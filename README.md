@@ -13,7 +13,7 @@ cp .env.example .env   # fill in ROCKETRIDE_APIKEY, ROCKETRIDE_OPENAI_KEY at min
 pnpm install
 
 # start infra (Postgres, Redis, Qdrant, MinIO + bucket init, RocketRide)
-docker compose -f infra/docker/docker-compose.yml up -d postgres redis qdrant minio minio-init rocketride
+docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis qdrant minio minio-init rocketride
 
 pnpm migrate            # applies packages/data-access/migrations/*.sql in order
 pnpm dev:api            # starts platform-api on PLATFORM_PORT (default 3000)
@@ -37,24 +37,28 @@ curl localhost:3000/v1/jobs/<jobId>   # poll ingestion status
 Run everything in Docker instead (API + worker + all infra):
 
 ```bash
-docker compose -f infra/docker/docker-compose.yml up -d --build
-docker compose -f infra/docker/docker-compose.yml up -d --scale worker=3   # scale worker horizontally
+docker compose -f infrastructure/docker/docker-compose.yml up -d --build
+docker compose -f infrastructure/docker/docker-compose.yml up -d --scale worker=3   # scale worker horizontally
 ```
 
 ## Layout
 
 ```
-apps/platform-api/         HTTP API (Clean Architecture: domain/application/infrastructure/interface per module)
-apps/worker/                 BullMQ processors (document ingestion today; repo/sync/cleanup land in later steps)
-packages/config/               zod-validated env schema + SQL migration runner
-packages/data-access/            shared Postgres repositories (projects, documents, pipeline_jobs) used by both apps
-packages/object-storage/           S3-compatible client (MinIO locally, S3/R2/Spaces in prod)
-packages/queues/                     BullMQ queue definitions shared between producer (API) and consumer (worker)
-packages/rocketride-gateway/           the only package allowed to import the RocketRide SDK
-packages/data-access/migrations/  versioned SQL migrations (applied in filename order)
-infra/docker/                             docker-compose.yml for local infra
-.rocketride/                                RocketRide docs + generated component catalog
+apps/platform-api/              HTTP API (Clean Architecture: domain/application/infrastructure/interface per module)
+apps/worker/                    BullMQ processors (document ingestion today; repo/sync/cleanup land in later steps)
+packages/config/                zod-validated env schema — the only place process.env is read
+packages/data-access/           Postgres repositories + entities + migrations/ + migrate runner
+packages/object-storage/        S3-compatible client (MinIO locally, S3/R2/Spaces in prod)
+packages/queues/                BullMQ queue definitions shared between producer (API) and consumer (worker)
+packages/vector-store/          Qdrant collection provisioning
+packages/shared/                cross-app logger (errors/constants as they appear)
+packages/rocketride-gateway/    the only package allowed to import the RocketRide SDK
+infrastructure/docker/          docker-compose.yml for local infra
+docs/                           Architecture, FolderStructure, DevelopmentGuide, NamingConventions, Contributing
+.rocketride/                    RocketRide docs + generated component catalog
 ```
+
+Full documentation lives in [docs/](docs/) — start with [docs/Architecture.md](docs/Architecture.md) and [docs/DevelopmentGuide.md](docs/DevelopmentGuide.md).
 
 ## Workspace commands
 
