@@ -10,3 +10,6 @@ dist/
 
 # Real K8s secrets — only the *.example.yaml template is committed.
 infrastructure/kubernetes/**/app-secrets.yaml
+
+# Local docker-compose override
+infrastructure/docker/docker-compose.override.yml

@@ -36,8 +36,10 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    # The qdrant image ships neither wget nor curl, but does include bash — use
+    # its /dev/tcp to confirm the REST port is accepting connections.
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/6333"]
       interval: 5s
       timeout: 3s
       retries: 10
