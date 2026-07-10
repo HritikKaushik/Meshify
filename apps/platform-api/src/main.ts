@@ -44,6 +44,8 @@ import { authGuard } from './modules/security/interface/auth.guard.js';
 import { RedisRateLimiter } from './modules/security/infrastructure/redis-rate-limiter.js';
 import { rateLimitGuard } from './modules/security/interface/rate-limit.guard.js';
 import { auditLogMiddleware } from './modules/security/interface/audit-log.middleware.js';
+import { RunEvaluationUseCase } from './modules/evaluation/application/run-evaluation.usecase.js';
+import { createEvaluationController } from './modules/evaluation/interface/evaluation.controller.js';
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -101,6 +103,10 @@ async function bootstrap(): Promise<void> {
 	const chatRepository = new PostgresChatRepository(pgPool);
 	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver);
 
+	// Evaluation reuses the same RAG seam + chat-pipeline resolver as live chat,
+	// so a golden-set run exercises the exact path production queries take.
+	const runEvaluation = new RunEvaluationUseCase(ragService, chatPipelineResolver);
+
 	const qdrantSearchClient = new QdrantSearchClient(env.QDRANT_URL, env.QDRANT_API_KEY);
 	const embeddingProviderFactory = new ConfiguredEmbeddingProviderFactory(env.ROCKETRIDE_OPENAI_KEY);
 	const search = new SearchUseCase(embeddingProviderFactory, qdrantSearchClient);
@@ -134,6 +140,7 @@ async function bootstrap(): Promise<void> {
 	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories }));
 	app.use(createChatController({ getProject, askQuestion, chats: chatRepository }));
 	app.use(createSearchController({ getProject, search }));
+	app.use(createEvaluationController({ getProject, runEvaluation }));
 
 	const server = app.listen(env.PLATFORM_PORT, () => {
 		logger.info({ port: env.PLATFORM_PORT }, 'platform-api listening');

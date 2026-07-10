@@ -40,6 +40,10 @@ Every route except health/readiness sits behind three middlewares, in order: **a
 - **Rate limiting.** Per-key fixed-window counter in Redis (`RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_SEC`), keyed on `keyId` (not a spoofable IP). Emits `RateLimit-*` headers; `429` + `Retry-After` on exhaustion. **Fails open** — a Redis blip degrades throttling, not availability.
 - **Audit logging.** Every mutating (non-GET) authenticated request is written to `audit_logs` on response `finish` (off the critical path, errors swallowed): org, actor key, project, action, client IP, status. `audit_logs.actor_key_id` (added in 0006) records the key; `actor_id`/users is reserved for Phase II human actors.
 
+## Evaluation harness (regression testing)
+
+`POST /v1/projects/:id/evaluation/run` runs a caller-supplied **golden set** of Q&A cases through the project's real RAG chat pipeline — the same `RagPort` + `ChatPipelineResolver` seams live chat uses, so a run exercises the exact path production queries take. Each case declares composable expectations (required / any / forbidden keywords, expected citation sources, min-confidence); a pure `evaluateAnswer` scores the answer, and the endpoint returns a report (pass rate, per-case check breakdown, average confidence/latency, total tokens). Cases run **sequentially** against the one resolved pipeline token (no assumption RocketRide serves concurrent turns on a token) and the set is **capped** (`MAX_CASES`) to keep the synchronous request bounded; a per-case RAG failure is captured on that case and never aborts the run. State is intentionally not persisted — CI asserts on the returned JSON (e.g. `passRate >= 0.9`); the run is captured by the audit middleware.
+
 ## Layering (inside platform-api modules)
 
 `domain/` (no deps) ← `application/` (use-cases) ← `infrastructure/` (Postgres, queues, gateways) and `interface/` (Express controllers, DTOs, guards). Dependencies point inward only; `RagPort` in rocketride-gateway is the seam that keeps AI orchestration out of business logic (tests use `FakeRagService`).
