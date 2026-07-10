@@ -38,6 +38,12 @@ import { QdrantSearchClient } from '@meshify/vector-store';
 import { SearchUseCase } from './modules/search/application/search.usecase.js';
 import { ConfiguredEmbeddingProviderFactory } from './modules/search/infrastructure/embedding-provider.factory.js';
 import { createSearchController } from './modules/search/interface/search.controller.js';
+import { PostgresApiKeyRepository, PostgresAuditLogRepository } from '@meshify/data-access';
+import { AuthenticateApiKeyUseCase } from './modules/security/application/authenticate.usecase.js';
+import { authGuard } from './modules/security/interface/auth.guard.js';
+import { RedisRateLimiter } from './modules/security/infrastructure/redis-rate-limiter.js';
+import { rateLimitGuard } from './modules/security/interface/rate-limit.guard.js';
+import { auditLogMiddleware } from './modules/security/interface/audit-log.middleware.js';
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -99,10 +105,29 @@ async function bootstrap(): Promise<void> {
 	const embeddingProviderFactory = new ConfiguredEmbeddingProviderFactory(env.ROCKETRIDE_OPENAI_KEY);
 	const search = new SearchUseCase(embeddingProviderFactory, qdrantSearchClient);
 
+	// Security (Step 9): API-key auth → per-key rate limit → audit. Constructed
+	// before routing so the guards can be mounted around the data controllers.
+	const apiKeyRepository = new PostgresApiKeyRepository(pgPool);
+	const auditLogRepository = new PostgresAuditLogRepository(pgPool);
+	const authenticate = new AuthenticateApiKeyUseCase(apiKeyRepository, env.PLATFORM_API_KEY_PEPPER);
+	const rateLimiter = new RedisRateLimiter(redis, env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC);
+
 	const app = express();
+	// Honour X-Forwarded-For for accurate client IPs in audit logs (behind a
+	// load balancer / ingress). Rate limits key on the API key, not the IP.
+	app.set('trust proxy', true);
 	app.use(pinoHttp({ logger }));
 	app.use(express.json());
+
+	// Public: health/readiness probes must answer without credentials.
 	app.use(createHealthController(checkHealth));
+
+	// Everything below requires a valid API key, is rate-limited per key, and
+	// (for mutations) audited. Order matters: authenticate → throttle → audit.
+	app.use(authGuard(authenticate));
+	app.use(rateLimitGuard(rateLimiter));
+	app.use(auditLogMiddleware(auditLogRepository));
+
 	app.use(createProjectsController({ createProject, deleteProject, getProject }));
 	app.use(createDocumentsController({ getProject, uploadDocument }));
 	app.use(createJobsController({ getJobStatus }));

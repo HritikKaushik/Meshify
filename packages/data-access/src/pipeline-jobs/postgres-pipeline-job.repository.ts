@@ -51,6 +51,17 @@ export class PostgresPipelineJobRepository implements PipelineJobRepository {
 		return row ? toDomain(row) : undefined;
 	}
 
+	async findByIdForOrg(id: string, orgId: string): Promise<PipelineJob | undefined> {
+		const { rows } = await this.pool.query<PipelineJobRow>(
+			`select j.* from pipeline_jobs j
+			 join projects p on p.id = j.project_id
+			 where j.id = $1 and p.org_id = $2`,
+			[id, orgId]
+		);
+		const row = rows[0];
+		return row ? toDomain(row) : undefined;
+	}
+
 	async markRunning(id: string): Promise<void> {
 		await this.pool.query("update pipeline_jobs set status = 'running', updated_at = now() where id = $1", [id]);
 	}

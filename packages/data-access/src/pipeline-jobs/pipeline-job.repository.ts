@@ -10,6 +10,8 @@ export interface CreatePipelineJobInput {
 export interface PipelineJobRepository {
 	create(input: CreatePipelineJobInput): Promise<PipelineJob>;
 	findById(id: string): Promise<PipelineJob | undefined>;
+	/** Org-scoped lookup for tenant isolation on read paths (joins projects.org_id). */
+	findByIdForOrg(id: string, orgId: string): Promise<PipelineJob | undefined>;
 	markRunning(id: string): Promise<void>;
 	markCompleted(id: string): Promise<void>;
 	markFailed(id: string, error: string, nextStatus: 'failed' | 'dead_letter'): Promise<void>;

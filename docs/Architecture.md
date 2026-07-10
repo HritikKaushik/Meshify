@@ -31,6 +31,15 @@ client ──HTTP──▶ platform-api ──enqueue──▶ Redis/BullMQ ─�
 
 `POST /v1/projects/:id/search` does **not** go through a RocketRide pipeline. RocketRide's `qdrant` component only accepts `collection/host/port/score` — it has no metadata-filter input and cannot query sparse vectors — but the search feature requires metadata filters (language, parent type, source-path prefix). So search queries Qdrant's REST API directly from `@meshify/vector-store`, and embeds the query through `@meshify/embeddings` using the project's stored `embedding_profile` (the one place we call an embedding provider directly, since RocketRide exposes no query-embedding call; the shared profile guarantees no drift from ingest). Results from the documents and code collections are merged by cosine score (comparable because both use the same model).
 
+## Security (auth, rate limiting, audit)
+
+Every route except health/readiness sits behind three middlewares, in order: **authenticate → rate-limit → audit**.
+
+- **API-key auth.** Callers present `Authorization: Bearer msk_<secret>`. Keys are stored only as `HMAC-SHA256(PLATFORM_API_KEY_PEPPER, plaintext)` — the pepper is a server-held secret, so a database leak alone can't verify or forge a key. Auth is a single indexed lookup by hash resolving to `req.auth = { orgId, keyId, scopes }`. Missing / malformed / unknown / revoked / expired all return an identical `401` so callers can't probe which keys exist. Keys are issued out-of-band by an operator (`pnpm --filter @meshify/data-access issue-api-key`), never via a public endpoint.
+- **Cross-org isolation is enforced at the guard, not just the query.** `projectIsolationGuard` now requires `project.orgId === req.auth.orgId` and returns **404** (not 403) on mismatch, so project ids can't be probed across tenants. `create-project` takes `orgId` from the key, never the body. Read paths keyed by opaque id (e.g. `GET /v1/jobs/:jobId`) use org-scoped lookups (`findByIdForOrg`) for the same reason.
+- **Rate limiting.** Per-key fixed-window counter in Redis (`RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_SEC`), keyed on `keyId` (not a spoofable IP). Emits `RateLimit-*` headers; `429` + `Retry-After` on exhaustion. **Fails open** — a Redis blip degrades throttling, not availability.
+- **Audit logging.** Every mutating (non-GET) authenticated request is written to `audit_logs` on response `finish` (off the critical path, errors swallowed): org, actor key, project, action, client IP, status. `audit_logs.actor_key_id` (added in 0006) records the key; `actor_id`/users is reserved for Phase II human actors.
+
 ## Layering (inside platform-api modules)
 
 `domain/` (no deps) ← `application/` (use-cases) ← `infrastructure/` (Postgres, queues, gateways) and `interface/` (Express controllers, DTOs, guards). Dependencies point inward only; `RagPort` in rocketride-gateway is the seam that keeps AI orchestration out of business logic (tests use `FakeRagService`).

@@ -29,3 +29,12 @@ export type { PipelineRunSnapshot, PipelineRunTraceInput } from './pipeline-runs
 export { tokensToUsd } from './pipeline-runs/pipeline-run.entity.js';
 export type { PipelineRunRepository } from './pipeline-runs/pipeline-run.repository.js';
 export { PostgresPipelineRunRepository } from './pipeline-runs/postgres-pipeline-run.repository.js';
+
+export type { ApiKey, AuthContext } from './api-keys/api-key.entity.js';
+export { generateApiKey, hashApiKey, looksLikeApiKey, hashesEqual } from './api-keys/api-key.entity.js';
+export type { ApiKeyRepository, ActiveApiKey, CreateApiKeyInput } from './api-keys/api-key.repository.js';
+export { PostgresApiKeyRepository } from './api-keys/postgres-api-key.repository.js';
+
+export type { AuditLogEntry } from './audit/audit-log.entity.js';
+export type { AuditLogRepository } from './audit/audit-log.repository.js';
+export { PostgresAuditLogRepository } from './audit/postgres-audit-log.repository.js';

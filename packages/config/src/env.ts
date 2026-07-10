@@ -13,6 +13,11 @@ const envSchema = z.object({
 	PLATFORM_API_KEY_PEPPER: z.string().min(16, 'PLATFORM_API_KEY_PEPPER must be at least 16 chars'),
 	PLATFORM_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
+	// Rate limiting (fixed-window per API key, backed by Redis). Defaults suit a
+	// modest single-tenant deployment; raise for higher-throughput clients.
+	RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+	RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
+
 	// Postgres
 	DATABASE_URL: z.string().url(),
 

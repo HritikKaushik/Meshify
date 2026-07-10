@@ -33,7 +33,7 @@ export function createProjectsController(deps: { createProject: CreateProjectUse
 		}
 
 		try {
-			const project = await deps.createProject.execute(parsed.data);
+			const project = await deps.createProject.execute({ ...parsed.data, orgId: req.auth!.orgId });
 			res.status(201).json(toResponse(project));
 		} catch (err) {
 			if (err instanceof OrgNotFoundError) {

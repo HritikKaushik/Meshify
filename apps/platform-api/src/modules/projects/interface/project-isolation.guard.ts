@@ -17,9 +17,19 @@ declare global {
  * that scopes data by project MUST read `req.project.id` — never trust a
  * `projectId` taken from the request body or query string, which would
  * allow a caller to bypass isolation by mismatching the two.
+ *
+ * Cross-org isolation: a project owned by a different org than the
+ * authenticated key is treated as NOT FOUND (404, not 403) so a caller cannot
+ * probe which project ids exist across tenant boundaries. Requires authGuard
+ * to have run first (`req.auth`).
  */
 export function projectIsolationGuard(getProject: GetProjectUseCase) {
 	return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+		if (!req.auth) {
+			res.status(401).json({ error: 'Unauthorized' });
+			return;
+		}
+
 		const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : undefined;
 		if (!projectId) {
 			res.status(400).json({ error: 'projectId route parameter is required' });
@@ -27,7 +37,7 @@ export function projectIsolationGuard(getProject: GetProjectUseCase) {
 		}
 
 		const project = await getProject.execute(projectId);
-		if (!project) {
+		if (!project || project.orgId !== req.auth.orgId) {
 			res.status(404).json({ error: `Project "${projectId}" not found` });
 			return;
 		}
