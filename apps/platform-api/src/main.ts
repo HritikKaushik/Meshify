@@ -19,8 +19,9 @@ import { PostgresDocumentRepository, PostgresPipelineJobRepository } from '@mesh
 import { ObjectStorageClient } from '@meshify/object-storage';
 import { createDocumentIngestQueue } from '@meshify/queues';
 import { UploadDocumentUseCase } from './modules/documents/application/upload-document.usecase.js';
-import { GetJobStatusUseCase } from './modules/documents/application/get-job-status.usecase.js';
 import { createDocumentsController } from './modules/documents/interface/documents.controller.js';
+import { GetJobStatusUseCase } from './modules/jobs/application/get-job-status.usecase.js';
+import { createJobsController } from './modules/jobs/interface/jobs.controller.js';
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -64,7 +65,8 @@ async function bootstrap(): Promise<void> {
 	app.use(express.json());
 	app.use(createHealthController(checkHealth));
 	app.use(createProjectsController({ createProject, deleteProject, getProject }));
-	app.use(createDocumentsController({ getProject, uploadDocument, getJobStatus }));
+	app.use(createDocumentsController({ getProject, uploadDocument }));
+	app.use(createJobsController({ getJobStatus }));
 
 	const server = app.listen(env.PLATFORM_PORT, () => {
 		logger.info({ port: env.PLATFORM_PORT }, 'platform-api listening');

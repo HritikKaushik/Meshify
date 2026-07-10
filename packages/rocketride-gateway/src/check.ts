@@ -31,7 +31,6 @@ async function main(): Promise<void> {
 		pipelineGuid: '00000000-0000-4000-8000-000000000001',
 		target: 'documents',
 		qdrant: { host: 'localhost', port: 6333, collection: 'meshify_check_documents' },
-		llm: { provider: 'openai', profile: 'openai-5', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
 		embedding: { provider: 'openai', profile: 'text-embedding-3-large', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
 		chunkSize: 768,
 	});

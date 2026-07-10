@@ -1,5 +1,5 @@
 import type { Job } from 'bullmq';
-import { apiKeyEnvVarFor, embeddingProviderFromProfile, llmProviderFromProfile } from '@meshify/data-access';
+import { apiKeyEnvVarFor, embeddingProviderFromProfile } from '@meshify/data-access';
 import type { DocumentRepository, PipelineJobRepository, ProjectRepository } from '@meshify/data-access';
 import type { ObjectStorageClient } from '@meshify/object-storage';
 import type { DocumentIngestJobPayload } from '@meshify/queues';
@@ -36,14 +36,12 @@ export async function processDocumentIngestJob(job: Job<DocumentIngestJobPayload
 
 		const buffer = await deps.storage.getObject(document.objectStorageKey);
 
-		const llmProvider = llmProviderFromProfile(project.llmProfile);
 		const embeddingProvider = embeddingProviderFromProfile(project.embeddingProfile);
 
 		const token = await deps.pipelineRegistry.ensureIngestPipeline({
 			pipelineGuid: project.rocketrideDocsIngestPipelineId,
 			target: 'documents',
 			qdrant: { host: deps.qdrantHost, port: deps.qdrantPort, collection: project.qdrantCollectionDocs },
-			llm: { provider: llmProvider, profile: project.llmProfile, apiKeyEnvVar: apiKeyEnvVarFor(llmProvider) },
 			embedding: {
 				provider: embeddingProvider,
 				profile: project.embeddingProfile,

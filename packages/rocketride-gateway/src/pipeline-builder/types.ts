@@ -27,18 +27,19 @@ export interface QdrantTargetConfig {
 export interface ProjectPipelineConfig {
 	/** Literal UUID for this specific .pipe file's `project_id` field (RocketRide requirement, not our platform project id). */
 	pipelineGuid: string;
-	llm: LlmProviderConfig;
 	embedding: EmbeddingProviderConfig;
 	/** RecursiveCharacterTextSplitter chunk size in chars. 512-1024 for prose, 256-512 for code. */
 	chunkSize: number;
 }
 
+/** Ingest pipelines have no LLM node (webhook -> parse -> chunk -> embed -> store), so no LLM config is accepted. */
 export interface IngestPipelineConfig extends ProjectPipelineConfig {
 	target: IngestTarget;
 	qdrant: QdrantTargetConfig;
 }
 
 export interface ChatPipelineConfig extends ProjectPipelineConfig {
+	llm: LlmProviderConfig;
 	docsCollection: QdrantTargetConfig;
 	codeCollection: QdrantTargetConfig;
 	systemInstructions: string[];
