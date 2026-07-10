@@ -17,7 +17,6 @@ const chatConfig: ChatPipelineConfig = {
 	pipelineGuid: GUID,
 	llm: { provider: 'openai', profile: 'openai-5', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
 	embedding: { provider: 'openai', profile: 'text-embedding-3-large', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
-	chunkSize: 768,
 	docsCollection: { host: 'localhost', port: 6333, collection: 'proj_x_documents' },
 	codeCollection: { host: 'localhost', port: 6333, collection: 'proj_x_code' },
 	systemInstructions: [],

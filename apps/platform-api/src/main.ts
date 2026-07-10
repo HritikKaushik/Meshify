@@ -29,6 +29,11 @@ import { UploadRepositoryZipUseCase } from './modules/repositories/application/u
 import { SyncRepositoryUseCase } from './modules/repositories/application/sync-repository.usecase.js';
 import { ListRepositoriesUseCase } from './modules/repositories/application/list-repositories.usecase.js';
 import { createRepositoriesController } from './modules/repositories/interface/repositories.controller.js';
+import { PostgresChatRepository } from '@meshify/data-access';
+import { PipelineRegistry, RocketRideClientPool, RocketRideRagService } from '@meshify/rocketride-gateway';
+import { RocketRideChatPipelineResolver } from './modules/chat/infrastructure/rocketride-chat-pipeline.resolver.js';
+import { AskQuestionUseCase } from './modules/chat/application/ask-question.usecase.js';
+import { createChatController } from './modules/chat/interface/chat.controller.js';
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -75,6 +80,17 @@ async function bootstrap(): Promise<void> {
 	const syncRepository = new SyncRepositoryUseCase(repositoryRepository, pipelineJobRepository, repoSyncQueue);
 	const listRepositories = new ListRepositoriesUseCase(repositoryRepository);
 
+	// Chat is the one synchronous RocketRide path in the API: questions run
+	// against each project's persistent chat pipeline (useExisting semantics
+	// in PipelineRegistry), so the process holds one pooled client.
+	const rocketridePool = new RocketRideClientPool(env, logger);
+	const pipelineRegistry = new PipelineRegistry(rocketridePool);
+	const ragService = new RocketRideRagService(rocketridePool);
+	const qdrantUrl = new URL(env.QDRANT_URL);
+	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry, qdrantUrl.hostname, Number(qdrantUrl.port || 6333));
+	const chatRepository = new PostgresChatRepository(pgPool);
+	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver);
+
 	const app = express();
 	app.use(pinoHttp({ logger }));
 	app.use(express.json());
@@ -83,6 +99,7 @@ async function bootstrap(): Promise<void> {
 	app.use(createDocumentsController({ getProject, uploadDocument }));
 	app.use(createJobsController({ getJobStatus }));
 	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories }));
+	app.use(createChatController({ getProject, askQuestion, chats: chatRepository }));
 
 	const server = app.listen(env.PLATFORM_PORT, () => {
 		logger.info({ port: env.PLATFORM_PORT }, 'platform-api listening');
@@ -92,6 +109,7 @@ async function bootstrap(): Promise<void> {
 		logger.info({ signal }, 'shutting down');
 		server.close();
 		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close()]);
+		await rocketridePool.shutdown();
 		await redis.quit();
 		await bullRedis.quit();
 		await pgPool.end();

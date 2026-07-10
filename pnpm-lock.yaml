@@ -32,6 +32,9 @@ importers:
       '@meshify/queues':
         specifier: workspace:*
         version: link:../../packages/queues
+      '@meshify/rocketride-gateway':
+        specifier: workspace:*
+        version: link:../../packages/rocketride-gateway
       '@meshify/shared':
         specifier: workspace:*
         version: link:../../packages/shared

@@ -17,6 +17,10 @@ export type { RepoFile, FileStatus } from './files/file.entity.js';
 export type { FileRepository, UpsertFileInput } from './files/file.repository.js';
 export { PostgresFileRepository } from './files/postgres-file.repository.js';
 
+export type { Chat, Message, MessageRole, MessageCitation } from './chats/chat.entity.js';
+export type { ChatRepository, CreateChatInput, CreateMessageInput } from './chats/chat.repository.js';
+export { PostgresChatRepository } from './chats/postgres-chat.repository.js';
+
 export type { PipelineJob, PipelineJobType, PipelineJobStatus } from './pipeline-jobs/pipeline-job.entity.js';
 export type { PipelineJobRepository, CreatePipelineJobInput } from './pipeline-jobs/pipeline-job.repository.js';
 export { PostgresPipelineJobRepository } from './pipeline-jobs/postgres-pipeline-job.repository.js';

@@ -47,7 +47,6 @@ async function main(): Promise<void> {
 		codeCollection: { host: 'localhost', port: 6333, collection: 'meshify_check_code' },
 		llm: { provider: 'openai', profile: 'openai-5', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
 		embedding: { provider: 'openai', profile: 'text-embedding-3-large', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
-		chunkSize: 768,
 		systemInstructions: [],
 	});
 	const chatResult = await client.validate({ pipeline: chatPipeline });

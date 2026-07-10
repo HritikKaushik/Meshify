@@ -28,14 +28,14 @@ export interface ProjectPipelineConfig {
 	/** Literal UUID for this specific .pipe file's `project_id` field (RocketRide requirement, not our platform project id). */
 	pipelineGuid: string;
 	embedding: EmbeddingProviderConfig;
-	/** RecursiveCharacterTextSplitter chunk size in chars. 512-1024 for prose, 256-512 for code. */
-	chunkSize: number;
 }
 
 /** Ingest pipelines have no LLM node (webhook -> parse -> chunk -> embed -> store), so no LLM config is accepted. */
 export interface IngestPipelineConfig extends ProjectPipelineConfig {
 	target: IngestTarget;
 	qdrant: QdrantTargetConfig;
+	/** RecursiveCharacterTextSplitter chunk size in chars. 512-1024 for prose, 256-512 for code. Chat pipelines have no preprocessor, so this lives here. */
+	chunkSize: number;
 }
 
 export interface ChatPipelineConfig extends ProjectPipelineConfig {

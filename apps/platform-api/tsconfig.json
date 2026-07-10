@@ -25,6 +25,9 @@
 		},
 		{
 			"path": "../../packages/vector-store"
+		},
+		{
+			"path": "../../packages/rocketride-gateway"
 		}
 	],
 	"exclude": [
