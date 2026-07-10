@@ -12,6 +12,7 @@
 	"dependencies": {
 		"@meshify/config": "workspace:*",
 		"express": "^4.21.1",
+		"zod": "^3.23.8",
 		"pg": "^8.13.1",
 		"ioredis": "^5.4.1",
 		"pino": "^9.5.0",

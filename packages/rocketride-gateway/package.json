@@ -1,0 +1,22 @@
+{
+	"name": "@meshify/rocketride-gateway",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsc -b",
+		"typecheck": "tsc --noEmit",
+		"check": "tsx src/check.ts"
+	},
+	"dependencies": {
+		"@meshify/config": "workspace:*",
+		"rocketride": "^1.0.0"
+	},
+	"devDependencies": {
+		"typescript": "^5.6.3",
+		"tsx": "^4.19.2",
+		"@types/node": "^22.9.0"
+	}
+}

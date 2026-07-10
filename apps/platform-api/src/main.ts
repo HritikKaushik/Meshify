@@ -9,6 +9,12 @@ import { RedisChecker } from './modules/health/infrastructure/redis.checker.js';
 import { QdrantChecker } from './modules/health/infrastructure/qdrant.checker.js';
 import { CheckHealthUseCase } from './modules/health/application/check-health.usecase.js';
 import { createHealthController } from './modules/health/interface/health.controller.js';
+import { PostgresProjectRepository } from './modules/projects/infrastructure/postgres-project.repository.js';
+import { QdrantCollectionProvisioner } from './modules/projects/infrastructure/qdrant-collection.provisioner.js';
+import { CreateProjectUseCase } from './modules/projects/application/create-project.usecase.js';
+import { DeleteProjectUseCase } from './modules/projects/application/delete-project.usecase.js';
+import { GetProjectUseCase } from './modules/projects/application/get-project.usecase.js';
+import { createProjectsController } from './modules/projects/interface/projects.controller.js';
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -24,10 +30,17 @@ async function bootstrap(): Promise<void> {
 		new QdrantChecker(env.QDRANT_URL, env.QDRANT_API_KEY),
 	]);
 
+	const projectRepository = new PostgresProjectRepository(pgPool);
+	const qdrantProvisioner = new QdrantCollectionProvisioner(env.QDRANT_URL, env.QDRANT_API_KEY);
+	const createProject = new CreateProjectUseCase(projectRepository, qdrantProvisioner);
+	const deleteProject = new DeleteProjectUseCase(projectRepository, qdrantProvisioner);
+	const getProject = new GetProjectUseCase(projectRepository);
+
 	const app = express();
 	app.use(pinoHttp({ logger }));
 	app.use(express.json());
 	app.use(createHealthController(checkHealth));
+	app.use(createProjectsController({ createProject, deleteProject, getProject }));
 
 	const server = app.listen(env.PLATFORM_PORT, () => {
 		logger.info({ port: env.PLATFORM_PORT }, 'platform-api listening');
