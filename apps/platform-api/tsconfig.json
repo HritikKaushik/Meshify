@@ -4,6 +4,27 @@
 		"outDir": "dist",
 		"rootDir": "src"
 	},
-	"include": ["src"],
-	"references": [{ "path": "../../packages/config" }, { "path": "../../packages/data-access" }, { "path": "../../packages/object-storage" }, { "path": "../../packages/queues" }]
+	"include": [
+		"src"
+	],
+	"references": [
+		{
+			"path": "../../packages/config"
+		},
+		{
+			"path": "../../packages/data-access"
+		},
+		{
+			"path": "../../packages/object-storage"
+		},
+		{
+			"path": "../../packages/queues"
+		},
+		{
+			"path": "../../packages/shared"
+		},
+		{
+			"path": "../../packages/vector-store"
+		}
+	]
 }

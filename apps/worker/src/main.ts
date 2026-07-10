@@ -1,8 +1,8 @@
 import pg from 'pg';
 import { Redis } from 'ioredis';
 import { Worker } from 'bullmq';
-import pino from 'pino';
 import { loadEnv } from '@meshify/config';
+import { createLogger } from '@meshify/shared';
 import { PostgresDocumentRepository, PostgresPipelineJobRepository, PostgresProjectRepository } from '@meshify/data-access';
 import { ObjectStorageClient } from '@meshify/object-storage';
 import { DOCUMENT_INGEST_QUEUE, type DocumentIngestJobPayload } from '@meshify/queues';
@@ -13,7 +13,7 @@ const DOCUMENT_CHUNK_SIZE = 768; // prose default per ROCKETRIDE_PIPELINE_RULES.
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
-	const logger = pino({ level: env.PLATFORM_LOG_LEVEL, base: { service: 'worker' } });
+	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'worker' });
 
 	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
 	const bullRedis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });

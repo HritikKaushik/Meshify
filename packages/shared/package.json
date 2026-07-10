@@ -1,5 +1,5 @@
 {
-	"name": "@meshify/config",
+	"name": "@meshify/shared",
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
@@ -10,7 +10,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"zod": "^3.23.8"
+		"pino": "^9.5.0"
 	},
 	"devDependencies": {
 		"typescript": "^5.6.3",

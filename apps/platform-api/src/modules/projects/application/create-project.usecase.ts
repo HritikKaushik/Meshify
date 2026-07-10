@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { embeddingDimensionFor, qdrantCollectionName, type Project, type ProjectRepository } from '@meshify/data-access';
-import type { QdrantCollectionProvisioner } from '../infrastructure/qdrant-collection.provisioner.js';
+import type { QdrantCollectionProvisioner } from '@meshify/vector-store';
 
 export class OrgNotFoundError extends Error {
 	constructor(orgId: string) {

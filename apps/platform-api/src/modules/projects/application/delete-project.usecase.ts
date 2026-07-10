@@ -1,5 +1,5 @@
 import type { ProjectRepository } from '@meshify/data-access';
-import type { QdrantCollectionProvisioner } from '../infrastructure/qdrant-collection.provisioner.js';
+import type { QdrantCollectionProvisioner } from '@meshify/vector-store';
 
 export class ProjectNotFoundError extends Error {
 	constructor(id: string) {

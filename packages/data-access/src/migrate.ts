@@ -2,9 +2,11 @@ import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import pg from 'pg';
-import { loadEnv } from './env.js';
+import { loadEnv } from '@meshify/config';
 
-const MIGRATIONS_DIR = path.resolve(fileURLToPath(import.meta.url), '../../../../infra/migrations');
+// SQL lives inside this package (packages/data-access/migrations) so the
+// schema and the code that owns it version together.
+const MIGRATIONS_DIR = path.resolve(fileURLToPath(import.meta.url), '../../migrations');
 
 async function ensureMigrationsTable(client: pg.PoolClient): Promise<void> {
 	await client.query(`

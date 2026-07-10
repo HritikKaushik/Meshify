@@ -10,7 +10,7 @@
 		"lint": "turbo run lint",
 		"dev:api": "pnpm --filter @meshify/platform-api dev",
 		"dev:worker": "pnpm --filter @meshify/worker dev",
-		"migrate": "pnpm --filter @meshify/config migrate"
+		"migrate": "pnpm --filter @meshify/data-access migrate"
 	},
 	"devDependencies": {
 		"turbo": "^2.3.3",

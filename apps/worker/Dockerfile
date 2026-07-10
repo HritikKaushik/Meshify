@@ -9,6 +9,7 @@ COPY packages/data-access/package.json packages/data-access/package.json
 COPY packages/object-storage/package.json packages/object-storage/package.json
 COPY packages/queues/package.json packages/queues/package.json
 COPY packages/rocketride-gateway/package.json packages/rocketride-gateway/package.json
+COPY packages/shared/package.json packages/shared/package.json
 COPY apps/worker/package.json apps/worker/package.json
 RUN pnpm install --frozen-lockfile
 
@@ -19,8 +20,9 @@ COPY packages/data-access packages/data-access
 COPY packages/object-storage packages/object-storage
 COPY packages/queues packages/queues
 COPY packages/rocketride-gateway packages/rocketride-gateway
+COPY packages/shared packages/shared
 COPY apps/worker apps/worker
-RUN pnpm --filter @meshify/config --filter @meshify/data-access --filter @meshify/object-storage --filter @meshify/queues --filter @meshify/rocketride-gateway build \
+RUN pnpm --filter @meshify/config --filter @meshify/data-access --filter @meshify/object-storage --filter @meshify/queues --filter @meshify/rocketride-gateway --filter @meshify/shared build \
 	&& pnpm --filter @meshify/worker build
 
 FROM base AS runtime
@@ -36,6 +38,8 @@ COPY --from=build /repo/packages/queues/package.json packages/queues/package.jso
 COPY --from=build /repo/packages/queues/dist packages/queues/dist
 COPY --from=build /repo/packages/rocketride-gateway/package.json packages/rocketride-gateway/package.json
 COPY --from=build /repo/packages/rocketride-gateway/dist packages/rocketride-gateway/dist
+COPY --from=build /repo/packages/shared/package.json packages/shared/package.json
+COPY --from=build /repo/packages/shared/dist packages/shared/dist
 COPY --from=build /repo/apps/worker/package.json apps/worker/package.json
 COPY --from=build /repo/apps/worker/dist apps/worker/dist
 RUN pnpm install --frozen-lockfile --prod

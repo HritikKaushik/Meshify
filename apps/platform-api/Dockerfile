@@ -8,6 +8,8 @@ COPY packages/config/package.json packages/config/package.json
 COPY packages/data-access/package.json packages/data-access/package.json
 COPY packages/object-storage/package.json packages/object-storage/package.json
 COPY packages/queues/package.json packages/queues/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/vector-store/package.json packages/vector-store/package.json
 COPY apps/platform-api/package.json apps/platform-api/package.json
 RUN pnpm install --frozen-lockfile
 
@@ -17,8 +19,10 @@ COPY packages/config packages/config
 COPY packages/data-access packages/data-access
 COPY packages/object-storage packages/object-storage
 COPY packages/queues packages/queues
+COPY packages/shared packages/shared
+COPY packages/vector-store packages/vector-store
 COPY apps/platform-api apps/platform-api
-RUN pnpm --filter @meshify/config --filter @meshify/data-access --filter @meshify/object-storage --filter @meshify/queues build \
+RUN pnpm --filter @meshify/config --filter @meshify/data-access --filter @meshify/object-storage --filter @meshify/queues --filter @meshify/shared --filter @meshify/vector-store build \
 	&& pnpm --filter @meshify/platform-api build
 
 FROM base AS runtime
@@ -32,6 +36,10 @@ COPY --from=build /repo/packages/object-storage/package.json packages/object-sto
 COPY --from=build /repo/packages/object-storage/dist packages/object-storage/dist
 COPY --from=build /repo/packages/queues/package.json packages/queues/package.json
 COPY --from=build /repo/packages/queues/dist packages/queues/dist
+COPY --from=build /repo/packages/shared/package.json packages/shared/package.json
+COPY --from=build /repo/packages/shared/dist packages/shared/dist
+COPY --from=build /repo/packages/vector-store/package.json packages/vector-store/package.json
+COPY --from=build /repo/packages/vector-store/dist packages/vector-store/dist
 COPY --from=build /repo/apps/platform-api/package.json apps/platform-api/package.json
 COPY --from=build /repo/apps/platform-api/dist apps/platform-api/dist
 RUN pnpm install --frozen-lockfile --prod

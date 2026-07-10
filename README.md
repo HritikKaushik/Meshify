@@ -15,7 +15,7 @@ pnpm install
 # start infra (Postgres, Redis, Qdrant, MinIO + bucket init, RocketRide)
 docker compose -f infra/docker/docker-compose.yml up -d postgres redis qdrant minio minio-init rocketride
 
-pnpm migrate            # applies infra/migrations/*.sql in order
+pnpm migrate            # applies packages/data-access/migrations/*.sql in order
 pnpm dev:api            # starts platform-api on PLATFORM_PORT (default 3000)
 pnpm dev:worker         # in a second terminal — starts the document-ingest worker
 ```
@@ -51,7 +51,7 @@ packages/data-access/            shared Postgres repositories (projects, documen
 packages/object-storage/           S3-compatible client (MinIO locally, S3/R2/Spaces in prod)
 packages/queues/                     BullMQ queue definitions shared between producer (API) and consumer (worker)
 packages/rocketride-gateway/           the only package allowed to import the RocketRide SDK
-infra/migrations/                       versioned SQL migrations (applied in filename order)
+packages/data-access/migrations/  versioned SQL migrations (applied in filename order)
 infra/docker/                             docker-compose.yml for local infra
 .rocketride/                                RocketRide docs + generated component catalog
 ```

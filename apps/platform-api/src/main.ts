@@ -3,14 +3,14 @@ import { pinoHttp } from 'pino-http';
 import pg from 'pg';
 import { Redis } from 'ioredis';
 import { loadEnv } from '@meshify/config';
-import { createLogger } from './shared-kernel/logger.js';
+import { createLogger } from '@meshify/shared';
 import { PostgresChecker } from './modules/health/infrastructure/postgres.checker.js';
 import { RedisChecker } from './modules/health/infrastructure/redis.checker.js';
 import { QdrantChecker } from './modules/health/infrastructure/qdrant.checker.js';
 import { CheckHealthUseCase } from './modules/health/application/check-health.usecase.js';
 import { createHealthController } from './modules/health/interface/health.controller.js';
 import { PostgresProjectRepository } from '@meshify/data-access';
-import { QdrantCollectionProvisioner } from './modules/projects/infrastructure/qdrant-collection.provisioner.js';
+import { QdrantCollectionProvisioner } from '@meshify/vector-store';
 import { CreateProjectUseCase } from './modules/projects/application/create-project.usecase.js';
 import { DeleteProjectUseCase } from './modules/projects/application/delete-project.usecase.js';
 import { GetProjectUseCase } from './modules/projects/application/get-project.usecase.js';
@@ -24,7 +24,7 @@ import { createDocumentsController } from './modules/documents/interface/documen
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
-	const logger = createLogger(env);
+	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'platform-api' });
 
 	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
 	const redis = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 });
