@@ -145,7 +145,22 @@ export class MeshifyApi {
 	}
 
 	private authHeaders(): Record<string, string> {
-		return this.cfg.apiKey ? { Authorization: `Bearer ${this.cfg.apiKey}` } : {};
+		// Trim to survive a pasted key with stray whitespace/newline.
+		const key = this.cfg.apiKey.trim();
+		return key ? { Authorization: `Bearer ${key}` } : {};
+	}
+
+	/**
+	 * Probes whether the API key authenticates, without mutating anything.
+	 * GET /v1/jobs/<zero-uuid> is behind authGuard: a bad/absent key → 401,
+	 * a valid key → 404 (the job doesn't exist). Anything else is reported raw.
+	 */
+	async checkAuth(): Promise<{ ok: boolean; detail: string }> {
+		if (!this.cfg.apiKey.trim()) return { ok: false, detail: 'No API key set — paste your msk_… key.' };
+		const res = await fetch(this.url('/v1/jobs/00000000-0000-0000-0000-000000000000'), { headers: this.authHeaders() });
+		if (res.status === 404) return { ok: true, detail: 'API key valid.' };
+		if (res.status === 401) return { ok: false, detail: 'API key rejected (401) — wrong/expired key, or issued under a different server pepper.' };
+		return { ok: false, detail: `Unexpected status ${res.status} while checking auth.` };
 	}
 
 	private async parse<T>(res: Response): Promise<T> {

@@ -19,8 +19,18 @@ export function App() {
 	const [activeId, setActiveId] = usePersistent<string | null>('meshify.active', null);
 	const [tab, setTab] = useState<Tab>('Documents');
 	const health = useAsync<HealthReport>();
+	const [auth, setAuth] = useState<{ ok: boolean; detail: string } | null>(null);
 
 	const active = projects.find((p) => p.id === activeId) ?? null;
+
+	// Reachability (public /health) AND key validity (authed probe) — so a green
+	// health check can't mislead you into thinking an empty/bad key is fine.
+	const connect = () =>
+		health.run(async () => {
+			const report = await api.health();
+			setAuth(await api.checkAuth());
+			return report;
+		});
 
 	return (
 		<div className="app">
@@ -40,7 +50,7 @@ export function App() {
 						value={config.apiKey}
 						onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
 					/>
-					<button onClick={() => health.run(() => api.health())}>Health</button>
+					<button onClick={connect}>Connect</button>
 					<HealthDot state={health.state} />
 				</div>
 			</header>
@@ -50,7 +60,17 @@ export function App() {
 					Can't reach the API. Is platform-api running on :3000 and the dev proxy up? <Result state={health.state} />
 				</div>
 			)}
-			{health.state.status === 'success' && <div className="banner ok">API healthy: {health.state.value.dependencies?.map((d) => `${d.name} ${d.status}`).join(' · ')}</div>}
+			{health.state.status === 'success' && (
+				<div className={`banner ${auth?.ok ? 'ok' : ''}`}>
+					API reachable: {health.state.value.dependencies?.map((d) => `${d.name} ${d.status}`).join(' · ')}
+					{auth && (
+						<div>
+							{auth.ok ? '✓ ' : '✗ '}
+							{auth.detail}
+						</div>
+					)}
+				</div>
+			)}
 
 			<main>
 				<ProjectsPanel api={api} known={projects} activeId={activeId} onAdd={add} onRemove={(id) => { remove(id); if (id === activeId) setActiveId(null); }} onSelect={setActiveId} />
