@@ -1,0 +1,23 @@
+{
+	"name": "@meshify/config",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsc -b",
+		"typecheck": "tsc --noEmit",
+		"migrate": "tsx src/migrate.ts"
+	},
+	"dependencies": {
+		"zod": "^3.23.8",
+		"pg": "^8.13.1"
+	},
+	"devDependencies": {
+		"typescript": "^5.6.3",
+		"tsx": "^4.19.2",
+		"@types/pg": "^8.11.10",
+		"@types/node": "^22.9.0"
+	}
+}

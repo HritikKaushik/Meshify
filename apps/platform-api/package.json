@@ -1,0 +1,27 @@
+{
+	"name": "@meshify/platform-api",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "tsx watch src/main.ts",
+		"build": "tsc -b",
+		"start": "node dist/main.js",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@meshify/config": "workspace:*",
+		"express": "^4.21.1",
+		"pg": "^8.13.1",
+		"ioredis": "^5.4.1",
+		"pino": "^9.5.0",
+		"pino-http": "^10.3.0"
+	},
+	"devDependencies": {
+		"typescript": "^5.6.3",
+		"tsx": "^4.19.2",
+		"@types/express": "^5.0.0",
+		"@types/node": "^22.9.0",
+		"@types/pg": "^8.11.10"
+	}
+}
