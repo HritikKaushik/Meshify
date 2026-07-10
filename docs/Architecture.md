@@ -37,6 +37,11 @@ client ──HTTP──▶ platform-api ──enqueue──▶ Redis/BullMQ ─�
 - **Object storage** — raw uploaded bytes, keyed `projects/<projectId>/documents/<docId>/<filename>`.
 - **Qdrant** — vectors + retrieval payload (source path, chunk index, hashes).
 
+## Known limitations (accepted, tracked)
+
+- **Stale vector GC:** repository sync marks removed files `deleted` in Postgres and re-ingests changed files, but does not yet delete their old points from Qdrant — that requires chunk/point tracking, which lands with the reindex step. Until then, stale chunks may still be retrieved/cited after a sync.
+- **DAP event gaps:** RocketRide has no durable event history; if the observability ingester is offline, events in that window are lost (reconciled from the next `running` snapshot only).
+
 ## Full design document
 
 The complete Phase I architecture (Qdrant payload schema, API contract, security model, observability/DAP-ingester design, deployment plan) lives in the published design artifact; this file is the in-repo summary. Update both when a settled decision changes.

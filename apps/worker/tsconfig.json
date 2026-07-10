@@ -25,6 +25,12 @@
 		},
 		{
 			"path": "../../packages/shared"
+		},
+		{
+			"path": "../../packages/github"
 		}
+	],
+	"exclude": [
+		"src/**/*.test.ts"
 	]
 }

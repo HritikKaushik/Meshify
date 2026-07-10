@@ -22,6 +22,13 @@ import { UploadDocumentUseCase } from './modules/documents/application/upload-do
 import { createDocumentsController } from './modules/documents/interface/documents.controller.js';
 import { GetJobStatusUseCase } from './modules/jobs/application/get-job-status.usecase.js';
 import { createJobsController } from './modules/jobs/interface/jobs.controller.js';
+import { PostgresRepositoryRepository } from '@meshify/data-access';
+import { createRepoIngestQueue, createRepoSyncQueue } from '@meshify/queues';
+import { ConnectGitHubRepositoryUseCase } from './modules/repositories/application/connect-github-repository.usecase.js';
+import { UploadRepositoryZipUseCase } from './modules/repositories/application/upload-repository-zip.usecase.js';
+import { SyncRepositoryUseCase } from './modules/repositories/application/sync-repository.usecase.js';
+import { ListRepositoriesUseCase } from './modules/repositories/application/list-repositories.usecase.js';
+import { createRepositoriesController } from './modules/repositories/interface/repositories.controller.js';
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -60,6 +67,14 @@ async function bootstrap(): Promise<void> {
 	const uploadDocument = new UploadDocumentUseCase(documentRepository, pipelineJobRepository, objectStorage, ingestQueue);
 	const getJobStatus = new GetJobStatusUseCase(pipelineJobRepository);
 
+	const repositoryRepository = new PostgresRepositoryRepository(pgPool);
+	const repoIngestQueue = createRepoIngestQueue(bullRedis);
+	const repoSyncQueue = createRepoSyncQueue(bullRedis);
+	const connectGitHub = new ConnectGitHubRepositoryUseCase(repositoryRepository, pipelineJobRepository, repoIngestQueue);
+	const uploadZip = new UploadRepositoryZipUseCase(repositoryRepository, pipelineJobRepository, objectStorage, repoIngestQueue);
+	const syncRepository = new SyncRepositoryUseCase(repositoryRepository, pipelineJobRepository, repoSyncQueue);
+	const listRepositories = new ListRepositoriesUseCase(repositoryRepository);
+
 	const app = express();
 	app.use(pinoHttp({ logger }));
 	app.use(express.json());
@@ -67,6 +82,7 @@ async function bootstrap(): Promise<void> {
 	app.use(createProjectsController({ createProject, deleteProject, getProject }));
 	app.use(createDocumentsController({ getProject, uploadDocument }));
 	app.use(createJobsController({ getJobStatus }));
+	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories }));
 
 	const server = app.listen(env.PLATFORM_PORT, () => {
 		logger.info({ port: env.PLATFORM_PORT }, 'platform-api listening');
@@ -75,7 +91,7 @@ async function bootstrap(): Promise<void> {
 	const shutdown = async (signal: string) => {
 		logger.info({ signal }, 'shutting down');
 		server.close();
-		await ingestQueue.close();
+		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close()]);
 		await redis.quit();
 		await bullRedis.quit();
 		await pgPool.end();

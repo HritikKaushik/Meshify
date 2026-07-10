@@ -7,23 +7,29 @@
 		"dev": "tsx watch src/main.ts",
 		"build": "tsc -b",
 		"start": "node dist/main.js",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
 	},
 	"dependencies": {
 		"@meshify/config": "workspace:*",
 		"@meshify/data-access": "workspace:*",
+		"@meshify/github": "workspace:*",
 		"@meshify/object-storage": "workspace:*",
 		"@meshify/queues": "workspace:*",
 		"@meshify/rocketride-gateway": "workspace:*",
 		"@meshify/shared": "workspace:*",
+		"adm-zip": "^0.5.16",
 		"bullmq": "^5.28.2",
 		"ioredis": "^5.4.1",
-		"pg": "^8.13.1"
+		"pg": "^8.13.1",
+		"tar": "^7.4.3"
 	},
 	"devDependencies": {
-		"typescript": "^5.6.3",
-		"tsx": "^4.19.2",
+		"@types/adm-zip": "^0.5.7",
 		"@types/node": "^22.9.0",
-		"@types/pg": "^8.11.10"
+		"@types/pg": "^8.11.10",
+		"tsx": "^4.19.2",
+		"typescript": "^5.6.3",
+		"vitest": "^2.1.8"
 	}
 }
