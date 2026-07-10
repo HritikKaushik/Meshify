@@ -1,0 +1,53 @@
+# Schema migration, run BEFORE rolling out a new app version. Uses the
+# platform-api image (which now ships the migration SQL) and runs the compiled
+# runner. The runner is idempotent — it skips already-applied files — so the Job
+# is safe to re-run. Apply and wait for completion, then roll out the apps:
+#
+#   kubectl apply -f migrate.job.yaml
+#   kubectl -n meshify wait --for=condition=complete job/meshify-migrate --timeout=120s
+#
+# A Job's name is immutable; delete a finished one before re-applying, or use a
+# CI step that appends the image tag to the name.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: meshify-migrate
+  labels:
+    app.kubernetes.io/name: migrate
+    app.kubernetes.io/part-of: meshify
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: migrate
+        app.kubernetes.io/part-of: meshify
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: meshify/platform-api:latest
+          command: ["node", "packages/data-access/dist/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: meshify-config
+            - secretRef:
+                name: meshify-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

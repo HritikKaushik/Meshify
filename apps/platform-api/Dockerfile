@@ -36,6 +36,9 @@ COPY --from=build /repo/packages/config/package.json packages/config/package.jso
 COPY --from=build /repo/packages/config/dist packages/config/dist
 COPY --from=build /repo/packages/data-access/package.json packages/data-access/package.json
 COPY --from=build /repo/packages/data-access/dist packages/data-access/dist
+# Migration SQL must ship in the image so the K8s migrate Job (node
+# packages/data-access/dist/migrate.js) can find it at runtime.
+COPY --from=build /repo/packages/data-access/migrations packages/data-access/migrations
 COPY --from=build /repo/packages/embeddings/package.json packages/embeddings/package.json
 COPY --from=build /repo/packages/embeddings/dist packages/embeddings/dist
 COPY --from=build /repo/packages/object-storage/package.json packages/object-storage/package.json

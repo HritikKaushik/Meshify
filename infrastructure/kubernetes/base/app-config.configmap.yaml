@@ -1,0 +1,22 @@
+# Non-secret runtime configuration, shared by every app/worker (each calls the
+# same loadEnv() which validates the full schema, so all three consume the same
+# ConfigMap + Secret). Secrets live in app-secrets (see app-secrets.example.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meshify-config
+  labels:
+    app.kubernetes.io/part-of: meshify
+data:
+  NODE_ENV: "production"
+  PLATFORM_PORT: "3000"
+  PLATFORM_LOG_LEVEL: "info"
+  RATE_LIMIT_MAX: "120"
+  RATE_LIMIT_WINDOW_SEC: "60"
+  # Point these at your managed services (or in-cluster service DNS).
+  QDRANT_URL: "http://qdrant.meshify.svc.cluster.local:6333"
+  S3_ENDPOINT: "https://s3.amazonaws.com"
+  S3_REGION: "us-east-1"
+  S3_BUCKET: "meshify-documents"
+  S3_FORCE_PATH_STYLE: "false"
+  ROCKETRIDE_URI: "http://rocketride.meshify.svc.cluster.local:5565"

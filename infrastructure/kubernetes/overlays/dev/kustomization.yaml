@@ -1,0 +1,67 @@
+# Dev overlay: minimal footprint, unpinned :dev tags. Same namespace as base.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: meshify/platform-api
+    newName: ghcr.io/hritikkaushik/meshify-platform-api
+    newTag: dev
+  - name: meshify/worker
+    newName: ghcr.io/hritikkaushik/meshify-worker
+    newTag: dev
+  - name: meshify/observability
+    newName: ghcr.io/hritikkaushik/meshify-observability
+    newTag: dev
+
+patches:
+  # Single API replica and a low ceiling — dev doesn't need HA or headroom.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: platform-api
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: platform-api
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  # Allow the worker to scale to zero when idle to save cost in dev.
+  - target:
+      kind: ScaledObject
+      name: worker
+    patch: |
+      - op: replace
+        path: /spec/minReplicaCount
+        value: 0
+      - op: replace
+        path: /spec/maxReplicaCount
+        value: 3
+  # Single-replica dev can't satisfy a minAvailable:1 PDB during drains — drop them.
+  - target:
+      kind: PodDisruptionBudget
+      name: platform-api
+    patch: |
+      $patch: delete
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: platform-api
+  - target:
+      kind: PodDisruptionBudget
+      name: worker
+    patch: |
+      $patch: delete
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: worker

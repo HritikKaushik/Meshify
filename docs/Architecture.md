@@ -60,6 +60,10 @@ Every route except health/readiness sits behind three middlewares, in order: **a
 - **Stale vector GC:** repository sync marks removed files `deleted` in Postgres and re-ingests changed files, but does not yet delete their old points from Qdrant — that requires chunk/point tracking, which lands with the reindex step. Until then, stale chunks may still be retrieved/cited after a sync.
 - **DAP event gaps:** RocketRide has no durable event history; if the observability ingester is offline, events in that window are lost (reconciled from the next `running` snapshot only). The `apps/observability` ingester is therefore a **single instance** — scaling it needs leader election, or every replica double-writes.
 
+## Deployment (Kubernetes)
+
+`infrastructure/kubernetes/` holds a Kustomize base + dev/prod overlays. The scaling model mirrors the runtime roles: **platform-api** is stateless and scales horizontally on CPU (HPA, anti-affinity, PDB); **worker** scales on BullMQ queue depth via KEDA (`bull:<queue>:wait` length across the three queues), with in-flight jobs safely returning to the queue on SIGTERM; **observability** is pinned to a single replica with a `Recreate` strategy — never two instances, since it has no leader election and would double-write `pipeline_runs`. Schema changes run as a pre-rollout migrate Job (the platform-api image now ships the migration SQL). Stateful dependencies (Postgres, Redis, Qdrant, object storage, RocketRide) are external/managed and referenced via ConfigMap/Secret; the manifests don't provision them. See `infrastructure/kubernetes/README.md`.
+
 ## Full design document
 
 The complete Phase I architecture (Qdrant payload schema, API contract, security model, observability/DAP-ingester design, deployment plan) lives in the published design artifact; this file is the in-repo summary. Update both when a settled decision changes.

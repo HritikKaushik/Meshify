@@ -1,0 +1,51 @@
+# The DAP event ingester MUST run as a single instance — two replicas would
+# double-write pipeline_runs (no leader election yet; see apps/observability and
+# docs/Architecture.md "DAP event gaps"). replicas is pinned to 1 and there is
+# NO HPA/ScaledObject for it. Recreate strategy guarantees the old pod is gone
+# before the new one starts, so a rollout never briefly runs two subscribers.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/name: observability
+    app.kubernetes.io/part-of: meshify
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: observability
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: observability
+        app.kubernetes.io/part-of: meshify
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: observability
+          image: meshify/observability:latest
+          envFrom:
+            - configMapRef:
+                name: meshify-config
+            - secretRef:
+                name: meshify-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      terminationGracePeriodSeconds: 30

@@ -20,7 +20,10 @@ root/
 │                                pipeline-builder/ (generates .pipe DAGs), client-pool, rag.service (RagPort impl),
 │                                pipeline-registry, check.ts (RocketRide-mandated setup verifier).
 ├── infrastructure/
-│   └── docker/                  docker-compose.yml. kubernetes/ added when the K8s step lands.
+│   ├── docker/                  docker-compose.yml (local full-stack).
+│   └── kubernetes/              Kustomize base + dev/prod overlays. platform-api
+│                                (HPA/CPU), worker (KEDA/queue-depth), observability
+│                                (single instance), migrate Job. See its README.
 ├── docs/                        This documentation set + DeadCodeReport.md.
 ├── .github/workflows/           CI (turbo typecheck/build/test).
 ├── turbo.json                   Task graph + caching.

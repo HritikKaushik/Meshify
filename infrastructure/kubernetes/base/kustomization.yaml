@@ -1,0 +1,28 @@
+# Base set of Meshify workloads. Overlays (overlays/dev, overlays/prod) set the
+# namespace, image registry/tags, and per-environment replica/scale patches.
+#
+# Deliberately excluded from this list:
+#   - app-secrets.example.yaml  → template only; provide the real Secret out-of-band.
+#   - migrate.job.yaml          → a pre-rollout step run/awaited separately (a Job
+#                                 name is immutable, so it can't live in a re-applied set).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Pin every resource to the meshify namespace (the Namespace object itself is
+# left untouched by this transformer).
+namespace: meshify
+
+resources:
+  - namespace.yaml
+  - app-config.configmap.yaml
+  - platform-api.deployment.yaml
+  - platform-api.service.yaml
+  - platform-api.hpa.yaml
+  - platform-api.ingress.yaml
+  - worker.deployment.yaml
+  - worker.keda-scaledobject.yaml
+  - observability.deployment.yaml
+  - pdb.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: meshify

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: meshify
+spec:
+  # KEDA owns replica count at runtime (see worker.keda-scaledobject.yaml).
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker
+        app.kubernetes.io/part-of: meshify
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: meshify/worker:latest
+          envFrom:
+            - configMapRef:
+                name: meshify-config
+            - secretRef:
+                name: meshify-secrets
+          # No HTTP surface, so no readiness/liveness probe: a crashed or exited
+          # process is already restarted by the kubelet. BullMQ workers are
+          # stateless consumers — in-flight jobs return to the queue on SIGTERM
+          # and are retried, so termination is safe. Deeper liveness would need a
+          # health port (future).
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      # Ingestion jobs can be mid-flight; give them room to finish or checkpoint
+      # before the job is returned to the queue for retry.
+      terminationGracePeriodSeconds: 120

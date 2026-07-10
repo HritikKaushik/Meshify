@@ -1,0 +1,30 @@
+# Public entry point. Assumes an ingress controller (e.g. ingress-nginx) and
+# cert-manager for TLS. Host and TLS secret are placeholders — override per
+# environment in the overlay. Only /health/* and /v1/* are served by the API.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: platform-api
+  labels:
+    app.kubernetes.io/name: platform-api
+    app.kubernetes.io/part-of: meshify
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.meshify.example.com
+      secretName: platform-api-tls
+  rules:
+    - host: api.meshify.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: platform-api
+                port:
+                  name: http

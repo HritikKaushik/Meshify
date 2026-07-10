@@ -1,0 +1,52 @@
+# Queue-depth autoscaling for the worker (requires KEDA installed in the cluster).
+# The worker consumes three BullMQ queues; BullMQ keeps pending jobs in the Redis
+# list `bull:<queue>:wait`. Each trigger targets a pending-job count PER REPLICA,
+# so KEDA adds replicas as backlog grows and removes them as it drains.
+#
+# minReplicaCount is 1 (not 0): one warm worker avoids cold-start latency on the
+# first job and keeps steady-state ingestion flowing. Raise maxReplicaCount with
+# available RocketRide/embedding throughput.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: meshify
+spec:
+  scaleTargetRef:
+    name: worker
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  cooldownPeriod: 120
+  pollingInterval: 15
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.meshify.svc.cluster.local:6379
+        listName: "bull:document-ingest:wait"
+        listLength: "10"
+        enableTLS: "false"
+    - type: redis
+      metadata:
+        address: redis.meshify.svc.cluster.local:6379
+        listName: "bull:repo-ingest:wait"
+        listLength: "5"
+        enableTLS: "false"
+    - type: redis
+      metadata:
+        address: redis.meshify.svc.cluster.local:6379
+        listName: "bull:repo-sync:wait"
+        listLength: "5"
+        enableTLS: "false"
+# For a password-protected / TLS Redis, add REDIS_PASSWORD to meshify-secrets and
+# reference it from a TriggerAuthentication, then set `authenticationRef` above:
+#
+# apiVersion: keda.sh/v1alpha1
+# kind: TriggerAuthentication
+# metadata: { name: redis-auth }
+# spec:
+#   secretTargetRef:
+#     - parameter: password
+#       name: meshify-secrets
+#       key: REDIS_PASSWORD

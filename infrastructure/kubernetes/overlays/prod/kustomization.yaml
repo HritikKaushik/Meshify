@@ -1,0 +1,38 @@
+# Prod overlay: pinned image tags (replace 1.0.0 with the released version per
+# deploy — never :latest in prod), higher autoscaling ceilings. Inherits the
+# base HA posture (anti-affinity, PDBs, rolling updates) unchanged.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: meshify/platform-api
+    newName: ghcr.io/hritikkaushik/meshify-platform-api
+    newTag: 1.0.0
+  - name: meshify/worker
+    newName: ghcr.io/hritikkaushik/meshify-worker
+    newTag: 1.0.0
+  - name: meshify/observability
+    newName: ghcr.io/hritikkaushik/meshify-observability
+    newTag: 1.0.0
+
+patches:
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: platform-api
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+  - target:
+      kind: ScaledObject
+      name: worker
+    patch: |
+      - op: replace
+        path: /spec/maxReplicaCount
+        value: 20

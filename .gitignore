@@ -7,3 +7,6 @@ dist/
 *.tsbuildinfo
 
 .turbo/
+
+# Real K8s secrets — only the *.example.yaml template is committed.
+infrastructure/kubernetes/**/app-secrets.yaml
