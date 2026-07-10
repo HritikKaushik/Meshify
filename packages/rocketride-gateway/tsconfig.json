@@ -4,6 +4,15 @@
 		"outDir": "dist",
 		"rootDir": "src"
 	},
-	"include": ["src"],
-	"references": [{ "path": "../config" }]
+	"include": [
+		"src"
+	],
+	"references": [
+		{
+			"path": "../config"
+		}
+	],
+	"exclude": [
+		"src/**/*.test.ts"
+	]
 }

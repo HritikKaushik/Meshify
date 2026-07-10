@@ -26,5 +26,8 @@
 		{
 			"path": "../../packages/vector-store"
 		}
+	],
+	"exclude": [
+		"src/**/*.test.ts"
 	]
 }
