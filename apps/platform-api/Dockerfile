@@ -6,6 +6,7 @@ FROM base AS deps
 COPY pnpm-workspace.yaml package.json ./
 COPY packages/config/package.json packages/config/package.json
 COPY packages/data-access/package.json packages/data-access/package.json
+COPY packages/embeddings/package.json packages/embeddings/package.json
 COPY packages/object-storage/package.json packages/object-storage/package.json
 COPY packages/queues/package.json packages/queues/package.json
 COPY packages/rocketride-gateway/package.json packages/rocketride-gateway/package.json
@@ -18,13 +19,14 @@ FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages/config packages/config
 COPY packages/data-access packages/data-access
+COPY packages/embeddings packages/embeddings
 COPY packages/object-storage packages/object-storage
 COPY packages/queues packages/queues
 COPY packages/rocketride-gateway packages/rocketride-gateway
 COPY packages/shared packages/shared
 COPY packages/vector-store packages/vector-store
 COPY apps/platform-api apps/platform-api
-RUN pnpm --filter @meshify/config --filter @meshify/data-access --filter @meshify/object-storage --filter @meshify/queues --filter @meshify/rocketride-gateway --filter @meshify/shared --filter @meshify/vector-store build \
+RUN pnpm --filter @meshify/config --filter @meshify/data-access --filter @meshify/embeddings --filter @meshify/object-storage --filter @meshify/queues --filter @meshify/rocketride-gateway --filter @meshify/shared --filter @meshify/vector-store build \
 	&& pnpm --filter @meshify/platform-api build
 
 FROM base AS runtime
@@ -34,6 +36,8 @@ COPY --from=build /repo/packages/config/package.json packages/config/package.jso
 COPY --from=build /repo/packages/config/dist packages/config/dist
 COPY --from=build /repo/packages/data-access/package.json packages/data-access/package.json
 COPY --from=build /repo/packages/data-access/dist packages/data-access/dist
+COPY --from=build /repo/packages/embeddings/package.json packages/embeddings/package.json
+COPY --from=build /repo/packages/embeddings/dist packages/embeddings/dist
 COPY --from=build /repo/packages/object-storage/package.json packages/object-storage/package.json
 COPY --from=build /repo/packages/object-storage/dist packages/object-storage/dist
 COPY --from=build /repo/packages/queues/package.json packages/queues/package.json

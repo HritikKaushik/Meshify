@@ -26,6 +26,9 @@ importers:
       '@meshify/data-access':
         specifier: workspace:*
         version: link:../../packages/data-access
+      '@meshify/embeddings':
+        specifier: workspace:*
+        version: link:../../packages/embeddings
       '@meshify/object-storage':
         specifier: workspace:*
         version: link:../../packages/object-storage
@@ -181,6 +184,18 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  packages/embeddings:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/github:
     devDependencies:
       '@types/node':
@@ -259,6 +274,9 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
 
 packages:
 

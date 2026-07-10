@@ -38,6 +38,12 @@ const envSchema = z.object({
 	ROCKETRIDE_URI: z.string().url(),
 	ROCKETRIDE_APIKEY: z.string().min(1),
 
+	// Provider embedding keys. RocketRide substitutes these into ingest pipelines;
+	// the search path also reads ROCKETRIDE_OPENAI_KEY directly to embed queries
+	// with the same model used at ingest. Optional so non-search deployments still boot.
+	ROCKETRIDE_OPENAI_KEY: z.string().optional(),
+	ROCKETRIDE_GEMINI_KEY: z.string().optional(),
+
 	// GitHub App (repo ingestion)
 	GITHUB_APP_ID: z.string().min(1),
 	GITHUB_APP_PRIVATE_KEY: z.string().min(1),

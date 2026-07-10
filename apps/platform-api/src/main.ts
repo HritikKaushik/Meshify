@@ -34,6 +34,10 @@ import { PipelineRegistry, RocketRideClientPool, RocketRideRagService } from '@m
 import { RocketRideChatPipelineResolver } from './modules/chat/infrastructure/rocketride-chat-pipeline.resolver.js';
 import { AskQuestionUseCase } from './modules/chat/application/ask-question.usecase.js';
 import { createChatController } from './modules/chat/interface/chat.controller.js';
+import { QdrantSearchClient } from '@meshify/vector-store';
+import { SearchUseCase } from './modules/search/application/search.usecase.js';
+import { ConfiguredEmbeddingProviderFactory } from './modules/search/infrastructure/embedding-provider.factory.js';
+import { createSearchController } from './modules/search/interface/search.controller.js';
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -91,6 +95,10 @@ async function bootstrap(): Promise<void> {
 	const chatRepository = new PostgresChatRepository(pgPool);
 	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver);
 
+	const qdrantSearchClient = new QdrantSearchClient(env.QDRANT_URL, env.QDRANT_API_KEY);
+	const embeddingProviderFactory = new ConfiguredEmbeddingProviderFactory(env.ROCKETRIDE_OPENAI_KEY);
+	const search = new SearchUseCase(embeddingProviderFactory, qdrantSearchClient);
+
 	const app = express();
 	app.use(pinoHttp({ logger }));
 	app.use(express.json());
@@ -100,6 +108,7 @@ async function bootstrap(): Promise<void> {
 	app.use(createJobsController({ getJobStatus }));
 	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories }));
 	app.use(createChatController({ getProject, askQuestion, chats: chatRepository }));
+	app.use(createSearchController({ getProject, search }));
 
 	const server = app.listen(env.PLATFORM_PORT, () => {
 		logger.info({ port: env.PLATFORM_PORT }, 'platform-api listening');

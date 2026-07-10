@@ -13,6 +13,7 @@
 	"dependencies": {
 		"@meshify/config": "workspace:*",
 		"@meshify/data-access": "workspace:*",
+		"@meshify/embeddings": "workspace:*",
 		"@meshify/object-storage": "workspace:*",
 		"@meshify/queues": "workspace:*",
 		"@meshify/rocketride-gateway": "workspace:*",

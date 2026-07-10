@@ -11,7 +11,9 @@ root/
 │   ├── data-access/             Postgres repositories + domain entities + migrations/ + migrate runner.
 │   ├── object-storage/          S3-compatible client (MinIO/S3/R2/Spaces).
 │   ├── queues/                  BullMQ queue names, payload types, retry defaults (producer+consumer share).
-│   ├── vector-store/            Qdrant collection provisioning (search client will join it).
+│   ├── vector-store/            Qdrant collection provisioning + direct search client.
+│   ├── embeddings/              Query-time embedding providers (OpenAI now); ingest embeddings are RocketRide's job.
+│   ├── github/                  GitHub App auth + read-only repo REST (tarball, compare, contents).
 │   ├── shared/                  Logger; future: errors, constants. Content must be app-agnostic.
 │   └── rocketride-gateway/      Anti-corruption layer: the ONLY package importing the RocketRide SDK.
 │                                pipeline-builder/ (generates .pipe DAGs), client-pool, rag.service (RagPort impl),
