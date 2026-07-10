@@ -1,6 +1,6 @@
 import type pg from 'pg';
-import type { Project } from '../domain/project.entity.js';
-import type { CreateProjectInput, ProjectRepository } from '../domain/project.repository.js';
+import type { Project } from './project.entity.js';
+import type { CreateProjectInput, ProjectRepository } from './project.repository.js';
 
 interface ProjectRow {
 	id: string;

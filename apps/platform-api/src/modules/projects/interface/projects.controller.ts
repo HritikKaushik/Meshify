@@ -6,7 +6,7 @@ import { ProjectNotFoundError } from '../application/delete-project.usecase.js';
 import type { GetProjectUseCase } from '../application/get-project.usecase.js';
 import { createProjectSchema } from './dto.js';
 import { projectIsolationGuard } from './project-isolation.guard.js';
-import type { Project } from '../domain/project.entity.js';
+import type { Project } from '@meshify/data-access';
 
 function toResponse(project: Project) {
 	return {

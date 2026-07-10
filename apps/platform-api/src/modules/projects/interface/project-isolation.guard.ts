@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import type { Project } from '../domain/project.entity.js';
+import type { Project } from '@meshify/data-access';
 import type { GetProjectUseCase } from '../application/get-project.usecase.js';
 
 declare global {

@@ -1,4 +1,4 @@
-import type { ProjectRepository } from '../domain/project.repository.js';
+import type { ProjectRepository } from '@meshify/data-access';
 import type { QdrantCollectionProvisioner } from '../infrastructure/qdrant-collection.provisioner.js';
 
 export class ProjectNotFoundError extends Error {

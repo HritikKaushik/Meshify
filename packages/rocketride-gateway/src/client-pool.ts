@@ -27,17 +27,35 @@ export class RocketRideClientPool {
 		if (this.client?.isConnected()) return this.client;
 		if (this.connecting) return this.connecting;
 
-		this.connecting = this.connect();
+		this.connecting = this.connectOrReuse();
 		try {
-			this.client = await this.connecting;
-			return this.client;
+			return await this.connecting;
 		} finally {
 			this.connecting = undefined;
 		}
 	}
 
-	private async connect(): Promise<RocketRideClient> {
-		const client = new RocketRideClient({
+	/**
+	 * Reuses the single client instance across the process lifetime instead of
+	 * constructing a new one on every failed connect attempt. With
+	 * `persist: true`, a client that fails its initial connect() keeps
+	 * retrying in the background on its own; if getClient() responded to that
+	 * failure by creating a brand-new client, the old one's retry loop would
+	 * be orphaned (never disconnected, never reused) and every subsequent
+	 * failed call would spawn another one, compounding indefinitely.
+	 */
+	private async connectOrReuse(): Promise<RocketRideClient> {
+		if (!this.client) {
+			this.client = this.createClient();
+		}
+		if (!this.client.isConnected()) {
+			await this.client.connect();
+		}
+		return this.client;
+	}
+
+	private createClient(): RocketRideClient {
+		return new RocketRideClient({
 			uri: this.env.ROCKETRIDE_URI,
 			auth: this.env.ROCKETRIDE_APIKEY,
 			persist: true,
@@ -53,9 +71,6 @@ export class RocketRideClientPool {
 				this.logger.warn({ error: error.message }, 'rocketride connect attempt failed');
 			},
 		});
-
-		await client.connect();
-		return client;
 	}
 
 	async shutdown(): Promise<void> {

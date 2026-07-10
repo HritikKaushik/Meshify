@@ -10,8 +10,14 @@
 	"scripts": {
 		"build": "pnpm -r build",
 		"dev:api": "pnpm --filter @meshify/platform-api dev",
+		"dev:worker": "pnpm --filter @meshify/worker dev",
 		"migrate": "pnpm --filter @meshify/config migrate",
 		"lint": "pnpm -r lint",
 		"typecheck": "pnpm -r typecheck"
+	},
+	"pnpm": {
+		"overrides": {
+			"ioredis": "5.11.1"
+		}
 	}
 }

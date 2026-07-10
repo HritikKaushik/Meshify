@@ -1,5 +1,4 @@
-import type { Project } from '../domain/project.entity.js';
-import type { ProjectRepository } from '../domain/project.repository.js';
+import type { Project, ProjectRepository } from '@meshify/data-access';
 
 export class GetProjectUseCase {
 	constructor(private readonly projects: ProjectRepository) {}
