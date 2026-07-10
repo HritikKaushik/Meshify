@@ -10,6 +10,7 @@
 		"lint": "turbo run lint",
 		"dev:api": "pnpm --filter @meshify/platform-api dev",
 		"dev:worker": "pnpm --filter @meshify/worker dev",
+		"dev:web": "pnpm --filter @meshify/web dev",
 		"migrate": "pnpm --filter @meshify/data-access migrate"
 	},
 	"devDependencies": {
