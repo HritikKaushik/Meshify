@@ -24,3 +24,8 @@ export { PostgresChatRepository } from './chats/postgres-chat.repository.js';
 export type { PipelineJob, PipelineJobType, PipelineJobStatus } from './pipeline-jobs/pipeline-job.entity.js';
 export type { PipelineJobRepository, CreatePipelineJobInput } from './pipeline-jobs/pipeline-job.repository.js';
 export { PostgresPipelineJobRepository } from './pipeline-jobs/postgres-pipeline-job.repository.js';
+
+export type { PipelineRunSnapshot, PipelineRunTraceInput } from './pipeline-runs/pipeline-run.entity.js';
+export { tokensToUsd } from './pipeline-runs/pipeline-run.entity.js';
+export type { PipelineRunRepository } from './pipeline-runs/pipeline-run.repository.js';
+export { PostgresPipelineRunRepository } from './pipeline-runs/postgres-pipeline-run.repository.js';

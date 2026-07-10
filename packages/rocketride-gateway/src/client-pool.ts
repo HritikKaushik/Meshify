@@ -73,6 +73,16 @@ export class RocketRideClientPool {
 		});
 	}
 
+	/**
+	 * Subscribe to all of this API key's tasks (`token: "*"`) for the given
+	 * event types. Used by the observability ingester; re-subscribed by the
+	 * SDK automatically after a reconnect.
+	 */
+	async subscribeAllTasks(types: string[]): Promise<void> {
+		const client = await this.getClient();
+		await client.addMonitor({ token: '*' }, types);
+	}
+
 	async shutdown(): Promise<void> {
 		if (this.client) {
 			await this.client.disconnect();

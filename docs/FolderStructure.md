@@ -4,7 +4,8 @@
 root/
 ├── apps/                        Deployable processes. Apps may depend on packages; never the reverse.
 │   ├── platform-api/            HTTP API (Express). src/modules/<domain>/{domain,application,infrastructure,interface}
-│   └── worker/                  BullMQ consumers. src/processors/<queue-name>.processor.ts
+│   ├── worker/                  BullMQ consumers. src/processors/<queue-name>.processor.ts
+│   └── observability/           Single-instance DAP subscriber -> pipeline_runs/traces (cost, metrics, flow).
 ├── packages/                    Shared libraries. A package earns its existence by having ≥2 consumers
 │   │                            (or one consumer + a concrete near-term second, stated in its header comment).
 │   ├── config/                  zod env schema — the ONLY place process.env is read.

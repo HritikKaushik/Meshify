@@ -45,7 +45,7 @@ client ──HTTP──▶ platform-api ──enqueue──▶ Redis/BullMQ ─�
 
 - **Search is dense-only, not hybrid yet.** Collections carry a sparse `text` slot, but RocketRide's `qdrant` ingest node writes dense vectors only and never populates it, so true dense+sparse hybrid (and pure keyword) retrieval isn't available. `/search` fully supports semantic (dense) search + metadata filters; `mode: keyword` and `mode: hybrid` are accepted but **degrade to semantic** and return a `degradedTo`/`warning` in the response. Real hybrid requires writing sparse vectors at ingest, which RocketRide's node can't do — it needs a custom ingest step (future).
 - **Stale vector GC:** repository sync marks removed files `deleted` in Postgres and re-ingests changed files, but does not yet delete their old points from Qdrant — that requires chunk/point tracking, which lands with the reindex step. Until then, stale chunks may still be retrieved/cited after a sync.
-- **DAP event gaps:** RocketRide has no durable event history; if the observability ingester is offline, events in that window are lost (reconciled from the next `running` snapshot only).
+- **DAP event gaps:** RocketRide has no durable event history; if the observability ingester is offline, events in that window are lost (reconciled from the next `running` snapshot only). The `apps/observability` ingester is therefore a **single instance** — scaling it needs leader election, or every replica double-writes.
 
 ## Full design document
 

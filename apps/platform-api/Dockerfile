@@ -3,7 +3,7 @@ RUN corepack enable
 WORKDIR /repo
 
 FROM base AS deps
-COPY pnpm-workspace.yaml package.json ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/config/package.json packages/config/package.json
 COPY packages/data-access/package.json packages/data-access/package.json
 COPY packages/embeddings/package.json packages/embeddings/package.json
@@ -31,7 +31,7 @@ RUN pnpm --filter @meshify/config --filter @meshify/data-access --filter @meshif
 
 FROM base AS runtime
 ENV NODE_ENV=production
-COPY --from=build /repo/pnpm-workspace.yaml /repo/package.json ./
+COPY --from=build /repo/pnpm-workspace.yaml /repo/package.json /repo/pnpm-lock.yaml ./
 COPY --from=build /repo/packages/config/package.json packages/config/package.json
 COPY --from=build /repo/packages/config/dist packages/config/dist
 COPY --from=build /repo/packages/data-access/package.json packages/data-access/package.json

@@ -21,7 +21,9 @@ export class PipelineRegistry {
 
 		const pipeline = buildIngestPipeline(config);
 		const client = await this.pool.getClient();
-		const { token } = await client.use({ pipeline, useExisting: true });
+		// pipelineTraceLevel:'summary' so the observability ingester receives FLOW
+		// events — apaevt_flow only fires for tasks started with a trace level.
+		const { token } = await client.use({ pipeline, useExisting: true, pipelineTraceLevel: 'summary' });
 		this.tokenCache.set(cacheKey, token);
 		return token;
 	}
@@ -33,7 +35,7 @@ export class PipelineRegistry {
 
 		const pipeline = buildChatPipeline(config);
 		const client = await this.pool.getClient();
-		const { token } = await client.use({ pipeline, useExisting: true });
+		const { token } = await client.use({ pipeline, useExisting: true, pipelineTraceLevel: 'summary' });
 		this.tokenCache.set(cacheKey, token);
 		return token;
 	}
