@@ -18,6 +18,8 @@ export interface RepoSyncProcessorDeps {
 	codeChunkSize: number;
 	qdrantHost: string;
 	qdrantPort: number;
+	/** See QdrantTargetConfig.apiKey — required whenever RocketRide runs as a managed cloud service. */
+	qdrantApiKey?: string;
 }
 
 /**
@@ -66,7 +68,7 @@ export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: Rep
 			const token = await deps.pipelineRegistry.ensureIngestPipeline({
 				pipelineGuid: project.rocketrideCodeIngestPipelineId,
 				target: 'code',
-				qdrant: { host: deps.qdrantHost, port: deps.qdrantPort, collection: project.qdrantCollectionCode },
+				qdrant: { host: deps.qdrantHost, port: deps.qdrantPort, collection: project.qdrantCollectionCode, apiKey: deps.qdrantApiKey },
 				embedding: {
 					provider: embeddingProvider,
 					profile: project.embeddingProfile,

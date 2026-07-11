@@ -57,6 +57,16 @@ describe('buildIngestPipeline', () => {
 		expect(qdrant.config).toMatchObject({ profile: 'local', local: { collection: 'proj_x_documents', host: 'localhost', port: 6333 } });
 	});
 
+	it('switches the qdrant node to the "cloud" profile when an apiKey is supplied', () => {
+		const cloudPipeline = buildIngestPipeline({ ...ingestConfig, qdrant: { ...ingestConfig.qdrant, apiKey: 'qk_secret' } });
+		const qdrant = componentById(cloudPipeline, 'qdrant_1');
+		expect(qdrant.config).toMatchObject({
+			profile: 'cloud',
+			cloud: { host: 'localhost', port: 6333, collection: 'proj_x_documents', apikey: 'qk_secret', serverName: 'qdrant_1' },
+		});
+		expect(qdrant.config).not.toHaveProperty('local');
+	});
+
 	it('nests the embedding API key template under the profile key (RocketRide profile pattern)', () => {
 		const embedding = componentById(pipeline, 'embedding_1');
 		expect(embedding.provider).toBe('embedding_openai');
@@ -104,5 +114,17 @@ describe('buildChatPipeline', () => {
 		const llm = componentById(pipeline, 'llm_1');
 		expect(llm.provider).toBe('llm_openai');
 		expect(llm.config).toMatchObject({ profile: 'openai-5', 'openai-5': { apikey: '${ROCKETRIDE_OPENAI_KEY}' } });
+	});
+
+	it('gives each qdrant node its own serverName in cloud profile, so tool names cannot collide', () => {
+		const cloudPipeline = buildChatPipeline({
+			...chatConfig,
+			docsCollection: { ...chatConfig.docsCollection, apiKey: 'qk_secret' },
+			codeCollection: { ...chatConfig.codeCollection, apiKey: 'qk_secret' },
+		});
+		const docs = componentById(cloudPipeline, 'qdrant_docs_1');
+		const code = componentById(cloudPipeline, 'qdrant_code_1');
+		expect((docs.config as { cloud: { serverName: string } }).cloud.serverName).toBe('qdrant_docs_1');
+		expect((code.config as { cloud: { serverName: string } }).cloud.serverName).toBe('qdrant_code_1');
 	});
 });

@@ -57,6 +57,7 @@ async function bootstrap(): Promise<void> {
 	const qdrantUrl = new URL(env.QDRANT_URL);
 	const qdrantHost = qdrantUrl.hostname;
 	const qdrantPort = Number(qdrantUrl.port || 6333);
+	const qdrantApiKey = env.QDRANT_API_KEY;
 
 	const documentWorker = new Worker<DocumentIngestJobPayload>(
 		DOCUMENT_INGEST_QUEUE,
@@ -71,6 +72,7 @@ async function bootstrap(): Promise<void> {
 				documentChunkSize: DOCUMENT_CHUNK_SIZE,
 				qdrantHost,
 				qdrantPort,
+				qdrantApiKey,
 			}),
 		{ connection: bullRedis, concurrency: 5 }
 	);
@@ -90,6 +92,7 @@ async function bootstrap(): Promise<void> {
 				codeChunkSize: CODE_CHUNK_SIZE,
 				qdrantHost,
 				qdrantPort,
+				qdrantApiKey,
 			}),
 		// Repo ingestion is archive-sized work (extraction + full-tree embedding); keep concurrency low.
 		{ connection: bullRedis, concurrency: 2 }
@@ -109,6 +112,7 @@ async function bootstrap(): Promise<void> {
 				codeChunkSize: CODE_CHUNK_SIZE,
 				qdrantHost,
 				qdrantPort,
+				qdrantApiKey,
 			}),
 		{ connection: bullRedis, concurrency: 3 }
 	);

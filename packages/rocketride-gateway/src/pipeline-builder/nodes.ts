@@ -37,30 +37,36 @@ export function embeddingNode(id: string, from: string, lane: 'documents' | 'que
 	return { id, provider, config, input: [{ lane, from }] };
 }
 
-export function qdrantStoreNode(id: string, from: string, qdrant: QdrantTargetConfig): RocketRideComponent {
-	return {
-		id,
-		provider: 'qdrant',
-		config: {
-			profile: 'local',
-			local: { host: qdrant.host, port: qdrant.port, collection: qdrant.collection, score: qdrant.scoreThreshold ?? 0.7 },
+/**
+ * "local" profile assumes Qdrant is reachable by plain host:port with no auth
+ * — true only when RocketRide's engine is co-located with Qdrant on the same
+ * network. "cloud" profile (host+port+apikey, RocketRide requires a
+ * `serverName` tool-namespace too) is used whenever an apiKey is supplied —
+ * required for a managed/cloud RocketRide reaching any Qdrant outside its own
+ * network, e.g. Qdrant Cloud. See QdrantTargetConfig.apiKey.
+ */
+function qdrantNodeConfig(id: string, qdrant: QdrantTargetConfig): Record<string, unknown> {
+	const score = qdrant.scoreThreshold ?? 0.7;
+	if (qdrant.apiKey) {
+		return {
+			profile: 'cloud',
+			cloud: { host: qdrant.host, port: qdrant.port, collection: qdrant.collection, score, apikey: qdrant.apiKey, serverName: id },
 			parameters: {},
-		},
-		input: [{ lane: 'documents', from }],
+		};
+	}
+	return {
+		profile: 'local',
+		local: { host: qdrant.host, port: qdrant.port, collection: qdrant.collection, score },
+		parameters: {},
 	};
 }
 
+export function qdrantStoreNode(id: string, from: string, qdrant: QdrantTargetConfig): RocketRideComponent {
+	return { id, provider: 'qdrant', config: qdrantNodeConfig(id, qdrant), input: [{ lane: 'documents', from }] };
+}
+
 export function qdrantSearchNode(id: string, from: string, qdrant: QdrantTargetConfig): RocketRideComponent {
-	return {
-		id,
-		provider: 'qdrant',
-		config: {
-			profile: 'local',
-			local: { host: qdrant.host, port: qdrant.port, collection: qdrant.collection, score: qdrant.scoreThreshold ?? 0.7 },
-			parameters: {},
-		},
-		input: [{ lane: 'questions', from }],
-	};
+	return { id, provider: 'qdrant', config: qdrantNodeConfig(id, qdrant), input: [{ lane: 'questions', from }] };
 }
 
 export function promptNode(id: string, documentSources: string[], questionsSource: string, instructions: string[]): RocketRideComponent {

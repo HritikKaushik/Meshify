@@ -22,6 +22,8 @@ export interface RepoIngestProcessorDeps {
 	codeChunkSize: number;
 	qdrantHost: string;
 	qdrantPort: number;
+	/** See QdrantTargetConfig.apiKey — required whenever RocketRide runs as a managed cloud service. */
+	qdrantApiKey?: string;
 }
 
 const SEND_BATCH_SIZE = 25;
@@ -83,7 +85,7 @@ export async function processRepoIngestJob(job: Job<RepoIngestJobPayload>, deps:
 		const token = await deps.pipelineRegistry.ensureIngestPipeline({
 			pipelineGuid: project.rocketrideCodeIngestPipelineId,
 			target: 'code',
-			qdrant: { host: deps.qdrantHost, port: deps.qdrantPort, collection: project.qdrantCollectionCode },
+			qdrant: { host: deps.qdrantHost, port: deps.qdrantPort, collection: project.qdrantCollectionCode, apiKey: deps.qdrantApiKey },
 			embedding: {
 				provider: embeddingProvider,
 				profile: project.embeddingProfile,

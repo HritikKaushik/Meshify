@@ -16,6 +16,8 @@ export interface DocumentIngestProcessorDeps {
 	documentChunkSize: number;
 	qdrantHost: string;
 	qdrantPort: number;
+	/** See QdrantTargetConfig.apiKey — required whenever RocketRide runs as a managed cloud service. */
+	qdrantApiKey?: string;
 }
 
 /**
@@ -41,7 +43,7 @@ export async function processDocumentIngestJob(job: Job<DocumentIngestJobPayload
 		const token = await deps.pipelineRegistry.ensureIngestPipeline({
 			pipelineGuid: project.rocketrideDocsIngestPipelineId,
 			target: 'documents',
-			qdrant: { host: deps.qdrantHost, port: deps.qdrantPort, collection: project.qdrantCollectionDocs },
+			qdrant: { host: deps.qdrantHost, port: deps.qdrantPort, collection: project.qdrantCollectionDocs, apiKey: deps.qdrantApiKey },
 			embedding: {
 				provider: embeddingProvider,
 				profile: project.embeddingProfile,

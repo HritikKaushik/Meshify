@@ -6,7 +6,9 @@ export class RocketRideChatPipelineResolver implements ChatPipelineResolver {
 	constructor(
 		private readonly registry: PipelineRegistry,
 		private readonly qdrantHost: string,
-		private readonly qdrantPort: number
+		private readonly qdrantPort: number,
+		/** Set when Qdrant needs cloud auth (see QdrantTargetConfig.apiKey) — required whenever RocketRide runs as a managed cloud service. */
+		private readonly qdrantApiKey?: string
 	) {}
 
 	async resolve(project: Project): Promise<string> {
@@ -21,8 +23,8 @@ export class RocketRideChatPipelineResolver implements ChatPipelineResolver {
 				profile: project.embeddingProfile,
 				apiKeyEnvVar: embeddingProvider === 'openai' ? apiKeyEnvVarFor('openai') : undefined,
 			},
-			docsCollection: { host: this.qdrantHost, port: this.qdrantPort, collection: project.qdrantCollectionDocs },
-			codeCollection: { host: this.qdrantHost, port: this.qdrantPort, collection: project.qdrantCollectionCode },
+			docsCollection: { host: this.qdrantHost, port: this.qdrantPort, collection: project.qdrantCollectionDocs, apiKey: this.qdrantApiKey },
+			codeCollection: { host: this.qdrantHost, port: this.qdrantPort, collection: project.qdrantCollectionCode, apiKey: this.qdrantApiKey },
 			systemInstructions: [], // empty -> pipeline-builder applies the grounding/anti-injection defaults
 		});
 	}

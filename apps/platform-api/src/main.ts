@@ -99,7 +99,7 @@ async function bootstrap(): Promise<void> {
 	const pipelineRegistry = new PipelineRegistry(rocketridePool);
 	const ragService = new RocketRideRagService(rocketridePool);
 	const qdrantUrl = new URL(env.QDRANT_URL);
-	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry, qdrantUrl.hostname, Number(qdrantUrl.port || 6333));
+	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry, qdrantUrl.hostname, Number(qdrantUrl.port || 6333), env.QDRANT_API_KEY);
 	const chatRepository = new PostgresChatRepository(pgPool);
 	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver);
 

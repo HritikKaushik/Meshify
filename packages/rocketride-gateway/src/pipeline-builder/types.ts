@@ -22,6 +22,16 @@ export interface QdrantTargetConfig {
 	port: number;
 	collection: string;
 	scoreThreshold?: number;
+	/**
+	 * Set only when Qdrant must be reached over the network with auth — e.g.
+	 * Qdrant Cloud, or any deployment where RocketRide's engine is NOT
+	 * co-located with Qdrant. This is required whenever RocketRide runs as a
+	 * managed cloud service: "host" values like "localhost" or a Docker
+	 * network hostname resolve on RocketRide's infrastructure, not ours, and
+	 * are unreachable from there. Presence of this field switches the qdrant
+	 * node to RocketRide's "cloud" profile instead of "local".
+	 */
+	apiKey?: string;
 }
 
 export interface ProjectPipelineConfig {

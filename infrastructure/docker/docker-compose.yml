@@ -73,13 +73,14 @@ services:
       mc mb --ignore-existing local/meshify-documents
       "
 
-  rocketride:
-    image: rocketride/server:latest
-    environment:
-      ROCKETRIDE_APIKEY: ${ROCKETRIDE_APIKEY}
-      ROCKETRIDE_CORS_ORIGINS: "*"
-    ports:
-      - "5565:5565"
+  # NOTE: there is no public "rocketride/server" image to self-host locally —
+  # a `docker pull` of it fails with access denied. RocketRide runs either via
+  # the VS Code extension (which can proxy to a local or cloud-hosted server)
+  # or as a managed cloud endpoint (ROCKETRIDE_URI=https://api.rocketride.ai).
+  # ROCKETRIDE_URI/APIKEY therefore come from env_file (.env) below, same as
+  # every other app/worker — do NOT hardcode a `rocketride` service hostname
+  # here again; it silently overrides .env since Compose `environment:` always
+  # wins over `env_file`, which is exactly the bug this comment replaced.
 
   platform-api:
     build:
@@ -92,7 +93,6 @@ services:
       REDIS_URL: redis://redis:6379
       QDRANT_URL: http://qdrant:6333
       S3_ENDPOINT: http://minio:9000
-      ROCKETRIDE_URI: http://rocketride:5565
     ports:
       - "3000:3000"
     depends_on:
@@ -116,7 +116,6 @@ services:
       REDIS_URL: redis://redis:6379
       QDRANT_URL: http://qdrant:6333
       S3_ENDPOINT: http://minio:9000
-      ROCKETRIDE_URI: http://rocketride:5565
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,8 +125,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      rocketride:
-        condition: service_started
 
   # Single long-lived DAP subscriber — do NOT scale without leader election
   # (each replica would double-write). See apps/observability/src/main.ts.
@@ -139,12 +136,9 @@ services:
       - ../../.env
     environment:
       DATABASE_URL: postgres://meshify:meshify@postgres:5432/meshify
-      ROCKETRIDE_URI: http://rocketride:5565
     depends_on:
       postgres:
         condition: service_healthy
-      rocketride:
-        condition: service_started
 
 volumes:
   postgres_data:
