@@ -9,6 +9,7 @@
 		"build": "tsc -b",
 		"typecheck": "tsc --noEmit",
 		"check": "tsx src/check.ts",
+		"export-pipelines": "tsx src/export-pipelines.ts",
 		"test": "vitest run"
 	},
 	"dependencies": {
