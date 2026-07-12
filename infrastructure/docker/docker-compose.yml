@@ -81,6 +81,11 @@ services:
   # every other app/worker — do NOT hardcode a `rocketride` service hostname
   # here again; it silently overrides .env since Compose `environment:` always
   # wins over `env_file`, which is exactly the bug this comment replaced.
+  #
+  # QDRANT_URL/QDRANT_API_KEY are likewise NOT overridden here: when RocketRide
+  # runs in the cloud it must reach Qdrant over the internet (e.g. Qdrant
+  # Cloud), so Qdrant's location must come from .env. For a fully-local stack
+  # using the qdrant service below, set QDRANT_URL=http://qdrant:6333 in .env.
 
   platform-api:
     build:
@@ -91,7 +96,6 @@ services:
     environment:
       DATABASE_URL: postgres://meshify:meshify@postgres:5432/meshify
       REDIS_URL: redis://redis:6379
-      QDRANT_URL: http://qdrant:6333
       S3_ENDPOINT: http://minio:9000
     ports:
       - "3000:3000"
@@ -99,8 +103,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      qdrant:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -114,14 +116,11 @@ services:
     environment:
       DATABASE_URL: postgres://meshify:meshify@postgres:5432/meshify
       REDIS_URL: redis://redis:6379
-      QDRANT_URL: http://qdrant:6333
       S3_ENDPOINT: http://minio:9000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      qdrant:
         condition: service_healthy
       minio:
         condition: service_healthy

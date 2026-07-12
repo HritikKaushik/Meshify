@@ -66,7 +66,19 @@ export class RocketRideRagService implements RagPort {
 	}
 }
 
-/** RocketRide's TS SDK expects a browser-style File; Node has no native File constructor prior to Node 20/undici globals. */
+/**
+ * RocketRide's TS SDK expects a browser-style File (Node 20+/undici global).
+ *
+ * Defensive: copy into a standalone Uint8Array first. Node's `Buffer.from()`
+ * pools small buffers and streamed/S3 buffers may be views into a larger
+ * allocation; a straight `new File([buffer])` then risks carrying the whole
+ * backing ArrayBuffer. (Note: this is NOT the cause of the current cloud
+ * ingestion failure — wire capture proves we transmit the exact bytes and the
+ * corruption is server-side in RocketRide's binary pipe — but keeping the copy
+ * is cheap, correct hardening regardless of where the buffer originates.)
+ */
 function bufferToFile(f: IngestFile): File {
-	return new File([f.buffer], f.path, { type: f.mimeType ?? 'application/octet-stream' });
+	const bytes = new Uint8Array(f.buffer.byteLength);
+	bytes.set(f.buffer);
+	return new File([bytes], f.path, { type: f.mimeType ?? 'application/octet-stream' });
 }
