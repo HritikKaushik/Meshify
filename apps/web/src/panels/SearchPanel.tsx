@@ -35,8 +35,8 @@ export function SearchPanel({ api, projectId }: { api: MeshifyApi; projectId: st
 								<th>score</th>
 								<th>collection</th>
 								<th>source</th>
-								<th>lang</th>
 								<th>chunk</th>
+								<th>content</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -45,8 +45,8 @@ export function SearchPanel({ api, projectId }: { api: MeshifyApi; projectId: st
 									<td>{h.score.toFixed(3)}</td>
 									<td>{h.collection}</td>
 									<td className="path">{h.sourcePath}</td>
-									<td>{h.language ?? '—'}</td>
 									<td>{h.chunkIndex ?? '—'}</td>
+									<td>{(h.content ?? '').slice(0, 120)}</td>
 								</tr>
 							))}
 						</tbody>

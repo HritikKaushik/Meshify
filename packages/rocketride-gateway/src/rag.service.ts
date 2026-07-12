@@ -2,9 +2,17 @@ import { Question } from 'rocketride';
 import type { RocketRideClientPool } from './client-pool.js';
 import type { ChatAnswer, ChatTurnRequest, IngestFile, IngestResult, RagPort } from './rag.port.js';
 
+/** RocketRide's response_documents shape: `page_content` + a `metadata` object
+ *  whose `parent` is the source filename and `objectId` the chunk's stable id. */
+interface RocketRideDocument {
+	page_content?: string;
+	score?: number;
+	metadata?: { parent?: string; objectId?: string; chunkId?: number; isDeleted?: boolean };
+}
+
 interface RocketRideAnswerResponse {
 	answers?: string[];
-	documents?: Array<{ id?: string; source_path?: string; sourcePath?: string; score?: number }>;
+	documents?: RocketRideDocument[];
 	result_types?: Record<string, string>;
 	name?: string;
 	[key: string]: unknown;
@@ -38,11 +46,24 @@ export class RocketRideRagService implements RagPort {
 		const answers = extractByLaneType(response, 'answers') as string[] | undefined;
 		const documents = (extractByLaneType(response, 'documents') as RocketRideAnswerResponse['documents']) ?? [];
 
-		const retrievedDocuments = documents.map((doc, index) => ({
-			id: doc.id ?? `doc-${index}`,
-			sourcePath: doc.sourcePath ?? doc.source_path ?? 'unknown',
-			score: doc.score ?? 0,
-		}));
+		// RocketRide reads both the docs and code collections, and can return the
+		// same chunk more than once — dedupe by objectId+chunkId. Skip control
+		// documents (the schema marker is flagged isDeleted).
+		const seen = new Set<string>();
+		const retrievedDocuments = documents
+			.filter((doc) => doc.metadata?.isDeleted !== true)
+			.map((doc, index) => ({
+				id: doc.metadata?.objectId ?? `doc-${index}`,
+				sourcePath: doc.metadata?.parent ?? 'unknown',
+				chunkId: doc.metadata?.chunkId,
+				score: doc.score ?? 0,
+			}))
+			.filter((doc) => {
+				const key = `${doc.id}:${doc.chunkId ?? ''}`;
+				if (seen.has(key)) return false;
+				seen.add(key);
+				return true;
+			});
 
 		return {
 			answer: answers?.[0] ?? 'No answer received.',

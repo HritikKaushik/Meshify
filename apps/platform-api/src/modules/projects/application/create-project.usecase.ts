@@ -40,10 +40,14 @@ export class CreateProjectUseCase {
 		const qdrantCollectionDocs = qdrantCollectionName(id, 'documents');
 		const qdrantCollectionCode = qdrantCollectionName(id, 'code');
 		const dimension = embeddingDimensionFor(command.embeddingProfile);
+		// The embedding profile IS the model name RocketRide writes with (e.g.
+		// "text-embedding-3-large"); it's recorded in the collection's schema
+		// control document so RocketRide will accept the collection at ingest.
+		const modelName = command.embeddingProfile;
 
-		await this.qdrant.ensureCollection(qdrantCollectionDocs, dimension);
+		await this.qdrant.ensureCollection(qdrantCollectionDocs, dimension, modelName);
 		try {
-			await this.qdrant.ensureCollection(qdrantCollectionCode, dimension);
+			await this.qdrant.ensureCollection(qdrantCollectionCode, dimension, modelName);
 		} catch (err) {
 			await this.qdrant.deleteCollection(qdrantCollectionDocs);
 			throw err;

@@ -12,7 +12,7 @@ interface ProvisionerCall {
 function makeQdrantFake(failOnEnsure?: (name: string) => boolean) {
 	const calls: ProvisionerCall[] = [];
 	const fake = {
-		async ensureCollection(name: string, dimension: number) {
+		async ensureCollection(name: string, dimension: number, _modelName: string) {
 			calls.push({ op: 'ensure', name, dimension });
 			if (failOnEnsure?.(name)) throw new Error(`ensure failed for ${name}`);
 		},

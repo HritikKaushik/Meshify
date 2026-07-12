@@ -26,15 +26,16 @@ function fakeQdrant(byCollection: Record<string, QdrantSearchHit[]>) {
 	return { client, calls };
 }
 
-function hit(id: string, score: number, sourcePath: string, extra: Record<string, unknown> = {}): QdrantSearchHit {
-	return { id, score, payload: { source_path: sourcePath, ...extra } };
+// RocketRide payload shape: `content` + `meta` (parent = source path, chunkId).
+function hit(id: string, score: number, sourcePath: string, meta: Record<string, unknown> = {}): QdrantSearchHit {
+	return { id, score, payload: { content: `content of ${sourcePath}`, meta: { parent: sourcePath, ...meta } } };
 }
 
 describe('SearchUseCase', () => {
 	it('merges documents and code hits into one score-descending ranking, tagged by collection', async () => {
 		const { client } = fakeQdrant({
-			proj_x_documents: [hit('d1', 0.7, 'docs/a.md', { parent_type: 'document', language: 'markdown' })],
-			proj_x_code: [hit('c1', 0.9, 'src/a.ts', { parent_type: 'file', language: 'typescript', chunk_index: 3 })],
+			proj_x_documents: [hit('d1', 0.7, 'docs/a.md')],
+			proj_x_code: [hit('c1', 0.9, 'src/a.ts', { chunkId: 3 })],
 		});
 		const usecase = new SearchUseCase(fakeEmbeddings, client);
 
@@ -44,8 +45,18 @@ describe('SearchUseCase', () => {
 			['c1', 'code'],
 			['d1', 'documents'],
 		]);
-		expect(result.results[0]).toMatchObject({ sourcePath: 'src/a.ts', language: 'typescript', parentType: 'file', chunkIndex: 3 });
+		expect(result.results[0]).toMatchObject({ sourcePath: 'src/a.ts', chunkIndex: 3, content: 'content of src/a.ts' });
 		expect(result.degradedTo).toBeUndefined();
+	});
+
+	it('filters out the RocketRide schema control document (meta.isDeleted)', async () => {
+		const schemaDoc: QdrantSearchHit = { id: 'schema', score: 0.1, payload: { content: '', meta: { objectId: 'schema', isDeleted: true } } };
+		const { client } = fakeQdrant({ proj_x_documents: [hit('d1', 0.7, 'docs/a.md'), schemaDoc], proj_x_code: [] });
+		const usecase = new SearchUseCase(fakeEmbeddings, client);
+
+		const result = await usecase.execute({ project: PROJECT, query: 'x', mode: 'semantic' });
+
+		expect(result.results.map((r) => r.id)).toEqual(['d1']); // schema doc excluded
 	});
 
 	it('degrades keyword/hybrid to semantic with a warning (sparse not populated at ingest)', async () => {

@@ -55,8 +55,7 @@ export interface SearchHit {
 	collection: 'documents' | 'code';
 	sourcePath: string;
 	score: number;
-	language: string | null;
-	parentType: string | null;
+	content: string | null;
 	chunkIndex: number | null;
 }
 

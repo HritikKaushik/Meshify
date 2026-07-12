@@ -8,21 +8,35 @@ export interface SearchResultItem {
 	collection: SearchCollection;
 	sourcePath: string;
 	score: number;
-	language: string | null;
-	parentType: string | null;
+	/** Chunk text (RocketRide stores it in the point payload). */
+	content: string | null;
 	chunkIndex: number | null;
 }
 
-function hitToItem(hit: QdrantSearchHit, collection: SearchCollection): SearchResultItem {
+/** Metadata RocketRide writes under `payload.meta` for every stored chunk. */
+interface RocketRideMeta {
+	parent?: string;
+	chunkId?: number;
+	objectId?: string;
+	isDeleted?: boolean;
+}
+
+/**
+ * Maps a Qdrant hit (RocketRide's payload shape: `content` + `meta`) to a
+ * result item. Returns null for RocketRide's schema/control document
+ * (`meta.isDeleted === true`), which must never surface as a search result.
+ */
+function hitToItem(hit: QdrantSearchHit, collection: SearchCollection): SearchResultItem | null {
 	const payload = hit.payload;
+	const meta = (typeof payload.meta === 'object' && payload.meta !== null ? payload.meta : {}) as RocketRideMeta;
+	if (meta.isDeleted === true) return null;
 	return {
 		id: hit.id,
 		collection,
-		sourcePath: typeof payload.source_path === 'string' ? payload.source_path : 'unknown',
+		sourcePath: typeof meta.parent === 'string' ? meta.parent : 'unknown',
 		score: hit.score,
-		language: typeof payload.language === 'string' ? payload.language : null,
-		parentType: typeof payload.parent_type === 'string' ? payload.parent_type : null,
-		chunkIndex: typeof payload.chunk_index === 'number' ? payload.chunk_index : null,
+		content: typeof payload.content === 'string' ? payload.content : null,
+		chunkIndex: typeof meta.chunkId === 'number' ? meta.chunkId : null,
 	};
 }
 
@@ -32,7 +46,10 @@ function hitToItem(hit: QdrantSearchHit, collection: SearchCollection): SearchRe
  * comparable — a plain score-descending sort is the correct fusion here.
  */
 export function mergeAndRank(documentHits: QdrantSearchHit[], codeHits: QdrantSearchHit[], limit: number): SearchResultItem[] {
-	const merged = [...documentHits.map((h) => hitToItem(h, 'documents')), ...codeHits.map((h) => hitToItem(h, 'code'))];
+	const merged = [
+		...documentHits.map((h) => hitToItem(h, 'documents')),
+		...codeHits.map((h) => hitToItem(h, 'code')),
+	].filter((item): item is SearchResultItem => item !== null);
 	merged.sort((a, b) => b.score - a.score);
 	return merged.slice(0, limit);
 }
