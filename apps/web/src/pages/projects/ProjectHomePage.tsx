@@ -6,14 +6,11 @@ import type { Repository } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { GlassCard, BeamCard, MeshAvatar, StatusDot, Kicker } from '@/components/mc/primitives';
+import { DataRow } from '@/components/common/DataRow';
+import { RepoStatusBadge } from '@/components/common/RepoStatusBadge';
+import { SuggestionChip } from '@/components/common/SuggestionChip';
+import { repoStatus } from '@/lib/repo-status';
 import { cn } from '@/lib/utils';
-
-const REPO_STATUS: Record<string, { dot: 'success' | 'indexing' | 'muted' | 'danger'; label: string }> = {
-	synced: { dot: 'success', label: 'Synced' },
-	cloning: { dot: 'indexing', label: 'Cloning' },
-	pending: { dot: 'muted', label: 'Pending' },
-	failed: { dot: 'danger', label: 'Failed' },
-};
 
 /**
  * The "flight deck" project briefing (design 2a), adapted to real functionality:
@@ -77,10 +74,10 @@ export function ProjectHomePage() {
 						<>
 							<div className="flex items-baseline gap-2">
 								<span className="font-mono text-lg font-semibold text-mc-text">{firstRepo.defaultBranch ?? 'main'}</span>
-								<StatusDot color={REPO_STATUS[firstRepo.syncStatus]?.dot ?? 'muted'} glow />
+								<StatusDot color={repoStatus(firstRepo.syncStatus).dot} glow />
 							</div>
 							<span className="text-xs text-mc-text-3">
-								{REPO_STATUS[firstRepo.syncStatus]?.label ?? firstRepo.syncStatus} · {repoList.length} connected
+								{repoStatus(firstRepo.syncStatus).label} · {repoList.length} connected
 							</span>
 						</>
 					) : (
@@ -160,10 +157,7 @@ export function ProjectHomePage() {
 								<div key={r.id} className={cn('flex items-center gap-3 px-4 py-3', i > 0 && 'border-t border-white/[.05]')}>
 									<FolderGit2 className="h-3.5 w-3.5 text-mc-teal" />
 									<span className="flex-1 truncate font-mono text-xs text-mc-text">{r.remoteUrl ?? '(zip upload)'}</span>
-									<span className="flex items-center gap-1.5 rounded-full bg-white/[.04] px-2 py-0.5 font-mono text-[10px] text-mc-text-2">
-										<StatusDot color={REPO_STATUS[r.syncStatus]?.dot ?? 'muted'} />
-										{r.syncStatus}
-									</span>
+									<RepoStatusBadge status={r.syncStatus} />
 								</div>
 							))}
 						</GlassCard>
@@ -175,11 +169,11 @@ export function ProjectHomePage() {
 					<section className="flex flex-col gap-2.5">
 						<h2 className="text-[13px] font-semibold text-mc-text">Configuration</h2>
 						<GlassCard className="flex flex-col gap-3 p-4">
-							<ConfigRow label="Project ID" value={project.id} mono />
-							<ConfigRow label="Organization" value={project.orgId} mono />
-							<ConfigRow label="LLM profile" value={project.llmProfile} />
-							<ConfigRow label="Embedding profile" value={project.embeddingProfile} />
-							<ConfigRow label="Updated" value={new Date(project.updatedAt).toLocaleString()} />
+							<DataRow label="Project ID" value={project.id} mono />
+							<DataRow label="Organization" value={project.orgId} mono />
+							<DataRow label="LLM profile" value={project.llmProfile} />
+							<DataRow label="Embedding profile" value={project.embeddingProfile} />
+							<DataRow label="Updated" value={new Date(project.updatedAt).toLocaleString()} />
 						</GlassCard>
 					</section>
 
@@ -213,13 +207,9 @@ export function ProjectHomePage() {
 							</form>
 							<div className="flex flex-wrap gap-1.5">
 								{['What is this project about?', 'Summarize the ingested knowledge'].map((s) => (
-									<button
-										key={s}
-										onClick={() => askMesh(s)}
-										className="rounded-full border border-white/[.08] bg-white/[.03] px-3 py-1.5 text-xs text-mc-text-2 transition-colors hover:border-mc-accent/40 hover:text-mc-text"
-									>
+									<SuggestionChip key={s} onClick={() => askMesh(s)}>
 										{s}
-									</button>
+									</SuggestionChip>
 								))}
 							</div>
 						</GlassCard>
@@ -303,11 +293,3 @@ function QuickAction({
 	);
 }
 
-function ConfigRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-	return (
-		<div className="flex items-baseline justify-between gap-4">
-			<span className="text-xs text-mc-text-3">{label}</span>
-			<span className={cn('truncate text-right text-xs text-mc-text', mono && 'font-mono')}>{value}</span>
-		</div>
-	);
-}

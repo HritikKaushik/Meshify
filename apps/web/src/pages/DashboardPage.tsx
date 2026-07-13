@@ -6,6 +6,7 @@ import { useOrg } from '@/components/layout/OrgShell';
 import { StatTile } from '@/components/project-home/StatTile';
 import { ProjectCard } from '@/components/project-home/ProjectCard';
 import { GlassCard, Kicker } from '@/components/mc/primitives';
+import { SectionHeading } from '@/components/common/SectionHeading';
 
 /**
  * Project Home (design 3b) — the org dashboard and post-login default. Real
@@ -103,10 +104,7 @@ export function DashboardPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
 	return (
 		<div className="flex flex-col gap-3">
-			<div className="flex items-center gap-3">
-				<span className="font-mono text-[10px] tracking-[.11em] text-mc-muted-2">{title}</span>
-				<div className="h-px flex-1 bg-white/[.06]" />
-			</div>
+			<SectionHeading divider>{title}</SectionHeading>
 			{children}
 		</div>
 	);

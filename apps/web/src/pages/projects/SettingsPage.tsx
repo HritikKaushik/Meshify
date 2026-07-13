@@ -6,6 +6,7 @@ import { api } from '@/api-client';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { GlassCard, Kicker } from '@/components/mc/primitives';
+import { DataRow } from '@/components/common/DataRow';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 
@@ -31,13 +32,13 @@ export function SettingsPage() {
 		<div className="flex max-w-2xl flex-col gap-5">
 			<GlassCard className="flex flex-col gap-4 p-5">
 				<Kicker>// CONFIGURATION</Kicker>
-				<Row label="Name" value={project.name} />
-				<Row label="Description" value={project.description || '—'} />
-				<Row label="Project ID" value={project.id} mono />
-				<Row label="Status" value={project.status} />
-				<Row label="LLM profile" value={project.llmProfile} mono />
-				<Row label="Embedding profile" value={project.embeddingProfile} mono />
-				<Row label="Created" value={new Date(project.createdAt).toLocaleString()} />
+				<DataRow label="Name" value={project.name} divider />
+				<DataRow label="Description" value={project.description || '—'} divider />
+				<DataRow label="Project ID" value={project.id} mono divider />
+				<DataRow label="Status" value={project.status} divider />
+				<DataRow label="LLM profile" value={project.llmProfile} mono divider />
+				<DataRow label="Embedding profile" value={project.embeddingProfile} mono divider />
+				<DataRow label="Created" value={new Date(project.createdAt).toLocaleString()} divider />
 			</GlassCard>
 
 			<div className="flex flex-col gap-3 rounded-xl border border-mc-danger/30 bg-mc-danger/[.05] p-5">
@@ -83,11 +84,3 @@ export function SettingsPage() {
 	);
 }
 
-function Row({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-	return (
-		<div className="flex items-baseline justify-between gap-4 border-b border-white/[.04] pb-3 last:border-0 last:pb-0">
-			<span className="text-xs text-mc-text-3">{label}</span>
-			<span className={`truncate text-right text-[13px] text-mc-text ${mono ? 'font-mono' : ''}`}>{value}</span>
-		</div>
-	);
-}

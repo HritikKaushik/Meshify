@@ -6,6 +6,7 @@ import { api } from '@/api-client';
 import type { Conversation, Project } from '@/api';
 import { projectColor } from '@/lib/project-color';
 import { MeshLogo } from '@/components/mc/primitives';
+import { SectionHeading } from '@/components/common/SectionHeading';
 import { cn } from '@/lib/utils';
 
 /**
@@ -93,12 +94,12 @@ export function WorkspaceSidebar({
 					</div>
 				)}
 
-				{pinned.length > 0 && <SectionLabel>PINNED</SectionLabel>}
+				{pinned.length > 0 && <SectionHeading className="px-2 pb-1 pt-3">PINNED</SectionHeading>}
 				{pinned.map((c) => (
 					<ConversationRow key={c.id} c={c} active={c.id === activeId} onOpen={openConversation} onTogglePin={togglePin} />
 				))}
 
-				{recent.length > 0 && <SectionLabel>RECENT</SectionLabel>}
+				{recent.length > 0 && <SectionHeading className="px-2 pb-1 pt-3">RECENT</SectionHeading>}
 				{recent.map((c) => (
 					<ConversationRow key={c.id} c={c} active={c.id === activeId} onOpen={openConversation} onTogglePin={togglePin} />
 				))}
@@ -122,9 +123,6 @@ export function WorkspaceSidebar({
 	);
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-	return <div className="px-2 pb-1 pt-3 font-mono text-[10px] tracking-[.11em] text-mc-muted-2">{children}</div>;
-}
 
 function ConversationRow({ c, active, onOpen, onTogglePin }: { c: Conversation; active: boolean; onOpen: (id: string) => void; onTogglePin: (c: Conversation) => void }) {
 	return (

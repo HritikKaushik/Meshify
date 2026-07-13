@@ -4,15 +4,11 @@ import { api } from '@/api-client';
 import type { Repository } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
-import { GlassCard, BeamCard, StatusDot, MeshAvatar, Kicker } from '@/components/mc/primitives';
+import { GlassCard, BeamCard, MeshAvatar, Kicker } from '@/components/mc/primitives';
+import { DataRow } from '@/components/common/DataRow';
+import { RepoStatusBadge } from '@/components/common/RepoStatusBadge';
+import { repoStatus } from '@/lib/repo-status';
 import { cn } from '@/lib/utils';
-
-const REPO_STATUS: Record<string, { dot: 'success' | 'indexing' | 'muted' | 'danger'; label: string }> = {
-	synced: { dot: 'success', label: 'Synced' },
-	cloning: { dot: 'indexing', label: 'Cloning' },
-	pending: { dot: 'muted', label: 'Pending' },
-	failed: { dot: 'danger', label: 'Failed' },
-};
 
 /**
  * Repository Explorer (design 2c), adapted to real functionality. The design's
@@ -93,7 +89,6 @@ export function RepositoriesPage() {
 							</div>
 						)}
 						{repos.map((r, i) => {
-							const st = REPO_STATUS[r.syncStatus] ?? { dot: 'muted' as const, label: r.syncStatus };
 							const isSel = selected?.id === r.id;
 							return (
 								<button
@@ -118,10 +113,7 @@ export function RepositoriesPage() {
 											)}
 										</span>
 									</div>
-									<span className="flex items-center gap-1.5 rounded-full bg-white/[.04] px-2.5 py-1 font-mono text-[10.5px] text-mc-text-2">
-										<StatusDot color={st.dot} glow={st.dot === 'success' || st.dot === 'indexing'} pulse={st.dot === 'indexing'} />
-										{st.label}
-									</span>
+									<RepoStatusBadge status={r.syncStatus} />
 									<button
 										onClick={(e) => {
 											e.stopPropagation();
@@ -157,11 +149,11 @@ export function RepositoriesPage() {
 					{selected ? (
 						<GlassCard className="flex flex-col gap-3 p-4">
 							<Kicker>SELECTED REPOSITORY</Kicker>
-							<DetailRow label="Source" value={selected.source} />
-							<DetailRow label="Remote" value={selected.remoteUrl ?? '(zip upload)'} mono />
-							<DetailRow label="Branch" value={selected.defaultBranch ?? 'default'} mono />
-							<DetailRow label="Sync status" value={REPO_STATUS[selected.syncStatus]?.label ?? selected.syncStatus} />
-							<DetailRow label="Connected" value={new Date(selected.createdAt).toLocaleString()} />
+							<DataRow label="Source" value={selected.source} />
+							<DataRow label="Remote" value={selected.remoteUrl ?? '(zip upload)'} mono />
+							<DataRow label="Branch" value={selected.defaultBranch ?? 'default'} mono />
+							<DataRow label="Sync status" value={repoStatus(selected.syncStatus).label} />
+							<DataRow label="Connected" value={new Date(selected.createdAt).toLocaleString()} />
 							{selected.lastError && (
 								<div className="mt-1 flex items-start gap-2 rounded-lg border border-mc-danger/30 bg-mc-danger/10 p-2.5">
 									<TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-none text-mc-danger" />
@@ -177,15 +169,6 @@ export function RepositoriesPage() {
 					)}
 				</div>
 			</div>
-		</div>
-	);
-}
-
-function DetailRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-	return (
-		<div className="flex items-baseline justify-between gap-4">
-			<span className="text-xs text-mc-text-3">{label}</span>
-			<span className={cn('truncate text-right text-xs capitalize text-mc-text', mono && 'font-mono normal-case')}>{value}</span>
 		</div>
 	);
 }

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { FileCode2, FileText, MessageSquare } from 'lucide-react';
 import type { ChatCitation, Conversation } from '@/api';
 import { isCodeSource, confidenceLabel } from './chat-util';
+import { SectionHeading } from '@/components/common/SectionHeading';
 import { cn } from '@/lib/utils';
 
 /**
@@ -91,7 +92,7 @@ export function ContextRail({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
 	return (
 		<div className="flex flex-col gap-2.5">
-			<span className="font-mono text-[10px] tracking-[.1em] text-mc-muted-2">{title}</span>
+			<SectionHeading>{title}</SectionHeading>
 			{children}
 		</div>
 	);

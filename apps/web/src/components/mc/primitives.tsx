@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-type DotColor = 'success' | 'indexing' | 'accent' | 'danger' | 'purple' | 'teal' | 'muted';
+export type DotColor = 'success' | 'indexing' | 'accent' | 'danger' | 'purple' | 'teal' | 'muted';
 
 const DOT_HEX: Record<DotColor, string> = {
 	success: '#55C784',

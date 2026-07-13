@@ -6,6 +6,7 @@ import type { ChatCitation, ChatMessage } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { MeshAvatar, Kicker } from '@/components/mc/primitives';
+import { SuggestionChip } from '@/components/common/SuggestionChip';
 import { MeshMessage, StreamingIndicator } from '@/components/chat/MeshMessage';
 import { ContextRail } from '@/components/chat/ContextRail';
 import type { Turn } from '@/components/chat/chat-util';
@@ -158,13 +159,9 @@ export function ChatPage() {
 						{turns.length > 0 && (
 							<div className="mb-2.5 flex flex-wrap gap-1.5">
 								{SUGGESTED.slice(0, 3).map((s) => (
-									<button
-										key={s}
-										onClick={() => ask(s)}
-										className="rounded-full border border-white/[.08] bg-white/[.03] px-3 py-1.5 text-xs text-mc-text-2 transition-colors hover:border-mc-accent/40 hover:text-mc-text"
-									>
+									<SuggestionChip key={s} onClick={() => ask(s)}>
 										{s}
-									</button>
+									</SuggestionChip>
 								))}
 							</div>
 						)}
