@@ -11,6 +11,13 @@ const askSchema = z.object({
 	question: z.string().min(1).max(8000),
 });
 
+const updateChatSchema = z
+	.object({
+		title: z.string().min(1).max(200).optional(),
+		pinned: z.boolean().optional(),
+	})
+	.refine((v) => v.title !== undefined || v.pinned !== undefined, { message: 'Provide at least one of: title, pinned' });
+
 export function createChatController(deps: { getProject: GetProjectUseCase; askQuestion: AskQuestionUseCase; chats: ChatRepository }): Router {
 	const router = Router();
 	const guard = projectIsolationGuard(deps.getProject);
@@ -38,6 +45,37 @@ export function createChatController(deps: { getProject: GetProjectUseCase; askQ
 			// The AI engine being unreachable is an upstream failure, not a client error.
 			res.status(502).json({ error: 'Chat is temporarily unavailable — the AI engine could not be reached' });
 		}
+	});
+
+	// List a project's conversations (pinned first, then newest) for the workspace sidebar.
+	router.get('/v1/projects/:projectId/chats', guard, async (req, res) => {
+		const chats = await deps.chats.findByProjectId(req.project!.id);
+		res.status(200).json({
+			conversations: chats.map((c) => ({
+				id: c.id,
+				title: c.title,
+				pinned: c.pinned,
+				messageCount: c.messageCount,
+				createdAt: c.createdAt.toISOString(),
+			})),
+		});
+	});
+
+	// Pin/unpin or rename a conversation.
+	router.patch('/v1/projects/:projectId/chats/:chatId', guard, async (req, res) => {
+		const parsed = updateChatSchema.safeParse(req.body);
+		if (!parsed.success) {
+			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+			return;
+		}
+		const chatId = req.params.chatId as string;
+		const existing = await deps.chats.findChatById(chatId);
+		if (!existing || existing.projectId !== req.project!.id) {
+			res.status(404).json({ error: `Conversation "${chatId}" not found` });
+			return;
+		}
+		const updated = await deps.chats.updateChat(chatId, parsed.data);
+		res.status(200).json({ id: updated!.id, title: updated!.title, pinned: updated!.pinned, createdAt: updated!.createdAt.toISOString() });
 	});
 
 	router.get('/v1/projects/:projectId/chats/:chatId/messages', guard, async (req, res) => {

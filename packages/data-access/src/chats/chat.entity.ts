@@ -3,7 +3,13 @@ export interface Chat {
 	projectId: string;
 	userId: string | null;
 	title: string | null;
+	pinned: boolean;
 	createdAt: Date;
+}
+
+/** A conversation plus its message count, for the workspace conversation list. */
+export interface ChatSummary extends Chat {
+	messageCount: number;
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system';

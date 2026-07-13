@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Chat, ChatRepository, Message, Project } from '@meshify/data-access';
+import type { Chat, ChatRepository, ChatSummary, Message, Project } from '@meshify/data-access';
 import { FakeRagService } from '@meshify/rocketride-gateway';
 import { AskQuestionUseCase, ChatNotFoundError } from './ask-question.usecase.js';
 import type { ChatPipelineResolver } from './chat-pipeline.port.js';
@@ -20,13 +20,27 @@ class FakeChatRepository implements ChatRepository {
 	messages: Message[] = [];
 
 	async createChat(input: { id: string; projectId: string; userId?: string; title?: string }): Promise<Chat> {
-		const chat: Chat = { id: input.id, projectId: input.projectId, userId: input.userId ?? null, title: input.title ?? null, createdAt: new Date() };
+		const chat: Chat = { id: input.id, projectId: input.projectId, userId: input.userId ?? null, title: input.title ?? null, pinned: false, createdAt: new Date() };
 		this.chats.set(chat.id, chat);
 		return chat;
 	}
 
 	async findChatById(id: string): Promise<Chat | undefined> {
 		return this.chats.get(id);
+	}
+
+	async findByProjectId(projectId: string): Promise<ChatSummary[]> {
+		return [...this.chats.values()]
+			.filter((c) => c.projectId === projectId)
+			.map((c) => ({ ...c, messageCount: this.messages.filter((m) => m.chatId === c.id).length }));
+	}
+
+	async updateChat(id: string, patch: { title?: string; pinned?: boolean }): Promise<Chat | undefined> {
+		const chat = this.chats.get(id);
+		if (!chat) return undefined;
+		const updated = { ...chat, ...patch };
+		this.chats.set(id, updated);
+		return updated;
 	}
 
 	async createMessage(input: { id: string; chatId: string; role: Message['role']; content: string; citations?: Message['citations']; latencyMs?: number; modelUsed?: string; tokensUsed?: number }): Promise<Message> {

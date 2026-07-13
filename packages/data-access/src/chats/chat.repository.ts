@@ -1,4 +1,9 @@
-import type { Chat, Message, MessageCitation, MessageRole } from './chat.entity.js';
+import type { Chat, ChatSummary, Message, MessageCitation, MessageRole } from './chat.entity.js';
+
+export interface UpdateChatInput {
+	title?: string;
+	pinned?: boolean;
+}
 
 export interface CreateChatInput {
 	id: string;
@@ -21,6 +26,10 @@ export interface CreateMessageInput {
 export interface ChatRepository {
 	createChat(input: CreateChatInput): Promise<Chat>;
 	findChatById(id: string): Promise<Chat | undefined>;
+	/** All conversations for a project, pinned first then newest, each with its message count. */
+	findByProjectId(projectId: string): Promise<ChatSummary[]>;
+	/** Patch a conversation's title/pinned flag. Returns the updated chat, or undefined if it doesn't exist. */
+	updateChat(id: string, patch: UpdateChatInput): Promise<Chat | undefined>;
 	createMessage(input: CreateMessageInput): Promise<Message>;
 	/** Most recent messages first-in-time last; `limit` counts from the end of the conversation. */
 	listMessages(chatId: string, limit?: number): Promise<Message[]>;

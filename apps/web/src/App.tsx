@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
-import { AppShell } from '@/components/layout/AppShell';
 import { OrgShell } from '@/components/layout/OrgShell';
-import { ProjectWorkspaceShell } from '@/components/layout/ProjectWorkspaceShell';
+import { WorkspaceShell } from '@/components/layout/WorkspaceShell';
 import { LandingPage } from './pages/LandingPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -45,25 +44,24 @@ export function App() {
 					<Route path="/dashboard" element={<Navigate to="/home" replace />} />
 				</Route>
 
-				{/* Project Workspace — per-project chrome (sidebar rebuilt in a later step). */}
+				{/* Project Workspace (3c) — conversation-centric chrome, no project list. */}
 				<Route
+					path="/projects/:projectId"
 					element={
 						<Protected>
-							<AppShell />
+							<WorkspaceShell />
 						</Protected>
 					}
 				>
-					<Route path="/projects/:projectId" element={<ProjectWorkspaceShell />}>
 					<Route index element={<Navigate to="chat" replace />} />
-						<Route path="overview" element={<ProjectHomePage />} />
-						<Route path="settings" element={<SettingsPage />} />
+					<Route path="chat" element={<ChatPage />} />
+					<Route path="overview" element={<ProjectHomePage />} />
+					<Route path="repository" element={<RepositoriesPage />} />
 					<Route path="documents" element={<DocumentsPage />} />
 					<Route path="search" element={<SearchPage />} />
-					<Route path="chat" element={<ChatPage />} />
 					<Route path="evaluation" element={<EvaluationPage />} />
-					<Route path="repository" element={<RepositoriesPage />} />
+					<Route path="settings" element={<SettingsPage />} />
 				</Route>
-			</Route>
 
 			<Route path="*" element={<NotFoundPage />} />
 		</Routes>

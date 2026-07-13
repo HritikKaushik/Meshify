@@ -8,7 +8,7 @@
 	"scripts": {
 		"build": "tsc -b",
 		"typecheck": "tsc --noEmit",
-		"migrate": "tsx src/migrate.ts",
+		"migrate": "tsx --env-file=../../.env src/migrate.ts",
 		"issue-api-key": "tsx src/scripts/issue-api-key.ts"
 	},
 	"dependencies": {

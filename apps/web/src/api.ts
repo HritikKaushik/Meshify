@@ -91,6 +91,25 @@ export interface ChatResponse {
 	tokenUsage: { prompt: number; completion: number; total: number } | null;
 }
 
+export interface Conversation {
+	id: string;
+	title: string | null;
+	pinned: boolean;
+	messageCount: number;
+	createdAt: string;
+}
+
+export interface ChatMessage {
+	id: string;
+	role: 'user' | 'assistant' | 'system';
+	content: string;
+	citations: ChatCitation[];
+	latencyMs: number | null;
+	modelUsed: string | null;
+	tokensUsed: number | null;
+	createdAt: string;
+}
+
 export interface GoldenCase {
 	id: string;
 	question: string;
@@ -222,6 +241,34 @@ export class MeshifyApi {
 				body: JSON.stringify({ question, conversationId }),
 			})
 		);
+	}
+
+	/** All conversations for a project (pinned first, then newest). */
+	async listChats(projectId: string): Promise<Conversation[]> {
+		const { conversations } = await this.parse<{ conversations: Conversation[] }>(
+			await fetch(this.url(`/api/v1/projects/${projectId}/chats`), { credentials: 'include' })
+		);
+		return conversations;
+	}
+
+	/** Pin/unpin or rename a conversation. */
+	async updateChat(projectId: string, chatId: string, patch: { title?: string; pinned?: boolean }): Promise<Conversation> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/projects/${projectId}/chats/${chatId}`), {
+				method: 'PATCH',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(patch),
+			})
+		);
+	}
+
+	/** Full message history for a conversation. */
+	async getMessages(projectId: string, chatId: string): Promise<ChatMessage[]> {
+		const { messages } = await this.parse<{ messages: ChatMessage[] }>(
+			await fetch(this.url(`/api/v1/projects/${projectId}/chats/${chatId}/messages`), { credentials: 'include' })
+		);
+		return messages;
 	}
 
 	// --- Evaluation ---
