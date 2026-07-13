@@ -1,125 +1,123 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
-import { toast } from 'sonner';
-import { Plus, ArrowUpRight } from 'lucide-react';
-import { api } from '@/api-client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { useMemo } from 'react';
+import { Plus, Sparkles, Activity } from 'lucide-react';
 import type { Project } from '@/api';
-import { useAsync } from '@/ui';
-import { projectColor } from '@/lib/project-color';
-import { StatusDot, Kicker } from '@/components/mc/primitives';
-import { cn } from '@/lib/utils';
+import { usePersistent } from '@/store';
+import { useOrg } from '@/components/layout/OrgShell';
+import { StatTile } from '@/components/project-home/StatTile';
+import { ProjectCard } from '@/components/project-home/ProjectCard';
+import { GlassCard, Kicker } from '@/components/mc/primitives';
 
-interface ShellContext {
-	refreshProjects: () => Promise<unknown>;
-}
-
+/**
+ * Project Home (design 3b) — the org dashboard and post-login default. Real
+ * project data drives the stat tiles and project cards; pinning is a local
+ * user preference. The design's org-level widgets (activity feed, indexing
+ * jobs, AI suggestions, coverage %) have no backend yet, so they are shown as
+ * honest "coming soon" states rather than fabricated numbers.
+ */
 export function DashboardPage() {
-	const navigate = useNavigate();
-	const { refreshProjects } = useOutletContext<ShellContext>();
-	const list = useAsync<Project[]>();
-	const create = useAsync<Project>();
-	const [open, setOpen] = useState(false);
-	const [name, setName] = useState('');
-	const [description, setDescription] = useState('');
+	const { projects, loading, openCreate } = useOrg();
+	const [pinnedIds, setPinnedIds] = usePersistent<string[]>('meshify.pinnedProjects', []);
 
-	const refresh = () => list.run(() => api.listProjects());
+	const togglePin = (id: string) =>
+		setPinnedIds(pinnedIds.includes(id) ? pinnedIds.filter((x) => x !== id) : [...pinnedIds, id]);
 
-	useEffect(() => {
-		void refresh();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
-
-	const handleCreate = async () => {
-		const project = await create.run(() => api.createProject({ name, description: description || undefined }));
-		if (project) {
-			setOpen(false);
-			setName('');
-			setDescription('');
-			toast.success(`Created "${project.name}"`);
-			void refresh();
-			void refreshProjects();
-			navigate(`/projects/${project.id}`);
-		}
-	};
-
-	const projects = list.state.status === 'success' ? list.state.value : [];
+	const weekAgo = Date.now() - 7 * 864e5;
+	const { pinned, recent, activeCount, updatedThisWeek } = useMemo(() => {
+		const byRecent = [...projects].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+		return {
+			pinned: byRecent.filter((p) => pinnedIds.includes(p.id)),
+			recent: byRecent,
+			activeCount: projects.filter((p) => p.status === 'active').length,
+			updatedThisWeek: projects.filter((p) => +new Date(p.updatedAt) > weekAgo).length,
+		};
+	}, [projects, pinnedIds, weekAgo]);
 
 	return (
-		<div>
-			<div className="mb-6 flex items-end justify-between">
+		<div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+			{/* Main column */}
+			<div className="flex min-w-0 flex-col gap-6">
 				<div className="flex flex-col gap-1.5">
 					<Kicker>// WORKSPACE</Kicker>
-					<h1 className="text-2xl font-semibold tracking-tight text-mc-text">Projects</h1>
-					<p className="text-sm text-mc-text-3">Each project owns an isolated, RAG-queryable knowledge base over its documents and code.</p>
+					<h1 className="text-2xl font-semibold tracking-tight text-mc-text">Your workspace</h1>
+					<p className="text-sm text-mc-text-3">
+						{loading ? 'Loading projects…' : `${projects.length} project${projects.length === 1 ? '' : 's'} · each an isolated, RAG-queryable knowledge base.`}
+					</p>
 				</div>
-				<Dialog open={open} onOpenChange={setOpen}>
-					<DialogTrigger asChild>
-						<button className="flex items-center gap-2 rounded-lg bg-mc-accent px-4 py-2.5 text-[13px] font-semibold text-mc-bg shadow-[0_0_20px_rgba(227,154,76,.3)] transition-colors hover:bg-mc-accent-hi">
-							<Plus className="h-4 w-4" /> New project
-						</button>
-					</DialogTrigger>
-					<DialogContent className="border-white/[.08] bg-mc-card">
-						<DialogHeader>
-							<DialogTitle>Create a project</DialogTitle>
-							<DialogDescription>Provisions its own isolated Qdrant collections and RocketRide pipelines.</DialogDescription>
-						</DialogHeader>
-						<div className="flex flex-col gap-3">
-							<Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-							<Input placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
+
+				<div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+					<StatTile label="PROJECTS" value={projects.length} />
+					<StatTile label="ACTIVE" value={activeCount} accent="success" sub={activeCount === projects.length && projects.length > 0 ? 'all healthy' : undefined} />
+					<StatTile label="UPDATED · 7D" value={updatedThisWeek} accent="indexing" />
+				</div>
+
+				{pinned.length > 0 && (
+					<Section title="PINNED">
+						<CardGrid projects={pinned} pinnedIds={pinnedIds} onTogglePin={togglePin} />
+					</Section>
+				)}
+
+				<Section title={pinned.length > 0 ? 'ALL PROJECTS' : 'PROJECTS'}>
+					{!loading && projects.length === 0 ? (
+						<div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/[.1] py-16 text-center">
+							<p className="text-sm text-mc-text-3">No projects yet.</p>
+							<button onClick={openCreate} className="flex items-center gap-1.5 text-sm text-mc-accent hover:text-mc-accent-hi">
+								<Plus className="h-3.5 w-3.5" /> Create your first project
+							</button>
 						</div>
-						<DialogFooter>
-							<Button onClick={handleCreate} disabled={!name.trim() || create.state.status === 'pending'}>
-								{create.state.status === 'pending' ? 'Creating…' : 'Create'}
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
+					) : (
+						<CardGrid projects={recent} pinnedIds={pinnedIds} onTogglePin={togglePin} />
+					)}
+				</Section>
 			</div>
 
-			{list.state.status === 'pending' && <p className="text-sm text-mc-text-3">Loading projects…</p>}
-			{list.state.status === 'error' && <p className="text-sm text-mc-danger">Couldn't load projects — {(list.state.error as Error).message}</p>}
-			{list.state.status === 'success' && projects.length === 0 && (
-				<div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/[.1] py-16 text-center">
-					<p className="text-sm text-mc-text-3">No projects yet.</p>
-					<button onClick={() => setOpen(true)} className="text-sm text-mc-accent hover:text-mc-accent-hi">
-						Create your first project →
+			{/* Right rail — quick start (real) + honest placeholders for unbacked org widgets */}
+			<aside className="flex flex-col gap-4">
+				<GlassCard className="flex flex-col gap-3 p-4">
+					<Kicker>GET STARTED</Kicker>
+					<button onClick={openCreate} className="flex items-center gap-2.5 rounded-lg border border-mc-accent/25 bg-mc-accent/[.08] px-3 py-2.5 text-left text-[13px] font-medium text-mc-accent-hi transition-colors hover:bg-mc-accent/[.14]">
+						<Plus className="h-4 w-4" /> New project
 					</button>
-				</div>
-			)}
+					<p className="text-[12px] leading-relaxed text-mc-text-3">
+						Open a project to connect a repository, upload documents, and ask Mesh grounded, cited questions.
+					</p>
+				</GlassCard>
 
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				{projects.map((p) => (
-					<button
-						key={p.id}
-						onClick={() => navigate(`/projects/${p.id}`)}
-						className={cn(
-							'group relative flex flex-col gap-3 overflow-hidden rounded-xl border border-white/[.06] bg-[rgba(18,18,24,.55)] p-5 text-left backdrop-blur-[10px] transition-all hover:border-mc-accent/40'
-						)}
-					>
-						<div
-							className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity group-hover:opacity-100"
-							style={{ background: projectColor(p.id) }}
-						/>
-						<div className="relative flex items-center gap-2.5">
-							<span className="h-4 w-4 rounded-md" style={{ background: projectColor(p.id) }} />
-							<span className="flex-1 truncate text-[15px] font-semibold text-mc-text">{p.name}</span>
-							<StatusDot color={p.status === 'active' ? 'success' : 'muted'} glow={p.status === 'active'} />
-						</div>
-						<p className="relative min-h-[2.5rem] text-xs leading-relaxed text-mc-text-3">
-							{p.description || 'No description.'}
-						</p>
-						<div className="relative flex items-center justify-between font-mono text-[11px] text-mc-muted">
-							<span className="truncate">{p.llmProfile}</span>
-							<span className="flex items-center gap-1 text-mc-text-2 opacity-0 transition-opacity group-hover:opacity-100">
-								Open <ArrowUpRight className="h-3 w-3" />
-							</span>
-						</div>
-					</button>
-				))}
+				<GlassCard className="flex flex-col gap-2.5 p-4">
+					<div className="flex items-center gap-2"><Activity className="h-3.5 w-3.5 text-mc-muted-2" /><Kicker>ACTIVITY</Kicker></div>
+					<p className="text-[12px] leading-relaxed text-mc-text-3">
+						Org-wide activity (uploads, syncs, indexing) will appear here once activity tracking ships. Per-project status is live inside each workspace.
+					</p>
+				</GlassCard>
+
+				<GlassCard className="flex flex-col gap-2.5 p-4">
+					<div className="flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-mc-accent" /><Kicker>AI SUGGESTIONS</Kicker></div>
+					<p className="text-[12px] leading-relaxed text-mc-text-3">
+						Mesh surfaces documentation gaps and drift inside each project. Open a project and ask Mesh to get started.
+					</p>
+				</GlassCard>
+			</aside>
+		</div>
+	);
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+	return (
+		<div className="flex flex-col gap-3">
+			<div className="flex items-center gap-3">
+				<span className="font-mono text-[10px] tracking-[.11em] text-mc-muted-2">{title}</span>
+				<div className="h-px flex-1 bg-white/[.06]" />
 			</div>
+			{children}
+		</div>
+	);
+}
+
+function CardGrid({ projects, pinnedIds, onTogglePin }: { projects: Project[]; pinnedIds: string[]; onTogglePin: (id: string) => void }) {
+	return (
+		<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+			{projects.map((p) => (
+				<ProjectCard key={p.id} project={p} pinned={pinnedIds.includes(p.id)} onTogglePin={onTogglePin} />
+			))}
 		</div>
 	);
 }

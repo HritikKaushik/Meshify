@@ -31,7 +31,7 @@ export function AppShell() {
 		<div className="flex h-screen overflow-hidden bg-mc-bg text-mc-text">
 			{/* Sidebar */}
 			<aside className="z-10 flex w-64 flex-none flex-col gap-1 border-r border-white/[.06] bg-[rgba(10,10,14,.72)] px-3 py-4 backdrop-blur-[14px]">
-				<Link to="/dashboard" className="flex items-center gap-2.5 px-2 pb-4 pt-1">
+				<Link to="/home" className="flex items-center gap-2.5 px-2 pb-4 pt-1">
 					<MeshLogo size={26} />
 					<div className="flex flex-col">
 						<span className="text-[13px] font-semibold tracking-tight">Meshify</span>
@@ -68,7 +68,7 @@ export function AppShell() {
 					))}
 				</nav>
 
-				<Link to="/dashboard" className="px-2 py-1.5 text-xs text-mc-muted-2 hover:text-mc-text-2">
+				<Link to="/home" className="px-2 py-1.5 text-xs text-mc-muted-2 hover:text-mc-text-2">
 					All projects →
 				</Link>
 
@@ -89,7 +89,7 @@ export function AppShell() {
 				{/* Top bar */}
 				<header className="z-10 flex flex-none items-center gap-4 border-b border-white/[.06] bg-[rgba(8,8,11,.6)] px-6 py-3 backdrop-blur-[14px]">
 					<div className="flex items-center gap-2 text-[12.5px] text-mc-muted-2">
-						<Link to="/dashboard" className="hover:text-mc-text-2">
+						<Link to="/home" className="hover:text-mc-text-2">
 							Meshify
 						</Link>
 						{active && (

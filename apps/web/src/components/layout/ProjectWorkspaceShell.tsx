@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
-import { LayoutDashboard, MessageSquare, FolderGit2, FileText, SearchCode, FlaskConical } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, FolderGit2, FileText, SearchCode, FlaskConical, Settings } from 'lucide-react';
 import { api } from '@/api-client';
 import { useAsync } from '@/ui';
 import type { Project } from '@/api';
@@ -8,13 +8,15 @@ import { projectColor } from '@/lib/project-color';
 import { Kicker } from '@/components/mc/primitives';
 import { cn } from '@/lib/utils';
 
+// Chat leads (primary, Cursor-style); the rest is secondary navigation.
 const TABS = [
-	{ to: 'home', label: 'Home', icon: LayoutDashboard },
 	{ to: 'chat', label: 'Mesh Chat', icon: MessageSquare },
+	{ to: 'overview', label: 'Overview', icon: LayoutDashboard },
 	{ to: 'repository', label: 'Repository', icon: FolderGit2 },
 	{ to: 'documents', label: 'Documents', icon: FileText },
 	{ to: 'search', label: 'Search', icon: SearchCode },
 	{ to: 'evaluation', label: 'Evaluation', icon: FlaskConical },
+	{ to: 'settings', label: 'Settings', icon: Settings },
 ] as const;
 
 /** Loads the active project and renders the Mission Control per-project sub-nav + nested route. */

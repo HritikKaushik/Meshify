@@ -6,7 +6,7 @@ import type { ChatCitation, ChatResponse } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { MeshAvatar, Kicker } from '@/components/mc/primitives';
-import { TextGenerateEffect } from '@/components/ui/text-generate-effect';
+import { TypewriterEffect } from '@/components/ui/typewriter-effect';
 import { cn } from '@/lib/utils';
 
 interface Turn {
@@ -223,7 +223,12 @@ function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 				</div>
 
 				{reveal ? (
-					<TextGenerateEffect words={turn.content} className="text-sm leading-relaxed text-mc-text-2" duration={0.25} />
+					<TypewriterEffect
+							words={turn.content.split(' ').map((text) => ({ text }))}
+							className="text-sm leading-relaxed text-mc-text-2"
+							duration={0.15}
+							stagger={0.012}
+						/>
 				) : (
 					<AnswerBody text={turn.content} />
 				)}

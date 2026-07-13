@@ -14,6 +14,9 @@ const buttonVariants = cva(
 				secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
 				ghost: 'hover:bg-accent hover:text-accent-foreground',
 				link: 'text-primary underline-offset-4 hover:underline',
+				// Mission Control variants (design system): amber call-to-action + translucent glass.
+				mesh: 'bg-mc-accent text-mc-bg font-semibold shadow-[0_0_20px_rgba(227,154,76,.3)] hover:bg-mc-accent-hi',
+				glass: 'border border-white/[.09] bg-white/[.03] text-mc-text-2 backdrop-blur-[8px] hover:bg-white/[.06] hover:text-mc-text',
 			},
 			size: {
 				default: 'h-9 px-4 py-2',
