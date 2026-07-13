@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mission Control theme — near-black neutrals, one amber accent reserved for
+   actions and "Mesh" (the AI). Dark-only for v1 (matches the design doc);
+   `darkMode: 'class'` stays available for a future light mode. index.html sets
+   class="dark" on <html> so this is the only theme in effect today. */
+@layer base {
+	:root,
+	.dark {
+		--background: 240 20% 4%; /* #08080B */
+		--foreground: 240 8% 95%; /* #F2F2F4 */
+		--card: 240 12% 5%; /* #0B0B0E */
+		--card-foreground: 240 8% 95%;
+		--popover: 240 11% 8%; /* #121216 */
+		--popover-foreground: 240 8% 95%;
+		--primary: 32 72% 59%; /* #E39A4C amber */
+		--primary-foreground: 240 12% 5%;
+		--secondary: 240 11% 10%; /* #17171C */
+		--secondary-foreground: 240 8% 95%;
+		--muted: 240 11% 10%;
+		--muted-foreground: 240 6% 67%; /* #A6A6B0 */
+		--accent: 240 11% 12%;
+		--accent-foreground: 240 8% 95%;
+		--destructive: 6 72% 60%; /* #E0604F */
+		--destructive-foreground: 0 0% 100%;
+		--border: 240 10% 15%;
+		--input: 240 10% 15%;
+		--ring: 32 72% 59%;
+		--radius: 0.6rem;
+	}
+
+	* {
+		@apply border-border;
+	}
+
+	body {
+		@apply bg-background text-foreground;
+		font-family: 'Geist', system-ui, -apple-system, sans-serif;
+		-webkit-font-smoothing: antialiased;
+	}
+
+	/* Thin, dark scrollbars to match the flight-deck aesthetic. */
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+	}
+	*::-webkit-scrollbar {
+		width: 8px;
+		height: 8px;
+	}
+	*::-webkit-scrollbar-thumb {
+		background: rgba(255, 255, 255, 0.12);
+		border-radius: 99px;
+	}
+	*::-webkit-scrollbar-track {
+		background: transparent;
+	}
+}

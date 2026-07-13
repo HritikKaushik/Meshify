@@ -1,111 +1,55 @@
-import { useMemo, useState } from 'react';
-import { MeshifyApi, type HealthReport } from './api';
-import { useConfig, useKnownProjects, usePersistent } from './store';
-import { Result, useAsync } from './ui';
-import { ProjectsPanel } from './panels/ProjectsPanel';
-import { DocumentsPanel } from './panels/DocumentsPanel';
-import { SearchPanel } from './panels/SearchPanel';
-import { ChatPanel } from './panels/ChatPanel';
-import { EvaluationPanel } from './panels/EvaluationPanel';
-import { RepositoriesPanel } from './panels/RepositoriesPanel';
+import type { ReactNode } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
+import { AppShell } from '@/components/layout/AppShell';
+import { ProjectWorkspaceShell } from '@/components/layout/ProjectWorkspaceShell';
+import { LandingPage } from './pages/LandingPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+import { ProjectHomePage } from './pages/projects/ProjectHomePage';
+import { DocumentsPage } from './pages/projects/DocumentsPage';
+import { SearchPage } from './pages/projects/SearchPage';
+import { ChatPage } from './pages/projects/ChatPage';
+import { EvaluationPage } from './pages/projects/EvaluationPage';
+import { RepositoriesPage } from './pages/projects/RepositoriesPage';
 
-const TABS = ['Documents', 'Search', 'Chat', 'Evaluation', 'Repositories'] as const;
-type Tab = (typeof TABS)[number];
-
-export function App() {
-	const [config, setConfig] = useConfig();
-	const api = useMemo(() => new MeshifyApi(config), [config]);
-	const { projects, add, remove } = useKnownProjects();
-	const [activeId, setActiveId] = usePersistent<string | null>('meshify.active', null);
-	const [tab, setTab] = useState<Tab>('Documents');
-	const health = useAsync<HealthReport>();
-	const [auth, setAuth] = useState<{ ok: boolean; detail: string } | null>(null);
-
-	const active = projects.find((p) => p.id === activeId) ?? null;
-
-	// Reachability (public /health) AND key validity (authed probe) — so a green
-	// health check can't mislead you into thinking an empty/bad key is fine.
-	const connect = () =>
-		health.run(async () => {
-			const report = await api.health();
-			setAuth(await api.checkAuth());
-			return report;
-		});
-
+/** Gates its children behind a Clerk session; sends anonymous visitors to sign-in. */
+function Protected({ children }: { children: ReactNode }) {
 	return (
-		<div className="app">
-			<header className="topbar">
-				<h1>Meshify Console <span className="tag">dev</span></h1>
-				<div className="conn">
-					<input
-						aria-label="API base URL"
-						placeholder="API base URL (blank = dev proxy)"
-						value={config.baseUrl}
-						onChange={(e) => setConfig({ ...config, baseUrl: e.target.value })}
-					/>
-					<input
-						aria-label="API key"
-						type="password"
-						placeholder="API key (msk_…)"
-						value={config.apiKey}
-						onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
-					/>
-					<button onClick={connect}>Connect</button>
-					<HealthDot state={health.state} />
-				</div>
-			</header>
-
-			{health.state.status === 'error' && (
-				<div className="banner">
-					Can't reach the API. Is platform-api running on :3000 and the dev proxy up? <Result state={health.state} />
-				</div>
-			)}
-			{health.state.status === 'success' && (
-				<div className={`banner ${auth?.ok ? 'ok' : ''}`}>
-					API reachable: {health.state.value.dependencies?.map((d) => `${d.name} ${d.status}`).join(' · ')}
-					{auth && (
-						<div>
-							{auth.ok ? '✓ ' : '✗ '}
-							{auth.detail}
-						</div>
-					)}
-				</div>
-			)}
-
-			<main>
-				<ProjectsPanel api={api} known={projects} activeId={activeId} onAdd={add} onRemove={(id) => { remove(id); if (id === activeId) setActiveId(null); }} onSelect={setActiveId} />
-
-				{active ? (
-					<div className="workspace">
-						<div className="workspace-head">
-							Active project: <strong>{active.name}</strong> <code>{active.id}</code>
-						</div>
-						<nav className="tabs">
-							{TABS.map((t) => (
-								<button key={t} className={t === tab ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-									{t}
-								</button>
-							))}
-						</nav>
-						{tab === 'Documents' && <DocumentsPanel api={api} projectId={active.id} />}
-						{tab === 'Search' && <SearchPanel api={api} projectId={active.id} />}
-						{tab === 'Chat' && <ChatPanel api={api} projectId={active.id} />}
-						{tab === 'Evaluation' && <EvaluationPanel api={api} projectId={active.id} />}
-						{tab === 'Repositories' && <RepositoriesPanel api={api} projectId={active.id} />}
-					</div>
-				) : (
-					<p className="muted center">Select or create a project to access its features.</p>
-				)}
-			</main>
-
-			<footer>
-				Dev console for the Meshify platform-api. The API key is stored in your browser (localStorage) — dev use only.
-			</footer>
-		</div>
+		<>
+			<SignedIn>{children}</SignedIn>
+			<SignedOut>
+				<RedirectToSignIn />
+			</SignedOut>
+		</>
 	);
 }
 
-function HealthDot({ state }: { state: ReturnType<typeof useAsync<HealthReport>>['state'] }) {
-	const color = state.status === 'success' ? '#22c55e' : state.status === 'error' ? '#ef4444' : state.status === 'pending' ? '#f59e0b' : '#94a3b8';
-	return <span className="dot" style={{ background: color }} title={state.status} />;
+export function App() {
+	return (
+		<Routes>
+			<Route path="/" element={<LandingPage />} />
+
+			<Route
+				element={
+					<Protected>
+						<AppShell />
+					</Protected>
+				}
+			>
+				<Route path="/dashboard" element={<DashboardPage />} />
+				<Route path="/projects/:projectId" element={<ProjectWorkspaceShell />}>
+					<Route index element={<ProjectHomePage />} />
+					<Route path="home" element={<ProjectHomePage />} />
+					<Route path="documents" element={<DocumentsPage />} />
+					<Route path="search" element={<SearchPage />} />
+					<Route path="chat" element={<ChatPage />} />
+					<Route path="evaluation" element={<EvaluationPage />} />
+					<Route path="repository" element={<RepositoriesPage />} />
+				</Route>
+			</Route>
+
+			<Route path="*" element={<NotFoundPage />} />
+		</Routes>
+	);
 }

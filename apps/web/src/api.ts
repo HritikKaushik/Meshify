@@ -1,11 +1,16 @@
-// Minimal typed client for the Meshify platform-api. One place that knows the
-// wire shape; panels call these methods. Errors carry the HTTP status and the
-// server's error body so the UI can show exactly what happened.
+// Minimal typed client for the Meshify BFF (apps/bff), which proxies to
+// platform-api. One place that knows the wire shape; pages call these
+// methods. Errors carry the HTTP status and the server's error body so the
+// UI can show exactly what happened.
+//
+// Auth: the BFF is Clerk-session-authenticated. The browser never holds a
+// platform-api key — every call sends `credentials: 'include'` so the Clerk
+// session cookie rides along; the BFF resolves it to the org's real API key
+// server-side. There is nothing to configure client-side beyond the base URL.
 
 export interface ApiConfig {
-	/** Base URL. Empty string → same-origin (dev proxy forwards to the API). */
+	/** Base URL. Empty string → same-origin (dev proxy forwards /api to the BFF). */
 	baseUrl: string;
-	apiKey: string;
 }
 
 export class ApiError extends Error {
@@ -143,25 +148,6 @@ export class MeshifyApi {
 		return `${this.cfg.baseUrl}${path}`;
 	}
 
-	private authHeaders(): Record<string, string> {
-		// Trim to survive a pasted key with stray whitespace/newline.
-		const key = this.cfg.apiKey.trim();
-		return key ? { Authorization: `Bearer ${key}` } : {};
-	}
-
-	/**
-	 * Probes whether the API key authenticates, without mutating anything.
-	 * GET /v1/jobs/<zero-uuid> is behind authGuard: a bad/absent key → 401,
-	 * a valid key → 404 (the job doesn't exist). Anything else is reported raw.
-	 */
-	async checkAuth(): Promise<{ ok: boolean; detail: string }> {
-		if (!this.cfg.apiKey.trim()) return { ok: false, detail: 'No API key set — paste your msk_… key.' };
-		const res = await fetch(this.url('/v1/jobs/00000000-0000-0000-0000-000000000000'), { headers: this.authHeaders() });
-		if (res.status === 404) return { ok: true, detail: 'API key valid.' };
-		if (res.status === 401) return { ok: false, detail: 'API key rejected (401) — wrong/expired key, or issued under a different server pepper.' };
-		return { ok: false, detail: `Unexpected status ${res.status} while checking auth.` };
-	}
-
 	private async parse<T>(res: Response): Promise<T> {
 		const text = await res.text();
 		const body = text ? safeJson(text) : undefined;
@@ -175,26 +161,31 @@ export class MeshifyApi {
 
 	// --- Health (no auth) ---
 	async health(): Promise<HealthReport> {
-		return this.parse(await fetch(this.url('/health/ready')));
+		return this.parse(await fetch(this.url('/api/health')));
 	}
 
 	// --- Projects ---
+	async listProjects(): Promise<Project[]> {
+		return this.parse(await fetch(this.url('/api/v1/projects'), { credentials: 'include' }));
+	}
+
 	async createProject(input: { name: string; description?: string; llmProfile?: string; embeddingProfile?: string }): Promise<Project> {
 		return this.parse(
-			await fetch(this.url('/v1/projects'), {
+			await fetch(this.url('/api/v1/projects'), {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(input),
 			})
 		);
 	}
 
 	async getProject(id: string): Promise<Project> {
-		return this.parse(await fetch(this.url(`/v1/projects/${id}`), { headers: this.authHeaders() }));
+		return this.parse(await fetch(this.url(`/api/v1/projects/${id}`), { credentials: 'include' }));
 	}
 
 	async deleteProject(id: string): Promise<void> {
-		const res = await fetch(this.url(`/v1/projects/${id}`), { method: 'DELETE', headers: this.authHeaders() });
+		const res = await fetch(this.url(`/api/v1/projects/${id}`), { method: 'DELETE', credentials: 'include' });
 		if (!res.ok && res.status !== 204) await this.parse(res);
 	}
 
@@ -202,19 +193,20 @@ export class MeshifyApi {
 	async uploadDocument(projectId: string, file: File): Promise<UploadResult> {
 		const form = new FormData();
 		form.append('file', file);
-		return this.parse(await fetch(this.url(`/v1/projects/${projectId}/documents`), { method: 'POST', headers: this.authHeaders(), body: form }));
+		return this.parse(await fetch(this.url(`/api/v1/projects/${projectId}/documents`), { method: 'POST', credentials: 'include', body: form }));
 	}
 
 	async getJob(jobId: string): Promise<Job> {
-		return this.parse(await fetch(this.url(`/v1/jobs/${jobId}`), { headers: this.authHeaders() }));
+		return this.parse(await fetch(this.url(`/api/v1/jobs/${jobId}`), { credentials: 'include' }));
 	}
 
 	// --- Search ---
 	async search(projectId: string, query: string, mode: string): Promise<SearchResponse> {
 		return this.parse(
-			await fetch(this.url(`/v1/projects/${projectId}/search`), {
+			await fetch(this.url(`/api/v1/projects/${projectId}/search`), {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ query, mode }),
 			})
 		);
@@ -223,9 +215,10 @@ export class MeshifyApi {
 	// --- Chat ---
 	async chat(projectId: string, question: string, conversationId?: string): Promise<ChatResponse> {
 		return this.parse(
-			await fetch(this.url(`/v1/projects/${projectId}/chat`), {
+			await fetch(this.url(`/api/v1/projects/${projectId}/chat`), {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ question, conversationId }),
 			})
 		);
@@ -234,9 +227,10 @@ export class MeshifyApi {
 	// --- Evaluation ---
 	async runEvaluation(projectId: string, cases: GoldenCase[]): Promise<EvaluationReport> {
 		return this.parse(
-			await fetch(this.url(`/v1/projects/${projectId}/evaluation/run`), {
+			await fetch(this.url(`/api/v1/projects/${projectId}/evaluation/run`), {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ cases }),
 			})
 		);
@@ -245,16 +239,17 @@ export class MeshifyApi {
 	// --- Repositories ---
 	async listRepositories(projectId: string): Promise<Repository[]> {
 		const { repositories } = await this.parse<{ repositories: Repository[] }>(
-			await fetch(this.url(`/v1/projects/${projectId}/repositories`), { headers: this.authHeaders() })
+			await fetch(this.url(`/api/v1/projects/${projectId}/repositories`), { credentials: 'include' })
 		);
 		return repositories;
 	}
 
 	async connectGitHub(projectId: string, remoteUrl: string): Promise<unknown> {
 		return this.parse(
-			await fetch(this.url(`/v1/projects/${projectId}/repositories`), {
+			await fetch(this.url(`/api/v1/projects/${projectId}/repositories`), {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ source: 'github', remoteUrl }),
 			})
 		);
@@ -262,7 +257,7 @@ export class MeshifyApi {
 
 	async syncRepository(projectId: string, repositoryId: string): Promise<unknown> {
 		return this.parse(
-			await fetch(this.url(`/v1/projects/${projectId}/repositories/${repositoryId}/sync`), { method: 'POST', headers: this.authHeaders() })
+			await fetch(this.url(`/api/v1/projects/${projectId}/repositories/${repositoryId}/sync`), { method: 'POST', credentials: 'include' })
 		);
 	}
 }

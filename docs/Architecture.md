@@ -1,6 +1,8 @@
 # Architecture
 
-Meshify Phase I is an **AI Backend-as-a-Service**: an API-only platform giving each project an isolated, RAG-queryable knowledge base over its documents and source code. There is no frontend in this phase; Phase II (Next.js) will consume these APIs.
+Meshify Phase I is an **AI Backend-as-a-Service**: an API-only platform giving each project an isolated, RAG-queryable knowledge base over its documents and source code.
+
+> **Note:** the line above originally read "there is no frontend in this phase; Phase II (Next.js) will consume these APIs." That assumption is superseded — the frontend arrived early, built on the existing `apps/web` Vite scaffold (not Next.js). See "Frontend & BFF" below.
 
 ## System overview
 
@@ -66,6 +68,18 @@ Every route except health/readiness sits behind three middlewares, in order: **a
 - **Object storage** — raw uploaded bytes, keyed `projects/<projectId>/documents/<docId>/<filename>`.
 - **Qdrant** — vectors + RocketRide's retrieval payload (`content` + `meta.{parent, chunkId, objectId, isDeleted}`), plus one schema control document per collection.
 
+## Frontend & BFF
+
+`apps/web` is a real Vite + React frontend (Tailwind + shadcn/ui + Aceternity UI for the hero/dashboard/chat/drag-drop-upload surfaces, react-router for the landing → dashboard → per-project workspace flow) — not the platform-api dev console it started as, and not a Next.js rebuild. It authenticates users with **Clerk**, not the platform-api bearer key directly.
+
+**`apps/bff`** is a new small Express app that sits between the browser and platform-api:
+
+- Clerk (`@clerk/express`) verifies the session; the Clerk session cookie is the frontend's only notion of "logged in" — the browser never holds an `msk_` key, and `platform-api`'s auth guard/CORS are untouched.
+- Every `/api/v1/*` request is streamed 1:1 to platform-api's `/v1/*` (including multipart uploads, unbuffered) with the resolved org's `Authorization: Bearer msk_...` header injected server-side.
+- **Self-serve org provisioning:** a `clerk_org_links` table (`clerk_org_id → org_id, api_key_id, encrypted_secret`) maps each Clerk organization to a Meshify org + API key. On a Clerk org's first authenticated request, `provisionOrgForClerk()` (`packages/data-access/src/provisioning/`) creates the org row, mints a key via the same `generateApiKey`/`hashApiKey` primitives the `issue-api-key` CLI uses, and persists the link (secret encrypted at rest, `ORG_KEY_ENCRYPTION_KEY`) — no operator step required, unlike the CLI-only flow the rest of this doc describes for direct API consumers.
+- Requires Clerk **Organizations** enabled (a session's `orgId` is what resolves to a Meshify org); a personal Clerk account with no org selected is rejected with a 400 rather than silently proceeding with no tenant context.
+- `GET /v1/projects` (list, org-scoped) was added to platform-api to back the dashboard's project list — previously only get-by-id existed.
+
 ## Known limitations (accepted, tracked)
 
 - **Search is dense-only, not hybrid.** Collections are dense Cosine only (RocketRide's shape); RocketRide's `qdrant` node writes dense vectors only, so true dense+sparse hybrid (and pure keyword) retrieval isn't available. `/search` fully supports semantic (dense) search; `mode: keyword` and `mode: hybrid` are accepted but **degrade to semantic** with a `degradedTo`/`warning`. Metadata filters (`language`/`parentType`) also match nothing, since RocketRide's payload doesn't store those fields.
@@ -76,6 +90,8 @@ Every route except health/readiness sits behind three middlewares, in order: **a
 ## Deployment (Kubernetes)
 
 `infrastructure/kubernetes/` holds a Kustomize base + dev/prod overlays. The scaling model mirrors the runtime roles: **platform-api** is stateless and scales horizontally on CPU (HPA, anti-affinity, PDB); **worker** scales on BullMQ queue depth via KEDA (`bull:<queue>:wait` length across the three queues), with in-flight jobs safely returning to the queue on SIGTERM; **observability** is pinned to a single replica with a `Recreate` strategy — never two instances, since it has no leader election and would double-write `pipeline_runs`. Schema changes run as a pre-rollout migrate Job (the platform-api image now ships the migration SQL). Stateful dependencies (Postgres, Redis, Qdrant, object storage, RocketRide) are external/managed and referenced via ConfigMap/Secret; the manifests don't provision them. See `infrastructure/kubernetes/README.md`.
+
+`apps/web` and `apps/bff` have no Kubernetes manifests yet — deployment for the frontend/BFF is out of scope for now and tracked separately from this backend deployment model.
 
 ## Full design document
 

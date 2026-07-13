@@ -8,7 +8,11 @@
 		"typecheck": "turbo run typecheck",
 		"test": "turbo run test",
 		"lint": "turbo run lint",
+		"predev": "node scripts/sync-rocketride-port.mjs",
+		"dev": "turbo run dev",
+		"sync:rocketride": "node scripts/sync-rocketride-port.mjs",
 		"dev:api": "pnpm --filter @meshify/platform-api dev",
+		"dev:bff": "pnpm --filter @meshify/bff dev",
 		"dev:worker": "pnpm --filter @meshify/worker dev",
 		"dev:web": "pnpm --filter @meshify/web dev",
 		"migrate": "pnpm --filter @meshify/data-access migrate"

@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import type { EvaluationReport, GoldenCase, MeshifyApi } from '../api';
 import { Result, Section, useAsync } from '../ui';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 const SAMPLE: GoldenCase[] = [
 	{ id: 'greeting', question: 'What is this project about?', expectedKeywords: ['knowledge'], minConfidence: 0.3 },
@@ -25,10 +29,10 @@ export function EvaluationPanel({ api, projectId }: { api: MeshifyApi; projectId
 
 	return (
 		<Section title="Evaluation" subtitle="Runs a golden set through the real RAG pipeline and scores each answer. Regression harness for CI.">
-			<label className="field">
-				<span>Golden set (JSON array of cases)</span>
-				<textarea
-					className="code-input"
+			<label className="flex flex-col gap-1.5">
+				<span className="text-xs text-muted-foreground">Golden set (JSON array of cases)</span>
+				<Textarea
+					className="font-mono text-xs"
 					rows={12}
 					value={text}
 					onChange={(e) => {
@@ -42,10 +46,10 @@ export function EvaluationPanel({ api, projectId }: { api: MeshifyApi; projectId
 					}}
 				/>
 			</label>
-			{parseError && <p className="warning">Invalid JSON: {parseError}</p>}
-			<button className="primary" onClick={execute} disabled={!!parseError}>
+			{parseError && <p className="mt-1 text-sm text-amber-500">Invalid JSON: {parseError}</p>}
+			<Button className="mt-3" onClick={execute} disabled={!!parseError}>
 				Run evaluation
-			</button>
+			</Button>
 
 			{run.state.status === 'success' && <Report report={run.state.value} />}
 			{run.state.status !== 'success' && <Result state={run.state} />}
@@ -55,49 +59,56 @@ export function EvaluationPanel({ api, projectId }: { api: MeshifyApi; projectId
 
 function Report({ report }: { report: EvaluationReport }) {
 	return (
-		<div className="report">
-			<div className="metrics">
+		<div className="mt-4">
+			<div className="flex flex-wrap gap-3">
 				<Metric label="pass rate" value={`${(report.passRate * 100).toFixed(0)}%`} good={report.passRate >= 0.9} />
 				<Metric label="passed" value={`${report.passed}/${report.total}`} />
 				<Metric label="avg confidence" value={report.averageConfidence.toFixed(2)} />
 				<Metric label="avg latency" value={`${report.averageLatencyMs}ms`} />
 				<Metric label="tokens" value={String(report.totalTokens)} />
 			</div>
-			<table className="hits">
-				<thead>
-					<tr>
-						<th></th>
-						<th>case</th>
-						<th>checks</th>
-						<th>answer / error</th>
-					</tr>
-				</thead>
-				<tbody>
+			<Table className="mt-4">
+				<TableHeader>
+					<TableRow>
+						<TableHead className="w-8"></TableHead>
+						<TableHead>case</TableHead>
+						<TableHead>checks</TableHead>
+						<TableHead>answer / error</TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
 					{report.cases.map((c) => (
-						<tr key={c.id}>
-							<td>{c.passed ? '✅' : '❌'}</td>
-							<td>{c.id}</td>
-							<td>
+						<TableRow key={c.id}>
+							<TableCell>{c.passed ? '✅' : '❌'}</TableCell>
+							<TableCell>{c.id}</TableCell>
+							<TableCell>
 								{c.checks.map((ch, i) => (
-									<div key={i} className={ch.passed ? 'ok' : 'bad'}>
+									<div key={i} className={ch.passed ? 'text-emerald-500' : 'text-red-400'}>
 										{ch.passed ? '✓' : '✗'} {ch.check}: {ch.detail}
 									</div>
 								))}
-							</td>
-							<td className="path">{c.error ? <span className="bad">{c.error}</span> : c.answer.slice(0, 160)}</td>
-						</tr>
+							</TableCell>
+							<TableCell className="max-w-[280px] break-words font-mono text-xs">
+								{c.error ? <span className="text-red-400">{c.error}</span> : c.answer.slice(0, 160)}
+							</TableCell>
+						</TableRow>
 					))}
-				</tbody>
-			</table>
+				</TableBody>
+			</Table>
 		</div>
 	);
 }
 
 function Metric({ label, value, good }: { label: string; value: string; good?: boolean }) {
 	return (
-		<div className={`metric ${good === undefined ? '' : good ? 'metric-good' : 'metric-bad'}`}>
-			<span className="metric-value">{value}</span>
-			<span className="metric-label">{label}</span>
+		<div
+			className={cn(
+				'flex min-w-[90px] flex-col rounded-lg border bg-card px-3.5 py-2.5',
+				good !== undefined && (good ? 'border-emerald-600' : 'border-destructive')
+			)}
+		>
+			<span className="text-xl font-bold">{value}</span>
+			<span className="text-[11px] text-muted-foreground">{label}</span>
 		</div>
 	);
 }
