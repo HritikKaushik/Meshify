@@ -26,12 +26,13 @@ import { DeleteDocumentUseCase } from './modules/documents/application/delete-do
 import { createDocumentsController } from './modules/documents/interface/documents.controller.js';
 import { GetJobStatusUseCase } from './modules/jobs/application/get-job-status.usecase.js';
 import { createJobsController } from './modules/jobs/interface/jobs.controller.js';
-import { PostgresRepositoryRepository } from '@meshify/data-access';
+import { PostgresRepositoryRepository, PostgresFileRepository } from '@meshify/data-access';
 import { createRepoIngestQueue, createRepoSyncQueue } from '@meshify/queues';
 import { ConnectGitHubRepositoryUseCase } from './modules/repositories/application/connect-github-repository.usecase.js';
 import { UploadRepositoryZipUseCase } from './modules/repositories/application/upload-repository-zip.usecase.js';
 import { SyncRepositoryUseCase } from './modules/repositories/application/sync-repository.usecase.js';
 import { ListRepositoriesUseCase } from './modules/repositories/application/list-repositories.usecase.js';
+import { DeleteRepositoryUseCase } from './modules/repositories/application/delete-repository.usecase.js';
 import { createRepositoriesController } from './modules/repositories/interface/repositories.controller.js';
 import { PostgresChatRepository } from '@meshify/data-access';
 import { PipelineRegistry, RocketRideClientPool, RocketRideRagService } from '@meshify/rocketride-gateway';
@@ -92,6 +93,7 @@ async function bootstrap(): Promise<void> {
 		const getJobStatus = new GetJobStatusUseCase(pipelineJobRepository);
 
 	const repositoryRepository = new PostgresRepositoryRepository(pgPool);
+		const fileRepository = new PostgresFileRepository(pgPool);
 	const repoIngestQueue = createRepoIngestQueue(bullRedis);
 	const repoSyncQueue = createRepoSyncQueue(bullRedis);
 	const connectGitHub = new ConnectGitHubRepositoryUseCase(repositoryRepository, pipelineJobRepository, repoIngestQueue);
@@ -105,6 +107,7 @@ async function bootstrap(): Promise<void> {
 
 		// Document teardown reuses the same object-storage + Qdrant clients as ingest/search.
 		const deleteDocument = new DeleteDocumentUseCase(documentRepository, objectStorage, qdrantSearchClient, (ctx, msg) => logger.error(ctx, msg));
+		const deleteRepository = new DeleteRepositoryUseCase(repositoryRepository, fileRepository, objectStorage, qdrantSearchClient, (ctx, msg) => logger.error(ctx, msg));
 
 	// Chat is the one synchronous RocketRide path in the API: questions run
 	// against each project's persistent chat pipeline (useExisting semantics
@@ -154,7 +157,7 @@ async function bootstrap(): Promise<void> {
 	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
 	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument }));
 	app.use(createJobsController({ getJobStatus }));
-	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories }));
+	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories, deleteRepository }));
 	app.use(createChatController({ getProject, askQuestion, chats: chatRepository }));
 	app.use(createSearchController({ getProject, search }));
 	app.use(createEvaluationController({ getProject, runEvaluation }));

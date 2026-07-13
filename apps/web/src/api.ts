@@ -350,6 +350,12 @@ export class MeshifyApi {
 			await fetch(this.url(`/api/v1/projects/${projectId}/repositories/${repositoryId}/sync`), { method: 'POST', credentials: 'include' })
 		);
 	}
+
+	/** Disconnect a repository — purges its code vectors, archive, and record. */
+	async deleteRepository(projectId: string, repositoryId: string): Promise<void> {
+		const res = await fetch(this.url(`/api/v1/projects/${projectId}/repositories/${repositoryId}`), { method: 'DELETE', credentials: 'include' });
+		if (!res.ok && res.status !== 204) await this.parse(res);
+	}
 }
 
 function safeJson(text: string): unknown {

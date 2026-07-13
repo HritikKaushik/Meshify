@@ -59,6 +59,11 @@ export class PostgresRepositoryRepository implements RepositoryRepository {
 		await this.pool.query('update repositories set sync_status = $2, updated_at = now() where id = $1', [id, status]);
 	}
 
+	async delete(id: string): Promise<void> {
+		// files.repository_id has ON DELETE CASCADE, so this also removes the repo's file rows.
+		await this.pool.query('delete from repositories where id = $1', [id]);
+	}
+
 	async markSynced(id: string, commitSha: string | null, defaultBranch: string | null): Promise<void> {
 		await this.pool.query(
 			`update repositories set sync_status = 'synced', last_synced_commit = coalesce($2, last_synced_commit),

@@ -85,6 +85,30 @@ export class QdrantSearchClient {
 		}
 	}
 
+	/**
+	 * Deletes every point whose payload.source_path is one of `paths`, batching
+	 * into OR-filtered delete requests. Used to purge a repository's embedded
+	 * code chunks (keyed by file path) from the project's code collection. A
+	 * missing collection (404) is a no-op; empty input does nothing. Other
+	 * failures throw so the caller can decide.
+	 */
+	async deleteBySourcePaths(collection: string, paths: string[], batchSize = 256): Promise<void> {
+		for (let i = 0; i < paths.length; i += batchSize) {
+			const batch = paths.slice(i, i + batchSize);
+			const filter = { should: batch.map((p) => ({ key: 'source_path', match: { value: p } })) };
+			const res = await fetch(new URL(`/collections/${collection}/points/delete`, this.baseUrl), {
+				method: 'POST',
+				headers: this.headers(),
+				body: JSON.stringify({ filter }),
+				signal: AbortSignal.timeout(15_000),
+			});
+			if (!res.ok && res.status !== 404) {
+				throw new Error(`Qdrant delete on "${collection}" failed: ${res.status} ${await res.text()}`);
+			}
+			if (res.status === 404) return; // collection absent — nothing embedded yet
+		}
+	}
+
 	private headers(): Record<string, string> {
 		const headers: Record<string, string> = { 'content-type': 'application/json' };
 		if (this.apiKey) headers['api-key'] = this.apiKey;

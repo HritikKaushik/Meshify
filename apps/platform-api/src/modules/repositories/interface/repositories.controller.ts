@@ -9,6 +9,7 @@ import type { UploadRepositoryZipUseCase } from '../application/upload-repositor
 import type { SyncRepositoryUseCase } from '../application/sync-repository.usecase.js';
 import { RepositoryNotFoundError } from '../application/sync-repository.usecase.js';
 import type { ListRepositoriesUseCase } from '../application/list-repositories.usecase.js';
+import type { DeleteRepositoryUseCase } from '../application/delete-repository.usecase.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
@@ -37,6 +38,7 @@ export function createRepositoriesController(deps: {
 	uploadZip: UploadRepositoryZipUseCase;
 	syncRepository: SyncRepositoryUseCase;
 	listRepositories: ListRepositoriesUseCase;
+	deleteRepository: DeleteRepositoryUseCase;
 }): Router {
 	const router = Router();
 	const guard = projectIsolationGuard(deps.getProject);
@@ -73,6 +75,21 @@ export function createRepositoriesController(deps: {
 	router.get('/v1/projects/:projectId/repositories', guard, async (req, res) => {
 		const repositories = await deps.listRepositories.execute(req.project!.id);
 		res.status(200).json({ repositories: repositories.map(toResponse) });
+	});
+
+	// Disconnect a repository — purges its code vectors + archive, then deletes the row (files cascade).
+	router.delete('/v1/projects/:projectId/repositories/:repositoryId', guard, async (req, res) => {
+		try {
+			await deps.deleteRepository.execute({ project: req.project!, repositoryId: req.params.repositoryId as string });
+			res.status(204).send();
+		} catch (err) {
+			if (err instanceof RepositoryNotFoundError) {
+				res.status(404).json({ error: err.message });
+				return;
+			}
+			req.log?.error({ err }, 'failed to delete repository');
+			res.status(502).json({ error: 'Failed to disconnect repository — see server logs' });
+		}
 	});
 
 	router.post('/v1/projects/:projectId/repositories/:repositoryId/sync', guard, async (req, res) => {

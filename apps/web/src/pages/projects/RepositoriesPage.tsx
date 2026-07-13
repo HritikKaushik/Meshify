@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { FolderGit2, Link2, RefreshCw, Sparkles, GitBranch, TriangleAlert } from 'lucide-react';
+import { FolderGit2, Link2, RefreshCw, Sparkles, GitBranch, TriangleAlert, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/api-client';
 import type { Repository } from '@/api';
 import { useAsync } from '@/ui';
@@ -7,6 +8,8 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { GlassCard, BeamCard, MeshAvatar, Kicker } from '@/components/mc/primitives';
 import { DataRow } from '@/components/common/DataRow';
 import { RepoStatusBadge } from '@/components/common/RepoStatusBadge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { repoStatus } from '@/lib/repo-status';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +28,8 @@ export function RepositoriesPage() {
 	const list = useAsync<Repository[]>();
 	const connect = useAsync<unknown>();
 	const sync = useAsync<unknown>();
+	const [pendingDelete, setPendingDelete] = useState<Repository | null>(null);
+	const [deleting, setDeleting] = useState(false);
 
 	const refresh = () => list.run(() => api.listRepositories(project.id));
 
@@ -46,6 +51,22 @@ export function RepositoriesPage() {
 	const doSync = async (id: string) => {
 		await sync.run(() => api.syncRepository(project.id, id));
 		await refresh();
+	};
+
+	const confirmDelete = async () => {
+		if (!pendingDelete) return;
+		setDeleting(true);
+		try {
+			await api.deleteRepository(project.id, pendingDelete.id);
+			toast.success('Repository disconnected');
+			if (selectedId === pendingDelete.id) setSelectedId(null);
+			setPendingDelete(null);
+			await refresh();
+		} catch (err) {
+			toast.error((err as Error).message);
+		} finally {
+			setDeleting(false);
+		}
 	};
 
 	return (
@@ -124,6 +145,16 @@ export function RepositoriesPage() {
 									>
 										<RefreshCw className="h-3 w-3" /> Sync
 									</button>
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											setPendingDelete(r);
+										}}
+										title="Disconnect repository"
+										className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-black/[.09] bg-white text-mc-muted shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-colors hover:border-mc-danger/30 hover:text-mc-danger"
+									>
+										<Trash2 className="h-3.5 w-3.5" />
+									</button>
 								</button>
 							);
 						})}
@@ -169,6 +200,25 @@ export function RepositoriesPage() {
 					)}
 				</div>
 			</div>
+
+			<Dialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+				<DialogContent className="border-black/[.08] bg-white">
+					<DialogHeader>
+						<DialogTitle>Disconnect this repository?</DialogTitle>
+						<DialogDescription>
+							“{pendingDelete?.remoteUrl ?? '(zip upload)'}” will be removed from {project.name} — its indexed code, embeddings and file records are deleted, and Mesh will stop grounding answers in it. This can't be undone.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button variant="glass" onClick={() => setPendingDelete(null)} disabled={deleting}>
+							Cancel
+						</Button>
+						<Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
+							{deleting ? 'Disconnecting…' : 'Disconnect repository'}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

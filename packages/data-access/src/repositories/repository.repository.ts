@@ -14,4 +14,6 @@ export interface RepositoryRepository {
 	listByProject(projectId: string): Promise<Repository[]>;
 	updateSyncStatus(id: string, status: RepositorySyncStatus): Promise<void>;
 	markSynced(id: string, commitSha: string | null, defaultBranch: string | null): Promise<void>;
+	/** Delete a repository row and (via ON DELETE CASCADE) its files. Vector/archive cleanup is the caller's job. */
+	delete(id: string): Promise<void>;
 }
