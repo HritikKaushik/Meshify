@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
-import { Plus, Search, Pin, Star, MessageSquare, ChevronLeft, FolderClosed, Share2, BrainCircuit, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Plus, Search, Pin, Star, MessageSquare, ChevronLeft, FolderClosed, Share2, BrainCircuit, PanelLeftClose, PanelLeftOpen, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/api-client';
 import type { Conversation, Project } from '@/api';
 import { projectColor } from '@/lib/project-color';
 import { MeshLogo } from '@/components/mc/primitives';
 import { SectionHeading } from '@/components/common/SectionHeading';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /**
@@ -38,6 +41,8 @@ export function WorkspaceSidebar({
 }) {
 	const navigate = useNavigate();
 	const [query, setQuery] = useState('');
+	const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null);
+	const [deleting, setDeleting] = useState(false);
 
 	const { pinned, recent } = useMemo(() => {
 		const q = query.trim().toLowerCase();
@@ -52,6 +57,23 @@ export function WorkspaceSidebar({
 	};
 
 	const openConversation = (id: string) => navigate(`/projects/${project.id}/chat?c=${id}`);
+
+	const confirmDelete = async () => {
+		if (!pendingDelete) return;
+		setDeleting(true);
+		try {
+			await api.deleteChat(project.id, pendingDelete.id);
+			toast.success('Conversation deleted');
+			// If the open conversation was the one removed, drop back to a fresh chat.
+			if (activeId === pendingDelete.id) navigate(`/projects/${project.id}/chat`, { replace: true });
+			setPendingDelete(null);
+			await refreshConversations();
+		} catch (err) {
+			toast.error((err as Error).message);
+		} finally {
+			setDeleting(false);
+		}
+	};
 
 	return (
 		<>
@@ -136,12 +158,12 @@ export function WorkspaceSidebar({
 
 				{pinned.length > 0 && <SectionHeading className="px-2 pb-1 pt-3">PINNED</SectionHeading>}
 				{pinned.map((c) => (
-					<ConversationRow key={c.id} c={c} active={c.id === activeId} onOpen={openConversation} onTogglePin={togglePin} />
+					<ConversationRow key={c.id} c={c} active={c.id === activeId} onOpen={openConversation} onTogglePin={togglePin} onDelete={setPendingDelete} />
 				))}
 
 				{recent.length > 0 && <SectionHeading className="px-2 pb-1 pt-3">RECENT</SectionHeading>}
 				{recent.map((c) => (
-					<ConversationRow key={c.id} c={c} active={c.id === activeId} onOpen={openConversation} onTogglePin={togglePin} />
+					<ConversationRow key={c.id} c={c} active={c.id === activeId} onOpen={openConversation} onTogglePin={togglePin} onDelete={setPendingDelete} />
 				))}
 
 				{/* Honest "not yet backed" affordances */}
@@ -160,12 +182,31 @@ export function WorkspaceSidebar({
 				</Link>
 			</div>
 		</aside>
+
+		<Dialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+			<DialogContent className="border-black/[.08] bg-white">
+				<DialogHeader>
+					<DialogTitle>Delete this conversation?</DialogTitle>
+					<DialogDescription>
+						“{pendingDelete?.title ?? 'Untitled conversation'}” and all of its messages will be permanently removed. This can't be undone.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<Button variant="glass" onClick={() => setPendingDelete(null)} disabled={deleting}>
+						Cancel
+					</Button>
+					<Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
+						{deleting ? 'Deleting…' : 'Delete conversation'}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 		</>
 	);
 }
 
 
-function ConversationRow({ c, active, onOpen, onTogglePin }: { c: Conversation; active: boolean; onOpen: (id: string) => void; onTogglePin: (c: Conversation) => void }) {
+function ConversationRow({ c, active, onOpen, onTogglePin, onDelete }: { c: Conversation; active: boolean; onOpen: (id: string) => void; onTogglePin: (c: Conversation) => void; onDelete: (c: Conversation) => void }) {
 	return (
 		<div
 			role="button"
@@ -187,6 +228,13 @@ function ConversationRow({ c, active, onOpen, onTogglePin }: { c: Conversation; 
 					className={cn('rounded p-0.5 transition-opacity', c.pinned ? 'text-mc-accent' : 'text-mc-muted opacity-0 group-hover:opacity-100 hover:text-mc-text-2')}
 				>
 					<Pin className={cn('h-3 w-3', c.pinned && 'fill-current')} />
+				</button>
+				<button
+					onClick={(e) => { e.stopPropagation(); onDelete(c); }}
+					title="Delete conversation"
+					className="rounded p-0.5 text-mc-muted opacity-0 transition-opacity hover:text-mc-danger group-hover:opacity-100"
+				>
+					<Trash2 className="h-3 w-3" />
 				</button>
 			</div>
 			<span className="pl-5 font-mono text-[10.5px] text-mc-muted-2">{c.messageCount} message{c.messageCount === 1 ? '' : 's'}</span>

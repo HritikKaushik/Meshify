@@ -88,6 +88,11 @@ export class PostgresChatRepository implements ChatRepository {
 		return row ? chatToDomain(row) : undefined;
 	}
 
+	async deleteChat(id: string): Promise<void> {
+		// messages.chat_id has ON DELETE CASCADE, so this also removes the thread's messages.
+		await this.pool.query('delete from chats where id = $1', [id]);
+	}
+
 	async createMessage(input: CreateMessageInput): Promise<Message> {
 		const { rows } = await this.pool.query<MessageRow>(
 			`insert into messages (id, chat_id, role, content, citations, latency_ms, model_used, tokens_used)

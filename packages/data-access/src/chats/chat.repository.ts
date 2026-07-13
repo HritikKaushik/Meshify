@@ -30,6 +30,8 @@ export interface ChatRepository {
 	findByProjectId(projectId: string): Promise<ChatSummary[]>;
 	/** Patch a conversation's title/pinned flag. Returns the updated chat, or undefined if it doesn't exist. */
 	updateChat(id: string, patch: UpdateChatInput): Promise<Chat | undefined>;
+	/** Delete a conversation and (via ON DELETE CASCADE) all of its messages. */
+	deleteChat(id: string): Promise<void>;
 	createMessage(input: CreateMessageInput): Promise<Message>;
 	/** Most recent messages first-in-time last; `limit` counts from the end of the conversation. */
 	listMessages(chatId: string, limit?: number): Promise<Message[]>;

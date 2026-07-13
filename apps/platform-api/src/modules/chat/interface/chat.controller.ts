@@ -78,6 +78,18 @@ export function createChatController(deps: { getProject: GetProjectUseCase; askQ
 		res.status(200).json({ id: updated!.id, title: updated!.title, pinned: updated!.pinned, createdAt: updated!.createdAt.toISOString() });
 	});
 
+	// Delete a conversation (and, via ON DELETE CASCADE, its messages).
+	router.delete('/v1/projects/:projectId/chats/:chatId', guard, async (req, res) => {
+		const chatId = req.params.chatId as string;
+		const existing = await deps.chats.findChatById(chatId);
+		if (!existing || existing.projectId !== req.project!.id) {
+			res.status(404).json({ error: `Conversation "${chatId}" not found` });
+			return;
+		}
+		await deps.chats.deleteChat(chatId);
+		res.status(204).send();
+	});
+
 	router.get('/v1/projects/:projectId/chats/:chatId/messages', guard, async (req, res) => {
 		const chatId = req.params.chatId as string;
 		const chat = await deps.chats.findChatById(chatId);

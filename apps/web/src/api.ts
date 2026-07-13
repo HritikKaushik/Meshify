@@ -300,6 +300,12 @@ export class MeshifyApi {
 		);
 	}
 
+	/** Delete a conversation and all of its messages. */
+	async deleteChat(projectId: string, chatId: string): Promise<void> {
+		const res = await fetch(this.url(`/api/v1/projects/${projectId}/chats/${chatId}`), { method: 'DELETE', credentials: 'include' });
+		if (!res.ok && res.status !== 204) await this.parse(res);
+	}
+
 	/** Full message history for a conversation. */
 	async getMessages(projectId: string, chatId: string): Promise<ChatMessage[]> {
 		const { messages } = await this.parse<{ messages: ChatMessage[] }>(

@@ -43,6 +43,11 @@ class FakeChatRepository implements ChatRepository {
 		return updated;
 	}
 
+	async deleteChat(id: string): Promise<void> {
+		this.chats.delete(id);
+		this.messages = this.messages.filter((m) => m.chatId !== id);
+	}
+
 	async createMessage(input: { id: string; chatId: string; role: Message['role']; content: string; citations?: Message['citations']; latencyMs?: number; modelUsed?: string; tokensUsed?: number }): Promise<Message> {
 		const message: Message = {
 			id: input.id,
