@@ -40,10 +40,6 @@ async function main(): Promise<void> {
 	const chat = buildChatPipeline({
 		pipelineGuid: randomUUID(),
 		llm: { provider: 'openai', profile: 'openai-5', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
-		embedding: { provider: 'openai', profile: 'text-embedding-3-large', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
-		docsCollection: qdrant('proj_SAMPLE_documents'),
-		codeCollection: qdrant('proj_SAMPLE_code'),
-		systemInstructions: [],
 	});
 
 	await mkdir(OUT_DIR, { recursive: true });

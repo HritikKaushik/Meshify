@@ -48,9 +48,13 @@ export interface IngestPipelineConfig extends ProjectPipelineConfig {
 	chunkSize: number;
 }
 
-export interface ChatPipelineConfig extends ProjectPipelineConfig {
+/**
+ * Deliberately NOT a ProjectPipelineConfig: chat no longer does retrieval
+ * inside the RocketRide pipeline (see chat-pipeline.ts) — the platform embeds
+ * already-retrieved context into the question text itself, so RocketRide only
+ * ever runs a bare LLM call for chat.
+ */
+export interface ChatPipelineConfig {
+	pipelineGuid: string;
 	llm: LlmProviderConfig;
-	docsCollection: QdrantTargetConfig;
-	codeCollection: QdrantTargetConfig;
-	systemInstructions: string[];
 }

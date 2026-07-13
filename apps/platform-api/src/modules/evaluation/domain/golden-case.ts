@@ -1,5 +1,3 @@
-import type { ChatAnswer } from '@meshify/rocketride-gateway';
-
 /**
  * One golden-set test case: a question plus the expectations its answer must
  * satisfy. All expectation fields are optional but a case must carry at least
@@ -40,6 +38,17 @@ export interface CaseResult {
 	error?: string;
 }
 
+/**
+ * What the evaluator needs from a completed chat turn — citations/confidence
+ * come from the caller's own retrieval (RocketRide's chat pipeline is now a
+ * bare LLM call, see chat-pipeline.ts), the rest from the LLM response.
+ */
+export interface EvaluatedAnswer {
+	answer: string;
+	citations: Array<{ sourcePath: string }>;
+	confidence: number;
+}
+
 function includesCI(haystack: string, needle: string): boolean {
 	return haystack.toLowerCase().includes(needle.toLowerCase());
 }
@@ -50,7 +59,7 @@ function includesCI(haystack: string, needle: string): boolean {
  * evaluated check passes. No RocketRide types beyond the answer shape, so this
  * is unit-testable in isolation.
  */
-export function evaluateAnswer(goldenCase: GoldenCase, answer: ChatAnswer): { passed: boolean; checks: CheckResult[] } {
+export function evaluateAnswer(goldenCase: GoldenCase, answer: EvaluatedAnswer): { passed: boolean; checks: CheckResult[] } {
 	const checks: CheckResult[] = [];
 	const text = answer.answer;
 	const citationPaths = answer.citations.map((c) => c.sourcePath);

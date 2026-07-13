@@ -1,6 +1,8 @@
 import type { Project } from '@meshify/data-access';
 import type { RagPort } from '@meshify/rocketride-gateway';
 import type { ChatPipelineResolver } from '../../chat/application/chat-pipeline.port.js';
+import type { ChatContextRetriever } from '../../chat/application/chat-context-retriever.port.js';
+import { buildRagPrompt } from '../../chat/domain/build-rag-prompt.js';
 import { evaluateAnswer, type CaseResult, type GoldenCase } from '../domain/golden-case.js';
 
 export interface EvaluationReport {
@@ -35,7 +37,8 @@ function round(n: number, dp = 4): number {
 export class RunEvaluationUseCase {
 	constructor(
 		private readonly rag: RagPort,
-		private readonly chatPipelines: ChatPipelineResolver
+		private readonly chatPipelines: ChatPipelineResolver,
+		private readonly contextRetriever: ChatContextRetriever
 	) {}
 
 	async execute(project: Project, cases: GoldenCase[]): Promise<EvaluationReport> {
@@ -44,26 +47,33 @@ export class RunEvaluationUseCase {
 		const results: CaseResult[] = [];
 
 		for (const goldenCase of cases) {
-			results.push(await this.runCase(pipelineToken, goldenCase));
+			results.push(await this.runCase(project, pipelineToken, goldenCase));
 		}
 
 		const finishedAt = new Date();
 		return this.aggregate(project.id, results, startedAt, finishedAt);
 	}
 
-	private async runCase(pipelineToken: string, goldenCase: GoldenCase): Promise<CaseResult> {
+	private async runCase(project: Project, pipelineToken: string, goldenCase: GoldenCase): Promise<CaseResult> {
 		try {
-			const answer = await this.rag.ask(pipelineToken, { question: goldenCase.question });
-			const { passed, checks } = evaluateAnswer(goldenCase, answer);
+			// Same retrieval + prompt assembly as live chat (AskQuestionUseCase) —
+			// RocketRide's chat pipeline is a bare LLM call, see chat-pipeline.ts.
+			const context = await this.contextRetriever.retrieve(project, goldenCase.question);
+			const citations = context.map((chunk) => ({ sourcePath: chunk.sourcePath }));
+			const confidence = context[0]?.score ?? 0;
+			const prompt = buildRagPrompt(goldenCase.question, context);
+
+			const rawAnswer = await this.rag.ask(pipelineToken, { question: prompt });
+			const { passed, checks } = evaluateAnswer(goldenCase, { answer: rawAnswer.answer, citations, confidence });
 			return {
 				id: goldenCase.id,
 				question: goldenCase.question,
 				passed,
-				answer: answer.answer,
-				confidence: answer.confidence,
-				latencyMs: answer.latencyMs,
-				tokens: answer.tokenUsage?.total ?? 0,
-				citations: answer.citations.map((c) => c.sourcePath),
+				answer: rawAnswer.answer,
+				confidence,
+				latencyMs: rawAnswer.latencyMs,
+				tokens: rawAnswer.tokenUsage?.total ?? 0,
+				citations: citations.map((c) => c.sourcePath),
 				checks,
 			};
 		} catch (err) {

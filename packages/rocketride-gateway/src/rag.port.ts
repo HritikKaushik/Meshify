@@ -26,11 +26,14 @@ export interface ChatCitation {
 	score: number;
 }
 
+/**
+ * RocketRide's chat pipeline is now a bare LLM call (see chat-pipeline.ts) —
+ * retrieval happens in platform-api before the question is sent, so this
+ * carries only what the LLM call itself produces. Citations/retrievedDocuments/
+ * confidence are derived by the caller from its own retrieval, not from here.
+ */
 export interface ChatAnswer {
 	answer: string;
-	citations: ChatCitation[];
-	retrievedDocuments: RetrievedDocument[];
-	confidence: number;
 	modelUsed?: string;
 	tokenUsage?: { prompt: number; completion: number; total: number };
 	latencyMs: number;

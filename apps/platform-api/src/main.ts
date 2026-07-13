@@ -32,6 +32,7 @@ import { createRepositoriesController } from './modules/repositories/interface/r
 import { PostgresChatRepository } from '@meshify/data-access';
 import { PipelineRegistry, RocketRideClientPool, RocketRideRagService } from '@meshify/rocketride-gateway';
 import { RocketRideChatPipelineResolver } from './modules/chat/infrastructure/rocketride-chat-pipeline.resolver.js';
+import { VectorSearchContextRetriever } from './modules/chat/infrastructure/vector-search-context-retriever.js';
 import { AskQuestionUseCase } from './modules/chat/application/ask-question.usecase.js';
 import { createChatController } from './modules/chat/interface/chat.controller.js';
 import { QdrantSearchClient } from '@meshify/vector-store';
@@ -92,24 +93,28 @@ async function bootstrap(): Promise<void> {
 	const syncRepository = new SyncRepositoryUseCase(repositoryRepository, pipelineJobRepository, repoSyncQueue);
 	const listRepositories = new ListRepositoriesUseCase(repositoryRepository);
 
-	// Chat is the one synchronous RocketRide path in the API: questions run
-	// against each project's persistent chat pipeline (useExisting semantics
-	// in PipelineRegistry), so the process holds one pooled client.
-	const rocketridePool = new RocketRideClientPool(env, logger);
-	const pipelineRegistry = new PipelineRegistry(rocketridePool);
-	const ragService = new RocketRideRagService(rocketridePool);
-	const qdrantUrl = new URL(env.QDRANT_URL);
-	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry, qdrantUrl.hostname, Number(qdrantUrl.port || 6333), env.QDRANT_API_KEY);
-	const chatRepository = new PostgresChatRepository(pgPool);
-	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver);
-
-	// Evaluation reuses the same RAG seam + chat-pipeline resolver as live chat,
-	// so a golden-set run exercises the exact path production queries take.
-	const runEvaluation = new RunEvaluationUseCase(ragService, chatPipelineResolver);
-
 	const qdrantSearchClient = new QdrantSearchClient(env.QDRANT_URL, env.QDRANT_API_KEY);
 	const embeddingProviderFactory = new ConfiguredEmbeddingProviderFactory(env.ROCKETRIDE_OPENAI_KEY);
 	const search = new SearchUseCase(embeddingProviderFactory, qdrantSearchClient);
+
+	// Chat is the one synchronous RocketRide path in the API: questions run
+	// against each project's persistent chat pipeline (useExisting semantics
+	// in PipelineRegistry), so the process holds one pooled client. Retrieval
+	// itself happens outside RocketRide (VectorSearchContextRetriever, same
+	// path as /search) — RocketRide's chat pipeline is a bare LLM call, see
+	// chat-pipeline.ts for why.
+	const rocketridePool = new RocketRideClientPool(env, logger);
+	const pipelineRegistry = new PipelineRegistry(rocketridePool);
+	const ragService = new RocketRideRagService(rocketridePool);
+	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry);
+	const chatContextRetriever = new VectorSearchContextRetriever(embeddingProviderFactory, qdrantSearchClient);
+	const chatRepository = new PostgresChatRepository(pgPool);
+	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver, chatContextRetriever);
+
+	// Evaluation reuses the same RAG seam + chat-pipeline resolver + context
+	// retriever as live chat, so a golden-set run exercises the exact path
+	// production queries take.
+	const runEvaluation = new RunEvaluationUseCase(ragService, chatPipelineResolver, chatContextRetriever);
 
 	// Security (Step 9): API-key auth → per-key rate limit → audit. Constructed
 	// before routing so the guards can be mounted around the data controllers.

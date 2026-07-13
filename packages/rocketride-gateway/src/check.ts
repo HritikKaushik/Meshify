@@ -43,11 +43,7 @@ async function main(): Promise<void> {
 	console.log('4/4 Validating a sample chat pipeline...');
 	const chatPipeline = buildChatPipeline({
 		pipelineGuid: '00000000-0000-4000-8000-000000000002',
-		docsCollection: { host: 'localhost', port: 6333, collection: 'meshify_check_documents' },
-		codeCollection: { host: 'localhost', port: 6333, collection: 'meshify_check_code' },
 		llm: { provider: 'openai', profile: 'openai-5', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
-		embedding: { provider: 'openai', profile: 'text-embedding-3-large', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
-		systemInstructions: [],
 	});
 	const chatResult = await client.validate({ pipeline: chatPipeline });
 	if (chatResult.errors.length > 0) {

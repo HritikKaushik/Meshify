@@ -66,7 +66,7 @@
           "host": "${ROCKETRIDE_QDRANT_HOST}",
           "port": 6333,
           "collection": "proj_SAMPLE_documents",
-          "score": 0.7,
+          "score": 0.4,
           "apikey": "${ROCKETRIDE_QDRANT_APIKEY}",
           "serverName": "qdrant_1"
         },
@@ -81,7 +81,7 @@
     }
   ],
   "source": "webhook_1",
-  "project_id": "832e34b5-2719-4345-b8da-7e93e3e9f80b",
+  "project_id": "21b1910f-26b3-4e28-8ac9-1c94808929ef",
   "viewport": {
     "x": 0,
     "y": 0,

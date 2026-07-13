@@ -11,9 +11,6 @@ export class FakeRagService implements RagPort {
 
 	nextAnswer: ChatAnswer = {
 		answer: 'This is a fake answer.',
-		citations: [],
-		retrievedDocuments: [],
-		confidence: 1,
 		latencyMs: 1,
 	};
 

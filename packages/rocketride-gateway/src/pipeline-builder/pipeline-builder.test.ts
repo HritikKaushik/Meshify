@@ -16,10 +16,6 @@ const ingestConfig: IngestPipelineConfig = {
 const chatConfig: ChatPipelineConfig = {
 	pipelineGuid: GUID,
 	llm: { provider: 'openai', profile: 'openai-5', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
-	embedding: { provider: 'openai', profile: 'text-embedding-3-large', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
-	docsCollection: { host: 'localhost', port: 6333, collection: 'proj_x_documents' },
-	codeCollection: { host: 'localhost', port: 6333, collection: 'proj_x_code' },
-	systemInstructions: [],
 };
 
 function componentById(pipeline: { components: Array<{ id: string; [k: string]: unknown }> }, id: string) {
@@ -80,34 +76,14 @@ describe('buildIngestPipeline', () => {
 describe('buildChatPipeline', () => {
 	const pipeline = buildChatPipeline(chatConfig);
 
-	it('fans one embedded question into both collection searches (same embedding node)', () => {
-		expect(componentById(pipeline, 'embedding_1').input).toEqual([{ lane: 'questions', from: 'chat_1' }]);
-		expect(componentById(pipeline, 'qdrant_docs_1').input).toEqual([{ lane: 'questions', from: 'embedding_1' }]);
-		expect(componentById(pipeline, 'qdrant_code_1').input).toEqual([{ lane: 'questions', from: 'embedding_1' }]);
-	});
-
-	it('merges retrieved documents from both collections in the prompt node', () => {
-		const prompt = componentById(pipeline, 'prompt_1');
-		expect(prompt.input).toContainEqual({ lane: 'documents', from: 'qdrant_docs_1' });
-		expect(prompt.input).toContainEqual({ lane: 'documents', from: 'qdrant_code_1' });
-		expect(prompt.input).toContainEqual({ lane: 'questions', from: 'qdrant_docs_1' });
-	});
-
-	it('routes prompt -> llm -> response_answers, and both retrievals -> response_documents', () => {
-		expect(componentById(pipeline, 'llm_1').input).toEqual([{ lane: 'questions', from: 'prompt_1' }]);
+	it('produces a bare chat -> llm -> response_answers DAG — retrieval happens in platform-api, not in this pipeline', () => {
+		expect(pipeline.components.map((c) => c.id)).toEqual(['chat_1', 'llm_1', 'response_answers_1']);
+		expect(componentById(pipeline, 'llm_1').input).toEqual([{ lane: 'questions', from: 'chat_1' }]);
 		expect(componentById(pipeline, 'response_answers_1').input).toEqual([{ lane: 'answers', from: 'llm_1' }]);
-		expect(componentById(pipeline, 'response_documents_1').input).toEqual([
-			{ lane: 'documents', from: 'qdrant_docs_1' },
-			{ lane: 'documents', from: 'qdrant_code_1' },
-		]);
 	});
 
-	it('applies grounding/anti-injection default instructions when none are provided', () => {
-		const prompt = componentById(pipeline, 'prompt_1');
-		const instructions = (prompt.config as { instructions: string[] }).instructions;
-		expect(instructions.length).toBeGreaterThan(0);
-		expect(instructions.join(' ')).toMatch(/ONLY the information contained in the retrieved context/);
-		expect(instructions.join(' ')).toMatch(/untrusted content/);
+	it('contains no qdrant or prompt node', () => {
+		expect(pipeline.components.some((c) => c.provider === 'qdrant' || c.provider === 'prompt')).toBe(false);
 	});
 
 	it('configures the LLM using the profile-nested key pattern', () => {
@@ -116,15 +92,9 @@ describe('buildChatPipeline', () => {
 		expect(llm.config).toMatchObject({ profile: 'openai-5', 'openai-5': { apikey: '${ROCKETRIDE_OPENAI_KEY}' } });
 	});
 
-	it('gives each qdrant node its own serverName in cloud profile, so tool names cannot collide', () => {
-		const cloudPipeline = buildChatPipeline({
-			...chatConfig,
-			docsCollection: { ...chatConfig.docsCollection, apiKey: 'qk_secret' },
-			codeCollection: { ...chatConfig.codeCollection, apiKey: 'qk_secret' },
-		});
-		const docs = componentById(cloudPipeline, 'qdrant_docs_1');
-		const code = componentById(cloudPipeline, 'qdrant_code_1');
-		expect((docs.config as { cloud: { serverName: string } }).cloud.serverName).toBe('qdrant_docs_1');
-		expect((code.config as { cloud: { serverName: string } }).cloud.serverName).toBe('qdrant_code_1');
+	it('meets RocketRide pipeline file requirements (literal GUID, version 1, source set)', () => {
+		expect(pipeline.project_id).toBe(GUID);
+		expect(pipeline.version).toBe(1);
+		expect(pipeline.source).toBe('chat_1');
 	});
 });

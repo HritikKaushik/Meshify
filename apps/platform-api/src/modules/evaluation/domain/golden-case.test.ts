@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatAnswer } from '@meshify/rocketride-gateway';
-import { evaluateAnswer, type GoldenCase } from './golden-case.js';
+import { evaluateAnswer, type EvaluatedAnswer, type GoldenCase } from './golden-case.js';
 
-function answer(overrides: Partial<ChatAnswer> = {}): ChatAnswer {
+function answer(overrides: Partial<EvaluatedAnswer> = {}): EvaluatedAnswer {
 	return {
 		answer: 'The auth flow uses a GitHub App and RS256 JWTs.',
-		citations: [{ sourcePath: 'src/github/auth.ts', score: 0.9 }],
-		retrievedDocuments: [],
+		citations: [{ sourcePath: 'src/github/auth.ts' }],
 		confidence: 0.8,
-		latencyMs: 100,
 		...overrides,
 	};
 }

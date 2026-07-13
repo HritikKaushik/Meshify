@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { ChatRepository, Project } from '@meshify/data-access';
 import type { ChatAnswer, ChatHistoryTurn, RagPort } from '@meshify/rocketride-gateway';
 import type { ChatPipelineResolver } from './chat-pipeline.port.js';
+import type { ChatContextRetriever } from './chat-context-retriever.port.js';
 import { extractReferencedCodeFiles } from '../domain/referenced-code-files.js';
+import { buildRagPrompt, type RetrievedChunk } from '../domain/build-rag-prompt.js';
 
 export class ChatNotFoundError extends Error {
 	constructor(id: string) {
@@ -36,7 +38,8 @@ export class AskQuestionUseCase {
 	constructor(
 		private readonly chats: ChatRepository,
 		private readonly rag: RagPort,
-		private readonly chatPipelines: ChatPipelineResolver
+		private readonly chatPipelines: ChatPipelineResolver,
+		private readonly contextRetriever: ChatContextRetriever
 	) {}
 
 	async execute(command: AskQuestionCommand): Promise<AskQuestionResult> {
@@ -49,14 +52,21 @@ export class AskQuestionUseCase {
 		// still be visible in the conversation history.
 		await this.chats.createMessage({ id: randomUUID(), chatId: chat.id, role: 'user', content: command.question });
 
-		const answer = await this.askWithRetry(command, history);
+		// Retrieval + prompt assembly happen here, not inside the RocketRide
+		// pipeline (see chat-pipeline.ts) — citations/confidence come from this
+		// retrieval directly, not parsed back out of RocketRide's response.
+		const context = await this.contextRetriever.retrieve(command.project, command.question);
+		const citations = context.map((chunk) => ({ sourcePath: chunk.sourcePath, chunkId: chunk.chunkId, score: chunk.score }));
+		const confidence = context[0]?.score ?? 0;
+
+		const answer = await this.askWithRetry(command, history, context);
 
 		const assistantMessage = await this.chats.createMessage({
 			id: randomUUID(),
 			chatId: chat.id,
 			role: 'assistant',
 			content: answer.answer,
-			citations: answer.citations,
+			citations,
 			latencyMs: answer.latencyMs,
 			modelUsed: answer.modelUsed,
 			tokensUsed: answer.tokenUsage?.total,
@@ -66,10 +76,10 @@ export class AskQuestionUseCase {
 			conversationId: chat.id,
 			messageId: assistantMessage.id,
 			answer: answer.answer,
-			citations: answer.citations,
-			confidence: answer.confidence,
-			retrievedDocuments: answer.retrievedDocuments,
-			referencedCodeFiles: extractReferencedCodeFiles(answer.citations),
+			citations,
+			confidence,
+			retrievedDocuments: context.map((chunk) => ({ id: chunk.chunkId ?? chunk.sourcePath, sourcePath: chunk.sourcePath, score: chunk.score })),
+			referencedCodeFiles: extractReferencedCodeFiles(citations),
 			latencyMs: answer.latencyMs,
 			modelUsed: answer.modelUsed ?? null,
 			tokenUsage: answer.tokenUsage ?? null,
@@ -84,14 +94,15 @@ export class AskQuestionUseCase {
 	 * until the process restarts. One retry with the cache dropped self-heals
 	 * that without surfacing a transient engine hiccup as a hard failure.
 	 */
-	private async askWithRetry(command: AskQuestionCommand, history: ChatHistoryTurn[]): Promise<ChatAnswer> {
+	private async askWithRetry(command: AskQuestionCommand, history: ChatHistoryTurn[], context: RetrievedChunk[]): Promise<ChatAnswer> {
+		const prompt = buildRagPrompt(command.question, context);
 		const pipelineToken = await this.chatPipelines.resolve(command.project);
 		try {
-			return await this.rag.ask(pipelineToken, { question: command.question, history });
+			return await this.rag.ask(pipelineToken, { question: prompt, history });
 		} catch {
 			this.chatPipelines.invalidate(command.project);
 			const freshToken = await this.chatPipelines.resolve(command.project);
-			return await this.rag.ask(freshToken, { question: command.question, history });
+			return await this.rag.ask(freshToken, { question: prompt, history });
 		}
 	}
 

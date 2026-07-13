@@ -3,6 +3,8 @@ import type { Chat, ChatRepository, Message, Project } from '@meshify/data-acces
 import { FakeRagService } from '@meshify/rocketride-gateway';
 import { AskQuestionUseCase, ChatNotFoundError } from './ask-question.usecase.js';
 import type { ChatPipelineResolver } from './chat-pipeline.port.js';
+import type { ChatContextRetriever } from './chat-context-retriever.port.js';
+import type { RetrievedChunk } from '../domain/build-rag-prompt.js';
 
 const PROJECT = {
 	id: '11111111-1111-4111-8111-111111111111',
@@ -50,29 +52,37 @@ class FakeChatRepository implements ChatRepository {
 
 const fakeResolver: ChatPipelineResolver = { resolve: async () => 'pipeline-token-1', invalidate: () => {} };
 
+const NO_CONTEXT: ChatContextRetriever = { retrieve: async () => [] };
+
+function retrieverReturning(chunks: RetrievedChunk[]): ChatContextRetriever {
+	return { retrieve: async () => chunks };
+}
+
 describe('AskQuestionUseCase', () => {
 	it('creates a conversation on first question and returns the full contract', async () => {
 		const chats = new FakeChatRepository();
 		const rag = new FakeRagService();
 		rag.nextAnswer = {
 			answer: 'It uses BullMQ.',
-			citations: [
-				{ sourcePath: 'src/queue.ts', chunkId: 'c1', score: 0.91 },
-				{ sourcePath: 'docs/Architecture.md', chunkId: 'c2', score: 0.85 },
-			],
-			retrievedDocuments: [{ id: 'c1', sourcePath: 'src/queue.ts', score: 0.91 }],
-			confidence: 0.91,
 			latencyMs: 640,
 			modelUsed: 'gpt-4-turbo',
 			tokenUsage: { prompt: 900, completion: 120, total: 1020 },
 		};
-		const usecase = new AskQuestionUseCase(chats, rag, fakeResolver);
+		const context = retrieverReturning([
+			{ sourcePath: 'src/queue.ts', content: 'BullMQ setup...', score: 0.91, chunkId: 'c1' },
+			{ sourcePath: 'docs/Architecture.md', content: 'Architecture prose...', score: 0.85, chunkId: 'c2' },
+		]);
+		const usecase = new AskQuestionUseCase(chats, rag, fakeResolver, context);
 
 		const result = await usecase.execute({ project: PROJECT, question: 'Which queue library is used?' });
 
 		expect(result.conversationId).toBeDefined();
 		expect(result.answer).toBe('It uses BullMQ.');
 		expect(result.confidence).toBe(0.91);
+		expect(result.citations).toEqual([
+			{ sourcePath: 'src/queue.ts', chunkId: 'c1', score: 0.91 },
+			{ sourcePath: 'docs/Architecture.md', chunkId: 'c2', score: 0.85 },
+		]);
 		expect(result.referencedCodeFiles).toEqual(['src/queue.ts']); // Architecture.md is prose, filtered out
 		expect(result.modelUsed).toBe('gpt-4-turbo');
 		expect(result.tokenUsage?.total).toBe(1020);
@@ -81,12 +91,15 @@ describe('AskQuestionUseCase', () => {
 		expect(chats.messages[1]!.citations).toHaveLength(2);
 		expect(chats.messages[1]!.latencyMs).toBe(640);
 		expect(rag.askCalls[0]!.pipelineToken).toBe('pipeline-token-1');
+		// The retrieved context is folded into the question sent to RocketRide.
+		expect(rag.askCalls[0]!.turn.question).toContain('src/queue.ts');
+		expect(rag.askCalls[0]!.turn.question).toContain('Which queue library is used?');
 	});
 
 	it('passes prior turns as history on a follow-up question', async () => {
 		const chats = new FakeChatRepository();
 		const rag = new FakeRagService();
-		const usecase = new AskQuestionUseCase(chats, rag, fakeResolver);
+		const usecase = new AskQuestionUseCase(chats, rag, fakeResolver, NO_CONTEXT);
 
 		const first = await usecase.execute({ project: PROJECT, question: 'What is Meshify?' });
 		await usecase.execute({ project: PROJECT, conversationId: first.conversationId, question: 'How does it isolate projects?' });
@@ -101,7 +114,7 @@ describe('AskQuestionUseCase', () => {
 	it('rejects a conversation belonging to another project exactly like a missing one', async () => {
 		const chats = new FakeChatRepository();
 		await chats.createChat({ id: 'other-chat', projectId: 'some-other-project' });
-		const usecase = new AskQuestionUseCase(chats, new FakeRagService(), fakeResolver);
+		const usecase = new AskQuestionUseCase(chats, new FakeRagService(), fakeResolver, NO_CONTEXT);
 
 		await expect(usecase.execute({ project: PROJECT, conversationId: 'other-chat', question: 'hi' })).rejects.toBeInstanceOf(ChatNotFoundError);
 		await expect(usecase.execute({ project: PROJECT, conversationId: 'missing', question: 'hi' })).rejects.toBeInstanceOf(ChatNotFoundError);
@@ -113,7 +126,7 @@ describe('AskQuestionUseCase', () => {
 		rag.ask = async () => {
 			throw new Error('Failed to connect to ws://rocketride');
 		};
-		const usecase = new AskQuestionUseCase(chats, rag, fakeResolver);
+		const usecase = new AskQuestionUseCase(chats, rag, fakeResolver, NO_CONTEXT);
 
 		await expect(usecase.execute({ project: PROJECT, question: 'Will this fail?' })).rejects.toThrow(/Failed to connect/);
 		expect(chats.messages.map((m) => m.role)).toEqual(['user']);
@@ -126,14 +139,14 @@ describe('AskQuestionUseCase', () => {
 		rag.ask = async () => {
 			calls += 1;
 			if (calls === 1) throw new Error('AI engine could not be reached');
-			return { answer: 'Recovered.', citations: [], retrievedDocuments: [], confidence: 0, latencyMs: 10, modelUsed: null, tokenUsage: null };
+			return { answer: 'Recovered.', latencyMs: 10, modelUsed: null, tokenUsage: null };
 		};
 		const invalidateCalls: string[] = [];
 		const resolver: ChatPipelineResolver = {
 			resolve: async () => 'pipeline-token-1',
 			invalidate: (project) => invalidateCalls.push(project.id),
 		};
-		const usecase = new AskQuestionUseCase(chats, rag, resolver);
+		const usecase = new AskQuestionUseCase(chats, rag, resolver, NO_CONTEXT);
 
 		const result = await usecase.execute({ project: PROJECT, question: 'Retry me' });
 
@@ -156,7 +169,7 @@ describe('AskQuestionUseCase', () => {
 				invalidateCount += 1;
 			},
 		};
-		const usecase = new AskQuestionUseCase(chats, rag, resolver);
+		const usecase = new AskQuestionUseCase(chats, rag, resolver, NO_CONTEXT);
 
 		await expect(usecase.execute({ project: PROJECT, question: 'Will this fail?' })).rejects.toThrow(/still down/);
 		expect(invalidateCount).toBe(1);

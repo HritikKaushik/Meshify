@@ -44,22 +44,15 @@ export function embeddingNode(id: string, from: string, lane: 'documents' | 'que
  * `serverName` tool-namespace too) is used whenever an apiKey is supplied —
  * required for a managed/cloud RocketRide reaching any Qdrant outside its own
  * network, e.g. Qdrant Cloud. See QdrantTargetConfig.apiKey.
+ *
+ * `score` is required by RocketRide's own component schema even for a store
+ * node, where it has no effect on writes — the schema's documented values are
+ * a fixed enum [0, 0.4, 0.6, 0.7, 0.8, 0.9, 1]; 0.4 is the placeholder here.
+ * (Query-time retrieval no longer goes through this component — see
+ * chat-pipeline.ts / ChatContextRetriever in platform-api.)
  */
-/**
- * Default cosine score floor for the qdrant search node. text-embedding-3-large
- * (our default embedding profile) scores genuinely relevant question/chunk pairs
- * around 0.25-0.45 cosine similarity in practice — nowhere near the ~0.7+ range
- * naive intuition suggests. A 0.7 default (this component's prior value) silently
- * dropped every real match, so the prompt node received zero documents and the
- * LLM answered from general knowledge with no citations — indistinguishable from
- * "RAG is broken" from the caller's side. 0.15 keeps out true noise (near-zero/
- * negative cosine) without discarding real hits; tune per-project via
- * QdrantTargetConfig.scoreThreshold if a profile's score distribution differs.
- */
-const DEFAULT_SCORE_THRESHOLD = 0.15;
-
 function qdrantNodeConfig(id: string, qdrant: QdrantTargetConfig): Record<string, unknown> {
-	const score = qdrant.scoreThreshold ?? DEFAULT_SCORE_THRESHOLD;
+	const score = qdrant.scoreThreshold ?? 0.4;
 	if (qdrant.apiKey) {
 		return {
 			profile: 'cloud',
@@ -78,19 +71,6 @@ export function qdrantStoreNode(id: string, from: string, qdrant: QdrantTargetCo
 	return { id, provider: 'qdrant', config: qdrantNodeConfig(id, qdrant), input: [{ lane: 'documents', from }] };
 }
 
-export function qdrantSearchNode(id: string, from: string, qdrant: QdrantTargetConfig): RocketRideComponent {
-	return { id, provider: 'qdrant', config: qdrantNodeConfig(id, qdrant), input: [{ lane: 'questions', from }] };
-}
-
-export function promptNode(id: string, documentSources: string[], questionsSource: string, instructions: string[]): RocketRideComponent {
-	return {
-		id,
-		provider: 'prompt',
-		config: { instructions, parameters: {} },
-		input: [...documentSources.map((from) => ({ lane: 'documents', from })), { lane: 'questions', from: questionsSource }],
-	};
-}
-
 export function llmNode(id: string, from: string, llm: LlmProviderConfig): RocketRideComponent {
 	const provider = llm.provider === 'openai' ? 'llm_openai' : 'llm_gemini';
 	return {
@@ -103,13 +83,4 @@ export function llmNode(id: string, from: string, llm: LlmProviderConfig): Rocke
 
 export function responseAnswersNode(id: string, from: string): RocketRideComponent {
 	return { id, provider: 'response_answers', config: { laneName: 'answers' }, input: [{ lane: 'answers', from }] };
-}
-
-export function responseDocumentsNode(id: string, sources: string[]): RocketRideComponent {
-	return {
-		id,
-		provider: 'response_documents',
-		config: { laneName: 'documents' },
-		input: sources.map((from) => ({ lane: 'documents', from })),
-	};
 }
