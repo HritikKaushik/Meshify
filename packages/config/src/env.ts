@@ -10,8 +10,19 @@ const envSchema = z.object({
 
 	// Platform API
 	PLATFORM_PORT: z.coerce.number().int().positive().default(3000),
+	// Also read by apps/bff when auto-provisioning API keys for new Clerk orgs —
+	// must be the SAME value in both processes, or platform-api can never verify
+	// a key the BFF minted.
 	PLATFORM_API_KEY_PEPPER: z.string().min(16, 'PLATFORM_API_KEY_PEPPER must be at least 16 chars'),
 	PLATFORM_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+	// BFF (Clerk session proxy — apps/bff). Optional here so platform-api/worker
+	// aren't forced to set them; apps/bff validates its own required-ness at boot.
+	BFF_PORT: z.coerce.number().int().positive().default(3001),
+	PLATFORM_API_ORIGIN: z.string().url().optional(),
+	CLERK_SECRET_KEY: z.string().optional(),
+	CLERK_PUBLISHABLE_KEY: z.string().optional(),
+	ORG_KEY_ENCRYPTION_KEY: z.string().min(32, 'ORG_KEY_ENCRYPTION_KEY must be at least 32 chars').optional(),
 
 	// Rate limiting (fixed-window per API key, backed by Redis). Defaults suit a
 	// modest single-tenant deployment; raise for higher-throughput clients.

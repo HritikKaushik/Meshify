@@ -14,6 +14,7 @@ import { QdrantCollectionProvisioner } from '@meshify/vector-store';
 import { CreateProjectUseCase } from './modules/projects/application/create-project.usecase.js';
 import { DeleteProjectUseCase } from './modules/projects/application/delete-project.usecase.js';
 import { GetProjectUseCase } from './modules/projects/application/get-project.usecase.js';
+import { ListProjectsUseCase } from './modules/projects/application/list-projects.usecase.js';
 import { createProjectsController } from './modules/projects/interface/projects.controller.js';
 import { PostgresDocumentRepository, PostgresPipelineJobRepository } from '@meshify/data-access';
 import { ObjectStorageClient } from '@meshify/object-storage';
@@ -70,6 +71,7 @@ async function bootstrap(): Promise<void> {
 	const createProject = new CreateProjectUseCase(projectRepository, qdrantProvisioner);
 	const deleteProject = new DeleteProjectUseCase(projectRepository, qdrantProvisioner);
 	const getProject = new GetProjectUseCase(projectRepository);
+	const listProjects = new ListProjectsUseCase(projectRepository);
 
 	const documentRepository = new PostgresDocumentRepository(pgPool);
 	const pipelineJobRepository = new PostgresPipelineJobRepository(pgPool);
@@ -139,7 +141,7 @@ async function bootstrap(): Promise<void> {
 	app.use(rateLimitGuard(rateLimiter));
 	app.use(auditLogMiddleware(auditLogRepository));
 
-	app.use(createProjectsController({ createProject, deleteProject, getProject }));
+	app.use(createProjectsController({ createProject, deleteProject, getProject, listProjects }));
 	app.use(createDocumentsController({ getProject, uploadDocument }));
 	app.use(createJobsController({ getJobStatus }));
 	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories }));

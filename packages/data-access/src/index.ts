@@ -38,3 +38,10 @@ export { PostgresApiKeyRepository } from './api-keys/postgres-api-key.repository
 export type { AuditLogEntry } from './audit/audit-log.entity.js';
 export type { AuditLogRepository } from './audit/audit-log.repository.js';
 export { PostgresAuditLogRepository } from './audit/postgres-audit-log.repository.js';
+
+export type { ClerkOrgLink } from './provisioning/clerk-org-link.entity.js';
+export type { ClerkOrgLinkRepository, CreateClerkOrgLinkInput } from './provisioning/clerk-org-link.repository.js';
+export { PostgresClerkOrgLinkRepository } from './provisioning/postgres-clerk-org-link.repository.js';
+export { provisionOrgForClerk } from './provisioning/provision-org-for-clerk.js';
+export type { ProvisionOrgForClerkInput } from './provisioning/provision-org-for-clerk.js';
+export { encryptSecret, decryptSecret } from './provisioning/secret-encryption.js';

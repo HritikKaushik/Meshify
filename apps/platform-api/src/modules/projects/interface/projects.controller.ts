@@ -4,6 +4,7 @@ import { OrgNotFoundError } from '../application/create-project.usecase.js';
 import type { DeleteProjectUseCase } from '../application/delete-project.usecase.js';
 import { ProjectNotFoundError } from '../application/delete-project.usecase.js';
 import type { GetProjectUseCase } from '../application/get-project.usecase.js';
+import type { ListProjectsUseCase } from '../application/list-projects.usecase.js';
 import { createProjectSchema } from './dto.js';
 import { projectIsolationGuard } from './project-isolation.guard.js';
 import type { Project } from '@meshify/data-access';
@@ -22,8 +23,18 @@ function toResponse(project: Project) {
 	};
 }
 
-export function createProjectsController(deps: { createProject: CreateProjectUseCase; deleteProject: DeleteProjectUseCase; getProject: GetProjectUseCase }): Router {
+export function createProjectsController(deps: {
+	createProject: CreateProjectUseCase;
+	deleteProject: DeleteProjectUseCase;
+	getProject: GetProjectUseCase;
+	listProjects: ListProjectsUseCase;
+}): Router {
 	const router = Router();
+
+	router.get('/v1/projects', async (req, res) => {
+		const projects = await deps.listProjects.execute(req.auth!.orgId);
+		res.status(200).json(projects.map(toResponse));
+	});
 
 	router.post('/v1/projects', async (req, res) => {
 		const parsed = createProjectSchema.safeParse(req.body);

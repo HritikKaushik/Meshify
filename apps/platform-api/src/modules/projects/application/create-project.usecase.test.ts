@@ -35,6 +35,9 @@ function makeProjectRepo(opts: { orgExists?: boolean; failCreate?: boolean } = {
 		async findById() {
 			return undefined;
 		},
+		async findByOrgId() {
+			return [];
+		},
 		async delete() {},
 	} satisfies ProjectRepository;
 	return repo;
