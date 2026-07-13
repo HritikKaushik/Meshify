@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, Outlet, useNavigate, useOutletContext } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
 import { toast } from 'sonner';
 import { Search, Plus, Bell } from 'lucide-react';
@@ -34,6 +34,7 @@ export function useOrg(): OrgContext {
  */
 export function OrgShell() {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const projects = useAsync<Project[]>();
 	const create = useAsync<Project>();
 	const [paletteOpen, setPaletteOpen] = useState(false);
@@ -103,7 +104,7 @@ export function OrgShell() {
 			</header>
 
 			{/* Content */}
-			<div className="relative z-[1] mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-8">
+			<div key={location.pathname} className="relative z-[1] mx-auto w-full max-w-7xl flex-1 animate-fade px-4 py-6 sm:px-8">
 				<Outlet
 					context={
 						{

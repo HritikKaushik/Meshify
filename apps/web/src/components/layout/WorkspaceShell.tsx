@@ -1,6 +1,6 @@
-import { useCallback, useEffect } from 'react';
-import { NavLink, Outlet, useParams, useSearchParams } from 'react-router-dom';
-import { Bell, MessageSquare, LayoutDashboard, FolderGit2, FileText, SearchCode, FlaskConical, Settings } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Bell, Menu, MessageSquare, LayoutDashboard, FolderGit2, FileText, SearchCode, FlaskConical, Settings } from 'lucide-react';
 import { api } from '@/api-client';
 import type { Conversation, Project } from '@/api';
 import { useAsync } from '@/ui';
@@ -30,9 +30,14 @@ const TABS = [
 export function WorkspaceShell() {
 	const { projectId } = useParams<{ projectId: string }>();
 	const [params] = useSearchParams();
+	const location = useLocation();
 	const activeConversationId = params.get('c');
+	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const project = useAsync<Project>();
 	const conversations = useAsync<Conversation[]>();
+
+	// Close the mobile drawer whenever the route (tab or conversation) changes.
+	useEffect(() => setSidebarOpen(false), [location.pathname, location.search]);
 
 	const refreshConversations = useCallback(
 		() => (projectId ? conversations.run(() => api.listChats(projectId)) : Promise.resolve()),
@@ -64,21 +69,33 @@ export function WorkspaceShell() {
 
 	return (
 		<div className="flex h-screen overflow-hidden bg-mc-bg text-mc-text">
-			<WorkspaceSidebar project={p} conversations={convList} activeId={activeConversationId} refreshConversations={refreshConversations} />
+			<WorkspaceSidebar project={p} conversations={convList} activeId={activeConversationId} refreshConversations={refreshConversations} open={sidebarOpen} />
+
+			{/* Mobile drawer backdrop */}
+			{sidebarOpen && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
 			<div className="relative flex min-w-0 flex-1 flex-col">
 				{/* Top bar */}
-				<header className="z-10 flex flex-none items-center gap-4 border-b border-white/[.06] bg-[rgba(8,8,11,.6)] px-5 py-2.5 backdrop-blur-[14px]">
-					<div className="flex items-center gap-2 text-[12.5px] text-mc-muted-2">
-						<span>Meshify</span>
-						<span className="text-mc-muted">/</span>
-						<span className="font-medium text-mc-text">{p.name}</span>
-						<span className="ml-1 flex items-center gap-1.5 rounded-full bg-mc-success/[.09] px-2 py-0.5 font-mono text-[10px] text-mc-success">
+				<header className="z-10 flex flex-none items-center gap-3 border-b border-white/[.06] bg-[rgba(8,8,11,.6)] px-4 py-2.5 backdrop-blur-[14px] sm:gap-4 sm:px-5">
+					<button
+						onClick={() => setSidebarOpen(true)}
+						className="flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-white/[.07] text-mc-text-2 lg:hidden"
+						title="Conversations"
+					>
+						<Menu className="h-4 w-4" />
+					</button>
+					<div className="flex min-w-0 items-center gap-2 text-[12.5px] text-mc-muted-2">
+						<span className="hidden sm:inline">Meshify</span>
+						<span className="hidden text-mc-muted sm:inline">/</span>
+						<span className="truncate font-medium text-mc-text">{p.name}</span>
+						<span className="ml-1 hidden items-center gap-1.5 rounded-full bg-mc-success/[.09] px-2 py-0.5 font-mono text-[10px] text-mc-success sm:flex">
 							<StatusDot color="success" glow /> {p.status.toUpperCase()}
 						</span>
 					</div>
 					<div className="flex-1" />
-					<MeshPill>Mesh · online</MeshPill>
+					<div className="hidden sm:block">
+						<MeshPill>Mesh · online</MeshPill>
+					</div>
 					<button className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[.07] text-mc-text-2" title="Notifications">
 						<Bell className="h-4 w-4" />
 					</button>
@@ -106,7 +123,7 @@ export function WorkspaceShell() {
 				{/* Content */}
 				<div className="relative min-h-0 flex-1 overflow-y-auto">
 					<Atmosphere />
-					<div className="relative mx-auto max-w-7xl px-6 pb-16 pt-6">
+					<div key={location.pathname} className="relative mx-auto max-w-7xl animate-fade px-4 pb-16 pt-6 sm:px-6">
 						<Outlet context={{ project: p, projectId: p.id, conversations: convList, refreshConversations } satisfies WorkspaceContext} />
 					</div>
 				</div>

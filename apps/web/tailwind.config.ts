@@ -87,6 +87,8 @@ export default {
 				meteor: { '0%': { transform: 'translate(0,0)', opacity: '0' }, '12%': { opacity: '.9' }, '72%': { opacity: '.9' }, '100%': { transform: 'translate(-360px,360px)', opacity: '0' } },
 				lamp: { '0%,100%': { opacity: '.45' }, '50%': { opacity: '.8' } },
 				dash: { to: { strokeDashoffset: '-240' } },
+				// Subtle route/content transition — a small fade+lift, nothing flashy.
+				fade: { '0%': { opacity: '0', transform: 'translateY(4px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
@@ -104,6 +106,7 @@ export default {
 				meteor: 'meteor 7s linear infinite',
 				lamp: 'lamp 6s ease-in-out infinite',
 				dash: 'dash 9s linear infinite',
+				fade: 'fade .22s ease-out both',
 			},
 		},
 	},

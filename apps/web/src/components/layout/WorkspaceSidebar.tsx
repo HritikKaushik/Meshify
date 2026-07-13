@@ -21,11 +21,14 @@ export function WorkspaceSidebar({
 	conversations,
 	activeId,
 	refreshConversations,
+	open = false,
 }: {
 	project: Project;
 	conversations: Conversation[];
 	activeId: string | null;
 	refreshConversations: () => Promise<unknown>;
+	/** Mobile drawer open state — ignored at lg+, where the sidebar is static. */
+	open?: boolean;
 }) {
 	const navigate = useNavigate();
 	const [query, setQuery] = useState('');
@@ -45,7 +48,14 @@ export function WorkspaceSidebar({
 	const openConversation = (id: string) => navigate(`/projects/${project.id}/chat?c=${id}`);
 
 	return (
-		<aside className="z-10 flex h-full w-[264px] flex-none flex-col gap-1 border-r border-white/[.06] bg-[rgba(10,10,14,.74)] px-3 py-3.5 backdrop-blur-[14px]">
+		<aside
+			className={cn(
+				'flex h-full w-[264px] flex-none flex-col gap-1 border-r border-white/[.06] bg-[rgba(10,10,14,.92)] px-3 py-3.5 backdrop-blur-[14px]',
+				// Off-canvas drawer below lg; static column at lg+.
+				'fixed inset-y-0 left-0 z-40 transform transition-transform duration-200 lg:static lg:z-10 lg:translate-x-0 lg:bg-[rgba(10,10,14,.74)]',
+				open ? 'translate-x-0' : '-translate-x-full'
+			)}
+		>
 			{/* Workspace context */}
 			<div className="flex items-center gap-2.5 px-1.5 pb-2.5">
 				<MeshLogo size={26} />
