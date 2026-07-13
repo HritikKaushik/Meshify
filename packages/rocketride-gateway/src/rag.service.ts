@@ -28,7 +28,7 @@ function extractByLaneType(response: RocketRideAnswerResponse, laneType: string)
 }
 
 export class RocketRideRagService implements RagPort {
-	constructor(private readonly pool: RocketRideClientPool) {}
+	constructor(private readonly pool: RocketRideClientPool) { }
 
 	async ask(pipelineToken: string, turn: ChatTurnRequest): Promise<ChatAnswer> {
 		const client = await this.pool.getClient();

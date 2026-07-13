@@ -28,4 +28,8 @@ export class RocketRideChatPipelineResolver implements ChatPipelineResolver {
 			systemInstructions: [], // empty -> pipeline-builder applies the grounding/anti-injection defaults
 		});
 	}
+
+	invalidate(project: Project): void {
+		this.registry.invalidate(project.rocketrideChatPipelineId, 'chat');
+	}
 }

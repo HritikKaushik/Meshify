@@ -7,4 +7,6 @@ import type { Project } from '@meshify/data-access';
  */
 export interface ChatPipelineResolver {
 	resolve(project: Project): Promise<string>;
+	/** Drops any cached token for this project's chat pipeline, forcing the next resolve() to re-establish it. */
+	invalidate(project: Project): void;
 }

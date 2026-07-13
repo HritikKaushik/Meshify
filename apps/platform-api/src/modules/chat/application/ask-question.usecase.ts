@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ChatRepository, Project } from '@meshify/data-access';
-import type { ChatHistoryTurn, RagPort } from '@meshify/rocketride-gateway';
+import type { ChatAnswer, ChatHistoryTurn, RagPort } from '@meshify/rocketride-gateway';
 import type { ChatPipelineResolver } from './chat-pipeline.port.js';
 import { extractReferencedCodeFiles } from '../domain/referenced-code-files.js';
 
@@ -49,8 +49,7 @@ export class AskQuestionUseCase {
 		// still be visible in the conversation history.
 		await this.chats.createMessage({ id: randomUUID(), chatId: chat.id, role: 'user', content: command.question });
 
-		const pipelineToken = await this.chatPipelines.resolve(command.project);
-		const answer = await this.rag.ask(pipelineToken, { question: command.question, history });
+		const answer = await this.askWithRetry(command, history);
 
 		const assistantMessage = await this.chats.createMessage({
 			id: randomUUID(),
@@ -75,6 +74,25 @@ export class AskQuestionUseCase {
 			modelUsed: answer.modelUsed ?? null,
 			tokenUsage: answer.tokenUsage ?? null,
 		};
+	}
+
+	/**
+	 * RocketRide's `useExisting: true` resumes whatever pipeline instance is
+	 * already running for a guid — if that instance died (engine restart,
+	 * extension reload) our in-process token cache doesn't know and keeps
+	 * handing out a token the engine no longer recognises, failing every call
+	 * until the process restarts. One retry with the cache dropped self-heals
+	 * that without surfacing a transient engine hiccup as a hard failure.
+	 */
+	private async askWithRetry(command: AskQuestionCommand, history: ChatHistoryTurn[]): Promise<ChatAnswer> {
+		const pipelineToken = await this.chatPipelines.resolve(command.project);
+		try {
+			return await this.rag.ask(pipelineToken, { question: command.question, history });
+		} catch {
+			this.chatPipelines.invalidate(command.project);
+			const freshToken = await this.chatPipelines.resolve(command.project);
+			return await this.rag.ask(freshToken, { question: command.question, history });
+		}
 	}
 
 	private async resolveChat(command: AskQuestionCommand) {

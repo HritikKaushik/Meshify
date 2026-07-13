@@ -35,7 +35,7 @@ function fakeRag(byQuestion: Record<string, ChatAnswer | Error>) {
 	return { rag, asked };
 }
 
-const resolver: ChatPipelineResolver = { resolve: async () => 'token-abc' };
+const resolver: ChatPipelineResolver = { resolve: async () => 'token-abc', invalidate: () => {} };
 
 describe('RunEvaluationUseCase', () => {
 	it('scores each case and aggregates pass rate, confidence, latency and tokens', async () => {
@@ -86,7 +86,7 @@ describe('RunEvaluationUseCase', () => {
 			{ id: 'b', question: 'q2', minConfidence: 0.5 },
 		];
 
-		await new RunEvaluationUseCase(rag, { resolve: resolveSpy }).execute(PROJECT, cases);
+		await new RunEvaluationUseCase(rag, { resolve: resolveSpy, invalidate: () => {} }).execute(PROJECT, cases);
 		expect(resolveSpy).toHaveBeenCalledOnce();
 	});
 

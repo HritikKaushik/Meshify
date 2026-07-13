@@ -48,7 +48,7 @@ class FakeChatRepository implements ChatRepository {
 	}
 }
 
-const fakeResolver: ChatPipelineResolver = { resolve: async () => 'pipeline-token-1' };
+const fakeResolver: ChatPipelineResolver = { resolve: async () => 'pipeline-token-1', invalidate: () => {} };
 
 describe('AskQuestionUseCase', () => {
 	it('creates a conversation on first question and returns the full contract', async () => {
@@ -116,6 +116,50 @@ describe('AskQuestionUseCase', () => {
 		const usecase = new AskQuestionUseCase(chats, rag, fakeResolver);
 
 		await expect(usecase.execute({ project: PROJECT, question: 'Will this fail?' })).rejects.toThrow(/Failed to connect/);
+		expect(chats.messages.map((m) => m.role)).toEqual(['user']);
+	});
+
+	it('self-heals a stale pipeline token: invalidates and retries once before giving up', async () => {
+		const chats = new FakeChatRepository();
+		const rag = new FakeRagService();
+		let calls = 0;
+		rag.ask = async () => {
+			calls += 1;
+			if (calls === 1) throw new Error('AI engine could not be reached');
+			return { answer: 'Recovered.', citations: [], retrievedDocuments: [], confidence: 0, latencyMs: 10, modelUsed: null, tokenUsage: null };
+		};
+		const invalidateCalls: string[] = [];
+		const resolver: ChatPipelineResolver = {
+			resolve: async () => 'pipeline-token-1',
+			invalidate: (project) => invalidateCalls.push(project.id),
+		};
+		const usecase = new AskQuestionUseCase(chats, rag, resolver);
+
+		const result = await usecase.execute({ project: PROJECT, question: 'Retry me' });
+
+		expect(result.answer).toBe('Recovered.');
+		expect(calls).toBe(2);
+		expect(invalidateCalls).toEqual([PROJECT.id]);
+		expect(chats.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+	});
+
+	it('propagates the error when the retry also fails, without a second invalidate', async () => {
+		const chats = new FakeChatRepository();
+		const rag = new FakeRagService();
+		rag.ask = async () => {
+			throw new Error('still down');
+		};
+		let invalidateCount = 0;
+		const resolver: ChatPipelineResolver = {
+			resolve: async () => 'pipeline-token-1',
+			invalidate: () => {
+				invalidateCount += 1;
+			},
+		};
+		const usecase = new AskQuestionUseCase(chats, rag, resolver);
+
+		await expect(usecase.execute({ project: PROJECT, question: 'Will this fail?' })).rejects.toThrow(/still down/);
+		expect(invalidateCount).toBe(1);
 		expect(chats.messages.map((m) => m.role)).toEqual(['user']);
 	});
 });
