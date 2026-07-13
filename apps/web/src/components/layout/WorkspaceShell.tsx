@@ -54,7 +54,7 @@ export function WorkspaceShell() {
 	}, [projectId]);
 
 	if (project.state.status === 'pending' || project.state.status === 'idle') {
-		return <div className="flex h-screen items-center justify-center bg-mc-bg text-sm text-mc-text-2">Loading project…</div>;
+		return <div className="flex h-screen items-center justify-center bg-mc-bg text-sm text-mc-text-3">Loading project…</div>;
 	}
 	if (project.state.status === 'error') {
 		return (
@@ -76,17 +76,17 @@ export function WorkspaceShell() {
 
 			<div className="relative flex min-w-0 flex-1 flex-col">
 				{/* Top bar */}
-				<header className="z-10 flex flex-none items-center gap-3 border-b border-white/[.06] bg-[rgba(8,8,11,.6)] px-4 py-2.5 backdrop-blur-[14px] sm:gap-4 sm:px-5">
+				<header className="z-10 flex flex-none items-center gap-3 border-b border-black/[.06] bg-white/85 px-4 py-2.5 backdrop-blur-[14px] sm:gap-4 sm:px-5">
 					<button
 						onClick={() => setSidebarOpen(true)}
-						className="flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-white/[.07] text-mc-text-2 lg:hidden"
+						className="flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-black/[.08] bg-white text-mc-text-3 lg:hidden"
 						title="Conversations"
 					>
 						<Menu className="h-4 w-4" />
 					</button>
-					<div className="flex min-w-0 items-center gap-2 text-[12.5px] text-mc-muted-2">
+					<div className="flex min-w-0 items-center gap-2 text-[12.5px] text-mc-muted">
 						<span className="hidden sm:inline">Meshify</span>
-						<span className="hidden text-mc-muted sm:inline">/</span>
+						<span className="hidden text-mc-muted-2 sm:inline">/</span>
 						<span className="truncate font-medium text-mc-text">{p.name}</span>
 						<span className="ml-1 hidden items-center gap-1.5 rounded-full bg-mc-success/[.09] px-2 py-0.5 font-mono text-[10px] text-mc-success sm:flex">
 							<StatusDot color="success" glow /> {p.status.toUpperCase()}
@@ -96,21 +96,21 @@ export function WorkspaceShell() {
 					<div className="hidden sm:block">
 						<MeshPill>Mesh · online</MeshPill>
 					</div>
-					<button className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[.07] text-mc-text-2" title="Notifications">
+					<button className="flex h-8 w-8 items-center justify-center rounded-lg border border-black/[.07] bg-white text-mc-text-3" title="Notifications">
 						<Bell className="h-4 w-4" />
 					</button>
 				</header>
 
 				{/* Secondary nav */}
-				<nav className="z-10 flex flex-none gap-1 overflow-x-auto border-b border-white/[.06] bg-[rgba(8,8,11,.4)] px-4 backdrop-blur-[8px]">
+				<nav className="z-10 flex flex-none gap-1 overflow-x-auto border-b border-black/[.06] bg-white/70 px-4 backdrop-blur-[8px]">
 					{TABS.map((tab) => (
 						<NavLink
 							key={tab.to}
 							to={tab.to}
 							className={({ isActive }) =>
 								cn(
-									'flex items-center gap-2 whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-[12.5px] font-medium text-mc-text-2 transition-colors hover:text-mc-text',
-									isActive && 'border-mc-accent text-mc-text'
+									'flex items-center gap-2 whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-[12.5px] font-medium text-mc-text-3 transition-colors hover:text-mc-text',
+									isActive && 'border-mc-accent text-mc-accent-lo'
 								)
 							}
 						>

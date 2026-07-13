@@ -38,7 +38,7 @@ export function DashboardPage() {
 			{/* Main column */}
 			<div className="flex min-w-0 flex-col gap-6">
 				<div className="flex flex-col gap-1.5">
-					<Kicker>// WORKSPACE</Kicker>
+					<Kicker className="text-mc-accent">// WORKSPACE</Kicker>
 					<h1 className="text-2xl font-semibold tracking-tight text-mc-text">Your workspace</h1>
 					<p className="text-sm text-mc-text-3">
 						{loading ? 'Loading projects…' : `${projects.length} project${projects.length === 1 ? '' : 's'} · each an isolated, RAG-queryable knowledge base.`}
@@ -59,9 +59,9 @@ export function DashboardPage() {
 
 				<Section title={pinned.length > 0 ? 'ALL PROJECTS' : 'PROJECTS'}>
 					{!loading && projects.length === 0 ? (
-						<div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/[.1] py-16 text-center">
+						<div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-black/[.14] bg-white py-16 text-center">
 							<p className="text-sm text-mc-text-3">No projects yet.</p>
-							<button onClick={openCreate} className="flex items-center gap-1.5 text-sm text-mc-accent hover:text-mc-accent-hi">
+							<button onClick={openCreate} className="flex items-center gap-1.5 text-sm font-medium text-mc-accent hover:text-mc-accent-lo">
 								<Plus className="h-3.5 w-3.5" /> Create your first project
 							</button>
 						</div>
@@ -75,7 +75,7 @@ export function DashboardPage() {
 			<aside className="flex flex-col gap-4">
 				<GlassCard className="flex flex-col gap-3 p-4">
 					<Kicker>GET STARTED</Kicker>
-					<button onClick={openCreate} className="flex items-center gap-2.5 rounded-lg border border-mc-accent/25 bg-mc-accent/[.08] px-3 py-2.5 text-left text-[13px] font-medium text-mc-accent-hi transition-colors hover:bg-mc-accent/[.14]">
+					<button onClick={openCreate} className="flex items-center gap-2.5 rounded-xl border border-mc-accent/25 bg-mc-accent/[.07] px-3 py-2.5 text-left text-[13px] font-medium text-mc-accent-lo transition-colors hover:bg-mc-accent/[.12]">
 						<Plus className="h-4 w-4" /> New project
 					</button>
 					<p className="text-[12px] leading-relaxed text-mc-text-3">

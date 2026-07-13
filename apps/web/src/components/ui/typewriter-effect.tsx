@@ -61,7 +61,7 @@ export function TypewriterEffect({
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
 				transition={{ duration: 0.8, repeat: Infinity, repeatType: 'reverse' }}
-				className={cn('inline-block h-4 w-[3px] translate-y-[2px] rounded-sm bg-mc-accent', cursorClassName)}
+				className={cn('inline-block h-4 w-[3px] translate-y-[2px] rounded-sm bg-mc-purple', cursorClassName)}
 			/>
 		</div>
 	);
@@ -108,7 +108,7 @@ export function TypewriterEffectSmooth({
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
 				transition={{ duration: 0.8, repeat: Infinity, repeatType: 'reverse' }}
-				className={cn('block h-4 w-[3px] rounded-sm bg-mc-accent', cursorClassName)}
+				className={cn('block h-4 w-[3px] rounded-sm bg-mc-purple', cursorClassName)}
 			/>
 		</div>
 	);

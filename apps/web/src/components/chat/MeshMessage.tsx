@@ -23,7 +23,7 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 						<div className="flex items-center gap-1.5">
 							<div className="flex gap-0.5">
 								{[0, 1, 2, 3].map((n) => (
-									<span key={n} className="h-1 w-3 rounded-sm" style={{ background: n < segments ? '#55C784' : 'rgba(255,255,255,.1)' }} />
+									<span key={n} className="h-1 w-3 rounded-sm" style={{ background: n < segments ? '#1E9E6A' : 'rgba(16,24,40,.1)' }} />
 								))}
 							</div>
 							<span className="font-mono text-[10.5px] text-mc-muted">{confidenceLabel(turn.confidence)}</span>
@@ -34,7 +34,7 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 				{reveal ? (
 					<TypewriterEffect
 						words={turn.content.split(' ').map((text) => ({ text }))}
-						className="text-sm leading-relaxed text-mc-text-2"
+						className="text-[15px] leading-relaxed text-mc-text-2"
 						duration={0.15}
 						stagger={0.012}
 					/>
@@ -43,7 +43,7 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 				)}
 
 				{citations.length > 0 && (
-					<div className="flex flex-col gap-2 rounded-[11px] border border-white/[.06] bg-[rgba(18,18,24,.5)] p-3">
+					<div className="flex flex-col gap-2 rounded-xl border border-black/[.06] bg-mc-surface p-3">
 						<span className="font-mono text-[11px] tracking-[0.06em] text-mc-muted-2">{citations.length} SOURCES</span>
 						<div className="flex flex-wrap gap-1.5">
 							{citations.map((c, j) => {
@@ -52,9 +52,9 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 									<span
 										key={j}
 										title={`score ${c.score.toFixed(3)}`}
-										className="flex items-center gap-1.5 rounded-md border border-white/[.08] bg-white/[.03] px-2.5 py-1 font-mono text-[11.5px] text-mc-text-2"
+										className="flex items-center gap-1.5 rounded-full border border-black/[.08] bg-white px-2.5 py-1 font-mono text-[11.5px] text-mc-text-2 shadow-[0_1px_3px_rgba(16,24,40,.04)]"
 									>
-										{code ? <FileCode2 className="h-3 w-3 text-mc-teal" /> : <FileText className="h-3 w-3 text-mc-indexing" />}
+										{code ? <FileCode2 className="h-3 w-3 text-mc-accent" /> : <FileText className="h-3 w-3 text-mc-purple" />}
 										{c.sourcePath.split('/').pop()}
 									</span>
 								);
@@ -79,10 +79,10 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 export function AnswerBody({ text }: { text: string }) {
 	const parts = text.split(/```/);
 	return (
-		<div className="flex flex-col gap-2.5 text-sm leading-relaxed text-mc-text-2">
+		<div className="flex flex-col gap-2.5 text-[15px] leading-relaxed text-mc-text-2">
 			{parts.map((part, i) =>
 				i % 2 === 1 ? (
-					<pre key={i} className="overflow-x-auto rounded-lg border border-white/[.08] bg-[rgba(6,6,9,.6)] p-3.5 font-mono text-[12.5px] leading-relaxed text-mc-text-2">
+					<pre key={i} className="overflow-x-auto rounded-xl border border-black/[.07] bg-mc-surface p-3.5 font-mono text-[12.5px] leading-relaxed text-mc-text-2 shadow-[0_1px_3px_rgba(16,24,40,.04)]">
 						{part.replace(/^[a-z]+\n/, '')}
 					</pre>
 				) : (

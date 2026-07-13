@@ -53,9 +53,9 @@ export function CommandPalette({
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh]" role="dialog" aria-modal>
-			<div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => onOpenChange(false)} />
-			<div className="relative w-full max-w-xl overflow-hidden rounded-xl border border-white/[.1] bg-mc-card shadow-2xl">
-				<div className="flex items-center gap-3 border-b border-white/[.06] px-4">
+			<div className="absolute inset-0 bg-[rgba(16,24,40,.28)] backdrop-blur-[2px]" onClick={() => onOpenChange(false)} />
+			<div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-black/[.08] bg-white shadow-[0_30px_80px_rgba(16,24,40,.22)]">
+				<div className="flex items-center gap-3 border-b border-black/[.06] px-4">
 					<Search className="h-4 w-4 text-mc-muted-2" />
 					<input
 						ref={inputRef}
@@ -70,7 +70,7 @@ export function CommandPalette({
 						placeholder="Search projects or run a command…"
 						className="h-12 flex-1 bg-transparent text-sm text-mc-text placeholder:text-mc-muted focus:outline-none"
 					/>
-					<kbd className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[10px] text-mc-muted-2">ESC</kbd>
+					<kbd className="rounded border border-black/[.12] px-1.5 py-0.5 font-mono text-[10px] text-mc-muted-2">ESC</kbd>
 				</div>
 				<div className="max-h-80 overflow-y-auto p-1.5">
 					{items.length === 0 && <div className="px-3 py-6 text-center text-sm text-mc-text-3">No matches.</div>}
@@ -79,7 +79,7 @@ export function CommandPalette({
 							key={item.id}
 							onMouseEnter={() => setActive(i)}
 							onClick={() => item.run()}
-							className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left', i === active ? 'bg-white/[.05]' : 'hover:bg-white/[.03]')}
+							className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left', i === active ? 'bg-mc-accent/[.08]' : 'hover:bg-mc-surface')}
 						>
 							{item.color ? (
 								<span className="h-[7px] w-[7px] flex-none rounded-sm" style={{ background: item.color }} />

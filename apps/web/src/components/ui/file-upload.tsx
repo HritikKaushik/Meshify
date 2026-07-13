@@ -33,8 +33,8 @@ export function FileUpload({
 	return (
 		<div
 			className={cn(
-				'relative rounded-lg border-2 border-dashed border-input bg-card/50 p-10 text-center transition-colors cursor-pointer',
-				isDragActive && 'border-primary bg-primary/5',
+				'relative rounded-2xl border-[1.5px] border-dashed border-mc-accent/30 bg-white p-10 text-center transition-colors cursor-pointer shadow-[0_8px_26px_rgba(26,115,232,.07)]',
+				isDragActive && 'border-mc-accent bg-mc-accent/[.04]',
 				disabled && 'opacity-50 cursor-not-allowed',
 				className
 			)}
@@ -59,7 +59,7 @@ export function FileUpload({
 				transition={{ duration: 0.15 }}
 				className="flex flex-col items-center gap-3"
 			>
-				<UploadCloud className="h-8 w-8 text-muted-foreground" />
+				<UploadCloud className="h-8 w-8 text-mc-accent" />
 				<p className="text-sm font-medium text-foreground">
 					{isDragActive ? 'Drop the file here' : 'Drag & drop a file here, or click to browse'}
 				</p>

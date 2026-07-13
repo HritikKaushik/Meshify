@@ -51,15 +51,15 @@ export function WorkspaceSidebar({
 	return (
 		<aside
 			className={cn(
-				'flex h-full w-[264px] flex-none flex-col gap-1 border-r border-white/[.06] bg-[rgba(10,10,14,.92)] px-3 py-3.5 backdrop-blur-[14px]',
+				'flex h-full w-[264px] flex-none flex-col gap-1 border-r border-black/[.06] bg-white px-3 py-3.5',
 				// Off-canvas drawer below lg; static column at lg+.
-				'fixed inset-y-0 left-0 z-40 transform transition-transform duration-200 lg:static lg:z-10 lg:translate-x-0 lg:bg-[rgba(10,10,14,.74)]',
+				'fixed inset-y-0 left-0 z-40 transform shadow-xl transition-transform duration-200 lg:static lg:z-10 lg:translate-x-0 lg:shadow-none',
 				open ? 'translate-x-0' : '-translate-x-full'
 			)}
 		>
 			{/* Workspace context */}
 			<div className="flex items-center gap-2.5 px-1.5 pb-2.5">
-				<MeshLogo size={26} />
+				<MeshLogo size={27} />
 				<div className="flex min-w-0 flex-1 flex-col">
 					<span className="truncate text-[13px] font-semibold tracking-[-.01em] text-mc-text">{project.name}</span>
 					<span className="font-mono text-[9px] tracking-[.05em] text-mc-muted-2">WORKSPACE</span>
@@ -70,13 +70,13 @@ export function WorkspaceSidebar({
 			{/* New conversation */}
 			<button
 				onClick={() => navigate(`/projects/${project.id}/chat`)}
-				className="flex items-center justify-center gap-2 rounded-lg bg-mc-accent px-3 py-2.5 text-[13px] font-semibold text-mc-bg shadow-[0_0_18px_rgba(227,154,76,.24)] transition-colors hover:bg-mc-accent-hi"
+				className="flex items-center justify-center gap-2 rounded-full bg-mc-accent px-3 py-2.5 text-[13px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi"
 			>
 				<Plus className="h-4 w-4" /> New Conversation
 			</button>
 
 			{/* Search */}
-			<div className="mt-1.5 flex items-center gap-2 rounded-lg border border-white/[.07] bg-white/[.03] px-2.5 py-2 text-mc-muted-2">
+			<div className="mt-2 flex items-center gap-2 rounded-lg border border-black/[.05] bg-mc-surface px-2.5 py-2 text-mc-muted-2">
 				<Search className="h-3.5 w-3.5" />
 				<input
 					value={query}
@@ -89,8 +89,8 @@ export function WorkspaceSidebar({
 			{/* Conversation lists */}
 			<div className="mt-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
 				{conversations.length === 0 && (
-					<div className="px-2 py-6 text-center text-[12px] leading-relaxed text-mc-text-3">
-						No conversations yet. Start one with <span className="text-mc-text-2">New Conversation</span>.
+					<div className="px-2 py-6 text-center text-[12px] leading-relaxed text-mc-muted">
+						No conversations yet. Start one with <span className="font-medium text-mc-text-2">New Conversation</span>.
 					</div>
 				)}
 
@@ -105,7 +105,7 @@ export function WorkspaceSidebar({
 				))}
 
 				{/* Honest "not yet backed" affordances */}
-				<div className="mt-2 flex flex-col gap-0.5 border-t border-white/[.05] pt-2">
+				<div className="mt-2 flex flex-col gap-0.5 border-t border-black/[.05] pt-2">
 					<SoonRow icon={FolderClosed} label="Folders" />
 					<SoonRow icon={Share2} label="Shared with me" />
 					<SoonRow icon={BrainCircuit} label="AI Memory" />
@@ -113,9 +113,9 @@ export function WorkspaceSidebar({
 			</div>
 
 			{/* Footer */}
-			<div className="mt-1 flex items-center gap-2.5 border-t border-white/[.06] pt-2.5">
+			<div className="mt-1 flex items-center gap-2.5 border-t border-black/[.06] pt-2.5">
 				<UserButton afterSignOutUrl="/" />
-				<Link to="/home" className="ml-auto flex items-center gap-1.5 rounded-lg border border-white/[.06] bg-white/[.02] px-2.5 py-1.5 text-[11.5px] font-medium text-mc-text-3 transition-colors hover:text-mc-text-2">
+				<Link to="/home" className="ml-auto flex items-center gap-1.5 rounded-lg border border-black/[.08] bg-white px-2.5 py-1.5 text-[11.5px] font-medium text-mc-text-3 shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-colors hover:text-mc-text-2">
 					<ChevronLeft className="h-3.5 w-3.5" /> All projects
 				</Link>
 			</div>
@@ -132,13 +132,14 @@ function ConversationRow({ c, active, onOpen, onTogglePin }: { c: Conversation; 
 			onClick={() => onOpen(c.id)}
 			onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onOpen(c.id)}
 			className={cn(
-				'group flex cursor-pointer flex-col gap-0.5 rounded-lg px-2.5 py-2 transition-colors',
-				active ? 'border border-mc-accent/20 bg-gradient-to-r from-mc-accent/[.12] to-transparent' : 'hover:bg-white/[.03]'
+				'group relative flex cursor-pointer flex-col gap-0.5 rounded-lg px-2.5 py-2 transition-colors',
+				active ? 'bg-mc-accent/[.08]' : 'hover:bg-mc-surface'
 			)}
 		>
+			{active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-mc-accent" />}
 			<div className="flex items-center gap-2">
 				{c.pinned ? <Star className="h-3 w-3 flex-none fill-current text-mc-accent" /> : <MessageSquare className="h-3 w-3 flex-none text-mc-muted-2" />}
-				<span className={cn('flex-1 truncate text-[12.5px]', active ? 'font-medium text-mc-text' : 'text-mc-text-2')}>{c.title ?? 'Untitled conversation'}</span>
+				<span className={cn('flex-1 truncate text-[12.5px]', active ? 'font-medium text-mc-accent-lo' : 'text-mc-text-3')}>{c.title ?? 'Untitled conversation'}</span>
 				<button
 					onClick={(e) => { e.stopPropagation(); onTogglePin(c); }}
 					title={c.pinned ? 'Unpin' : 'Pin'}
@@ -147,7 +148,7 @@ function ConversationRow({ c, active, onOpen, onTogglePin }: { c: Conversation; 
 					<Pin className={cn('h-3 w-3', c.pinned && 'fill-current')} />
 				</button>
 			</div>
-			<span className="pl-5 font-mono text-[10.5px] text-mc-muted">{c.messageCount} message{c.messageCount === 1 ? '' : 's'}</span>
+			<span className="pl-5 font-mono text-[10.5px] text-mc-muted-2">{c.messageCount} message{c.messageCount === 1 ? '' : 's'}</span>
 		</div>
 	);
 }
@@ -157,7 +158,7 @@ function SoonRow({ icon: Icon, label }: { icon: typeof FolderClosed; label: stri
 		<div className="flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-mc-muted" title="Coming soon">
 			<Icon className="h-3.5 w-3.5" />
 			<span className="flex-1 text-[12.5px]">{label}</span>
-			<span className="rounded border border-white/[.08] px-1.5 py-0.5 font-mono text-[8.5px] tracking-wide text-mc-muted-2">SOON</span>
+			<span className="rounded border border-mc-purple/20 bg-mc-purple/[.08] px-1.5 py-0.5 font-mono text-[8.5px] tracking-wide text-[#4F46E5]">SOON</span>
 		</div>
 	);
 }

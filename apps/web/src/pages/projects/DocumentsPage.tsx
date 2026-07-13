@@ -76,7 +76,7 @@ export function DocumentsPage() {
 	return (
 		<div className="flex flex-col gap-5">
 			<div className="flex flex-col gap-1">
-				<Kicker>// KNOWLEDGE INGESTION</Kicker>
+				<Kicker className="text-mc-accent">// KNOWLEDGE INGESTION</Kicker>
 				<p className="text-sm text-mc-text-3">
 					Upload documents to index into {project.name}. Files land in object storage and a worker embeds them into the project's vector store.
 				</p>
@@ -86,7 +86,6 @@ export function DocumentsPage() {
 				onChange={handleFiles}
 				accept=".pdf,.docx,.pptx,.txt,.md"
 				disabled={upload.state.status === 'pending'}
-				className="border-white/[.12] bg-[rgba(18,18,24,.4)]"
 			/>
 
 			{upload.state.status === 'pending' && (
@@ -137,7 +136,7 @@ export function DocumentsPage() {
 
 function InfoRow({ label, value, dot }: { label: string; value: string; dot?: 'success' | 'indexing' | 'muted' | 'danger' }) {
 	return (
-		<div className="flex flex-col gap-1 rounded-lg border border-white/[.06] bg-white/[.02] px-3 py-2.5">
+		<div className="flex flex-col gap-1 rounded-lg border border-black/[.06] bg-mc-surface px-3 py-2.5">
 			<span className="font-mono text-[10px] tracking-[0.08em] text-mc-muted-2">{label.toUpperCase()}</span>
 			<span className={cn('flex items-center gap-1.5 truncate font-mono text-xs text-mc-text')}>
 				{dot && <StatusDot color={dot} />}

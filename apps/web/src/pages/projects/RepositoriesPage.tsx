@@ -57,12 +57,12 @@ export function RepositoriesPage() {
 					value={remoteUrl}
 					onChange={(e) => setRemoteUrl(e.target.value)}
 					placeholder="https://github.com/owner/repo"
-					className="h-9 min-w-[240px] flex-1 rounded-lg border border-white/[.09] bg-mc-surface px-3 font-mono text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-accent/50"
+					className="h-9 min-w-[240px] flex-1 rounded-lg border border-black/[.1] bg-mc-surface px-3 font-mono text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-accent/50"
 				/>
 				<button
 					onClick={doConnect}
 					disabled={!remoteUrl.trim() || connect.state.status === 'pending'}
-					className="flex items-center gap-2 rounded-lg bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-mc-bg shadow-[0_0_16px_rgba(227,154,76,.25)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
+					className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
 				>
 					{connect.state.status === 'pending' ? 'Connecting…' : 'Connect'}
 				</button>
@@ -96,11 +96,11 @@ export function RepositoriesPage() {
 									onClick={() => setSelectedId(r.id)}
 									className={cn(
 										'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors',
-										i > 0 && 'border-t border-white/[.05]',
-										isSel ? 'bg-mc-accent/[.06]' : 'hover:bg-white/[.03]'
+										i > 0 && 'border-t border-black/[.05]',
+										isSel ? 'bg-mc-accent/[.06]' : 'hover:bg-mc-surface'
 									)}
 								>
-									<FolderGit2 className="h-4 w-4 flex-none text-mc-teal" />
+									<FolderGit2 className="h-4 w-4 flex-none text-mc-accent" />
 									<div className="flex min-w-0 flex-1 flex-col gap-0.5">
 										<span className="truncate font-mono text-[13px] text-mc-text">{r.remoteUrl ?? '(zip upload)'}</span>
 										<span className="flex items-center gap-2 font-mono text-[11px] text-mc-muted">
@@ -120,7 +120,7 @@ export function RepositoriesPage() {
 											void doSync(r.id);
 										}}
 										disabled={sync.state.status === 'pending'}
-										className="flex items-center gap-1.5 rounded-lg border border-white/[.09] bg-white/[.04] px-2.5 py-1.5 text-[11.5px] text-mc-text-2 transition-colors hover:text-mc-text disabled:opacity-50"
+										className="flex items-center gap-1.5 rounded-lg border border-black/[.09] bg-white px-2.5 py-1.5 text-[11.5px] text-mc-text-3 shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-colors hover:text-mc-text disabled:opacity-50"
 									>
 										<RefreshCw className="h-3 w-3" /> Sync
 									</button>
@@ -133,7 +133,7 @@ export function RepositoriesPage() {
 
 				{/* Right rail — repository intelligence (honest ingestion guidance + selected repo details) */}
 				<div className="flex flex-col gap-4">
-					<BeamCard className="bg-gradient-to-br from-mc-accent/[.09] to-[rgba(18,18,24,.5)] p-4">
+					<BeamCard className="bg-gradient-to-br from-[#F4F7FF] to-[#F6F5FF] p-4">
 						<div className="flex flex-col gap-2.5">
 							<div className="flex items-center gap-2">
 								<MeshAvatar size={22} breathe />

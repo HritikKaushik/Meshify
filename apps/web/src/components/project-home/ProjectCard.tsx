@@ -31,16 +31,16 @@ export function ProjectCard({
 			tabIndex={0}
 			onClick={() => navigate(`/projects/${project.id}`)}
 			onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate(`/projects/${project.id}`)}
-			className="group relative flex cursor-pointer flex-col gap-3 overflow-hidden rounded-xl border border-white/[.08] bg-white/[.02] p-4 text-left transition-all hover:border-mc-accent/40"
+			className="group relative flex cursor-pointer flex-col gap-3 overflow-hidden rounded-2xl border border-black/[.06] bg-white p-4 text-left shadow-[0_10px_30px_rgba(16,24,40,.06),0_1px_2px_rgba(16,24,40,.04)] transition-all hover:-translate-y-0.5 hover:border-mc-accent/30 hover:shadow-[0_16px_40px_rgba(26,115,232,.12)]"
 		>
 			<div
-				className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity group-hover:opacity-100"
+				className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity group-hover:opacity-30"
 				style={{ background: projectColor(project.id) }}
 			/>
 			<div className="relative flex items-center gap-2.5">
 				<span className="h-[9px] w-[9px] flex-none rounded-sm" style={{ background: projectColor(project.id) }} />
 				<span className="flex-1 truncate text-[15px] font-semibold text-mc-text">{project.name}</span>
-				<span className="flex items-center gap-1.5 rounded-full bg-white/[.04] px-2 py-0.5 font-mono text-[9.5px] text-mc-text-2">
+				<span className="flex items-center gap-1.5 rounded-full border border-black/[.06] bg-mc-surface px-2 py-0.5 font-mono text-[9.5px] text-mc-text-3">
 					<StatusDot color={active ? 'success' : 'muted'} glow={active} />
 					{project.status.toUpperCase()}
 				</span>
@@ -56,7 +56,7 @@ export function ProjectCard({
 				</button>
 			</div>
 			<p className="relative line-clamp-2 min-h-[2.5rem] text-xs leading-relaxed text-mc-text-3">{project.description || 'No description.'}</p>
-			<div className="relative flex items-center justify-between font-mono text-[11px] text-mc-muted">
+			<div className="relative flex items-center justify-between border-t border-black/[.06] pt-3 font-mono text-[11px] text-mc-muted">
 				<span className="truncate">{project.llmProfile}</span>
 				<span className="flex items-center gap-2">
 					<span>Active {timeAgo(project.updatedAt)}</span>

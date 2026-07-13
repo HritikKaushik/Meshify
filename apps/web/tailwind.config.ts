@@ -7,7 +7,7 @@ export default {
 		extend: {
 			fontFamily: {
 				sans: ['Geist', 'system-ui', '-apple-system', 'sans-serif'],
-				mono: ['Geist Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+				mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',
@@ -43,26 +43,31 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))',
 				},
-				// Mission Control palette — used directly by bespoke MC components.
+				// Meshify light palette — used directly by bespoke components.
+				// Actions are Google Blue; "Mesh" (the AI) is indigo. Neutrals run
+				// ink → muted on a calm light canvas.
 				mc: {
-					bg: '#08080B',
-					card: '#0B0B0E',
-					surface: '#121216',
-					raised: '#17171C',
-					accent: '#E39A4C',
-					'accent-hi': '#F0B26A',
-					'accent-lo': '#B96F2E',
-					success: '#55C784',
-					indexing: '#6E9BE8',
-					danger: '#E0604F',
-					purple: '#8B7CC9',
-					teal: '#5AA9A0',
-					amber: '#D9B04C',
-					text: '#F2F2F4',
-					'text-2': '#A6A6B0',
-					'text-3': '#8A8A96',
-					muted: '#64646E',
-					'muted-2': '#5A5A66',
+					bg: '#F7F8FB',
+					card: '#FFFFFF',
+					surface: '#F4F6FA',
+					raised: '#EEF1F7',
+					accent: '#1A73E8', // Google Blue — primary action / active
+					'accent-hi': '#4F8DFB', // lightened blue (hover / on-dark)
+					'accent-lo': '#1A56C8', // deep blue (pressed / on-tint text)
+					success: '#1E9E6A',
+					indexing: '#4F8DFB', // processing / indexing
+					danger: '#E5484D',
+					purple: '#6366F1', // Indigo — the knowledge node / Mesh identity
+					teal: '#1A73E8', // code-file accent (kept blue for cohesion)
+					amber: '#E8A33D', // warning
+					text: '#12141A',
+					'text-2': '#28303F',
+					'text-3': '#5A6072',
+					muted: '#8A90A0',
+					'muted-2': '#9AA0B0',
+					// Hairline border tokens (dark-on-light).
+					border: 'rgba(16,24,40,0.08)',
+					hairline: 'rgba(16,24,40,0.06)',
 				},
 			},
 			borderRadius: {

@@ -43,7 +43,7 @@ export function ProjectHomePage() {
 			{/* Briefing header + primary actions */}
 			<div className="flex flex-wrap items-end gap-4">
 				<div className="flex flex-col gap-1.5">
-					<Kicker>// PROJECT BRIEFING</Kicker>
+					<Kicker className="text-mc-accent">// PROJECT BRIEFING</Kicker>
 					<p className="text-sm text-mc-text-3">
 						{project.description || 'An isolated, RAG-queryable knowledge base over this project’s documents and code.'}
 					</p>
@@ -58,7 +58,7 @@ export function ProjectHomePage() {
 					</HeaderButton>
 					<Link
 						to="../chat"
-						className="flex items-center gap-2 rounded-lg bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-mc-bg shadow-[0_0_20px_rgba(227,154,76,.3)] transition-colors hover:bg-mc-accent-hi"
+						className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.28)] transition-colors hover:bg-mc-accent-hi"
 					>
 						<Sparkles className="h-3.5 w-3.5" /> Ask Mesh
 					</Link>
@@ -102,7 +102,7 @@ export function ProjectHomePage() {
 
 				<MetricCard label="STATUS" accent>
 					<div className="flex items-baseline gap-2">
-						<span className="text-lg font-semibold capitalize text-mc-accent-hi">{project.status}</span>
+						<span className="text-lg font-semibold capitalize text-mc-accent-lo">{project.status}</span>
 						<StatusDot color={project.status === 'active' ? 'success' : 'muted'} glow />
 					</div>
 					<span className="text-xs text-mc-text-3">created {new Date(project.createdAt).toLocaleDateString()}</span>
@@ -119,7 +119,7 @@ export function ProjectHomePage() {
 							<h2 className="text-[13px] font-semibold text-mc-text">Get started</h2>
 						</div>
 						<div className="flex flex-col gap-2">
-							<BeamCard className="bg-gradient-to-r from-mc-accent/[.08] to-[rgba(18,18,24,.55)]">
+							<BeamCard className="bg-gradient-to-r from-[#F4F7FF] to-white">
 								<QuickAction
 									icon={<FileText className="h-4 w-4 text-mc-accent" />}
 									title="Upload documents"
@@ -154,8 +154,8 @@ export function ProjectHomePage() {
 								<div className="px-4 py-3 text-sm text-mc-text-3">No repositories connected yet.</div>
 							)}
 							{repoList.map((r, i) => (
-								<div key={r.id} className={cn('flex items-center gap-3 px-4 py-3', i > 0 && 'border-t border-white/[.05]')}>
-									<FolderGit2 className="h-3.5 w-3.5 text-mc-teal" />
+								<div key={r.id} className={cn('flex items-center gap-3 px-4 py-3', i > 0 && 'border-t border-black/[.05]')}>
+									<FolderGit2 className="h-3.5 w-3.5 text-mc-accent" />
 									<span className="flex-1 truncate font-mono text-xs text-mc-text">{r.remoteUrl ?? '(zip upload)'}</span>
 									<RepoStatusBadge status={r.syncStatus} />
 								</div>
@@ -189,7 +189,7 @@ export function ProjectHomePage() {
 									e.preventDefault();
 									askMesh(question);
 								}}
-								className="flex items-center gap-2 rounded-lg border border-white/[.1] bg-mc-surface px-3 py-2"
+								className="flex items-center gap-2 rounded-xl border border-black/[.09] bg-mc-surface px-3 py-2"
 							>
 								<input
 									value={question}
@@ -200,7 +200,7 @@ export function ProjectHomePage() {
 								<button
 									type="submit"
 									disabled={!question.trim()}
-									className="flex h-7 w-7 items-center justify-center rounded-md bg-mc-accent text-mc-bg disabled:opacity-40"
+									className="flex h-7 w-7 items-center justify-center rounded-lg bg-mc-accent text-white disabled:opacity-40"
 								>
 									<ArrowUpRight className="h-4 w-4" />
 								</button>
@@ -220,11 +220,11 @@ export function ProjectHomePage() {
 			{/* Floating Ask Mesh dock */}
 			<Link
 				to="../chat"
-				className="fixed bottom-6 right-8 z-20 flex animate-float items-center gap-2 rounded-full bg-mc-accent shadow-[0_10px_30px_rgba(227,154,76,.28)] transition-colors hover:bg-mc-accent-hi"
+				className="fixed bottom-6 right-8 z-20 flex animate-float items-center gap-2 rounded-full bg-mc-accent shadow-[0_10px_30px_rgba(26,115,232,.32)] transition-colors hover:bg-mc-accent-hi"
 				style={{ padding: '10px 18px' }}
 			>
-				<Sparkles className="h-3.5 w-3.5 text-mc-bg" />
-				<span className="text-[13px] font-semibold text-mc-bg">Ask Mesh</span>
+				<Sparkles className="h-3.5 w-3.5 text-white" />
+				<span className="text-[13px] font-semibold text-white">Ask Mesh</span>
 			</Link>
 		</div>
 	);
@@ -234,7 +234,7 @@ function HeaderButton({ to, icon, children }: { to: string; icon: ReactNode; chi
 	return (
 		<Link
 			to={to}
-			className="flex items-center gap-2 rounded-lg border border-white/[.09] bg-white/[.03] px-3.5 py-2 text-[12.5px] font-medium text-mc-text-2 backdrop-blur-[8px] transition-colors hover:bg-white/[.06] hover:text-mc-text"
+			className="flex items-center gap-2 rounded-full border border-black/[.1] bg-white px-3.5 py-2 text-[12.5px] font-medium text-mc-text-3 shadow-[0_1px_3px_rgba(16,24,40,.04)] transition-colors hover:bg-mc-surface hover:text-mc-text"
 		>
 			{icon}
 			{children}
@@ -246,11 +246,11 @@ function MetricCard({ label, children, accent = false }: { label: string; childr
 	return (
 		<div
 			className={cn(
-				'flex flex-col gap-2 rounded-xl border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.04)] backdrop-blur-[10px]',
-				accent ? 'border-mc-accent/[.16] bg-mc-accent/[.05]' : 'border-white/[.06] bg-[rgba(18,18,24,.55)]'
+				'flex flex-col gap-2 rounded-xl border p-4 shadow-[0_1px_3px_rgba(16,24,40,.04)]',
+				accent ? 'border-mc-accent/[.18] bg-mc-accent/[.05]' : 'border-black/[.06] bg-white'
 			)}
 		>
-			<span className={cn('font-mono text-[10px] tracking-[0.1em]', accent ? 'text-mc-accent/80' : 'text-mc-muted-2')}>{label}</span>
+			<span className={cn('font-mono text-[10px] uppercase tracking-[0.1em]', accent ? 'text-mc-accent' : 'text-mc-muted-2')}>{label}</span>
 			{children}
 		</div>
 	);
@@ -283,8 +283,8 @@ function QuickAction({
 				className={cn(
 					'whitespace-nowrap rounded-lg px-3 py-1.5 text-[11.5px] font-medium transition-colors',
 					subtle
-						? 'border border-white/[.09] bg-white/[.04] text-mc-text-2 hover:text-mc-text'
-						: 'bg-mc-accent text-mc-bg hover:bg-mc-accent-hi'
+						? 'border border-black/[.1] bg-white text-mc-text-3 shadow-[0_1px_2px_rgba(16,24,40,.04)] hover:text-mc-text'
+						: 'bg-mc-accent text-white hover:bg-mc-accent-hi'
 				)}
 			>
 				{cta}

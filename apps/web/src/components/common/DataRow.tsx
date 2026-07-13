@@ -17,9 +17,9 @@ export function DataRow({
 	divider?: boolean;
 }) {
 	return (
-		<div className={cn('flex items-baseline justify-between gap-4', divider && 'border-b border-white/[.04] pb-3 last:border-0 last:pb-0')}>
+		<div className={cn('flex items-baseline justify-between gap-4', divider && 'border-b border-black/[.06] pb-3 last:border-0 last:pb-0')}>
 			<span className="text-xs text-mc-text-3">{label}</span>
-			<span className={cn('truncate text-right text-xs text-mc-text', mono && 'font-mono')}>{value}</span>
+			<span className={cn('truncate text-right text-xs text-mc-text-2', mono && 'font-mono')}>{value}</span>
 		</div>
 	);
 }

@@ -115,9 +115,9 @@ export function ChatPage() {
 	return (
 		<div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_300px]">
 			{/* Thread */}
-			<div className="flex min-h-[560px] flex-col overflow-hidden rounded-xl border border-white/[.06] bg-mc-card/60">
-				<div className="flex items-center gap-2.5 border-b border-white/[.06] px-5 py-3">
-					{conversationId ? <Star className="h-3.5 w-3.5 text-mc-accent" /> : <MeshAvatar size={24} />}
+			<div className="flex min-h-[560px] flex-col overflow-hidden rounded-2xl border border-black/[.06] bg-white shadow-[0_10px_30px_rgba(16,24,40,.06),0_1px_2px_rgba(16,24,40,.04)]">
+				<div className="flex items-center gap-2.5 border-b border-black/[.06] px-5 py-3">
+					{conversationId ? <Star className="h-3.5 w-3.5 fill-current text-mc-accent" /> : <MeshAvatar size={24} />}
 					<span className="truncate text-[13.5px] font-semibold text-mc-text">{currentTitle ?? (conversationId ? 'Conversation' : 'New conversation')}</span>
 					<span className="font-mono text-[11px] text-mc-muted">
 						{project.name} · {sources.length} citation{sources.length === 1 ? '' : 's'}
@@ -129,7 +129,7 @@ export function ChatPage() {
 						{turns.length === 0 && chat.state.status !== 'pending' && history.state.status !== 'pending' && (
 							<div className="flex flex-col items-center gap-3 pt-16 text-center">
 								<MeshAvatar size={40} breathe />
-								<Kicker>// GROUNDED · CITED · SCOPED TO THIS PROJECT</Kicker>
+								<Kicker className="text-mc-accent">// GROUNDED · CITED · SCOPED TO THIS PROJECT</Kicker>
 								<p className="max-w-sm text-sm text-mc-text-3">
 									Ask anything about {project.name}. Mesh answers only from this project's indexed documents and code, with sources.
 								</p>
@@ -140,8 +140,8 @@ export function ChatPage() {
 
 						{turns.map((t, i) =>
 							t.role === 'user' ? (
-								<div key={i} className="ml-auto max-w-[80%] rounded-2xl rounded-br-sm border border-white/[.07] bg-white/[.05] px-4 py-3">
-									<p className="text-sm leading-relaxed text-mc-text">{t.content}</p>
+								<div key={i} className="ml-auto max-w-[80%] rounded-[18px] rounded-br-md bg-[#EEF2FB] px-4 py-3">
+									<p className="text-[14.5px] leading-relaxed text-mc-text-2">{t.content}</p>
 								</div>
 							) : (
 								<MeshMessage key={i} turn={t} reveal={i === turns.length - 1 && !!t.live} />
@@ -150,7 +150,7 @@ export function ChatPage() {
 
 						{chat.state.status === 'pending' && <StreamingIndicator />}
 						{chat.state.status === 'error' && (
-							<div className="rounded-lg border border-mc-danger/40 bg-mc-danger/10 px-4 py-3 text-sm text-mc-danger">{(chat.state.error as Error).message}</div>
+							<div className="rounded-xl border border-mc-danger/30 bg-mc-danger/[.07] px-4 py-3 text-sm text-mc-danger">{(chat.state.error as Error).message}</div>
 						)}
 					</div>
 
@@ -167,25 +167,22 @@ export function ChatPage() {
 						)}
 						<form
 							onSubmit={(e: FormEvent) => { e.preventDefault(); ask(question); }}
-							className="animate-aurora rounded-[14px] p-px"
-							style={{ background: 'linear-gradient(120deg,rgba(240,178,106,.5),rgba(110,155,232,.35),rgba(240,178,106,.5))', backgroundSize: '200% 100%', boxShadow: '0 6px 26px rgba(227,154,76,.15)' }}
+							className="flex items-center gap-3 rounded-[18px] border border-black/[.09] bg-white px-4 py-3 shadow-[0_12px_36px_rgba(16,24,40,.1),0_2px_8px_rgba(16,24,40,.05)] transition-colors focus-within:border-mc-accent/40"
 						>
-							<div className="flex items-center gap-2.5 rounded-[13px] bg-[#0C0C11] px-4 py-3">
-								<input
-									value={question}
-									onChange={(e) => setQuestion(e.target.value)}
-									disabled={chat.state.status === 'pending'}
-									placeholder={`Ask about ${project.name}…`}
-									className="flex-1 bg-transparent text-sm text-mc-text placeholder:text-mc-muted focus:outline-none"
-								/>
-								<button
-									type="submit"
-									disabled={!question.trim() || chat.state.status === 'pending'}
-									className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-mc-accent text-mc-bg shadow-[0_0_14px_rgba(227,154,76,.4)] transition-colors hover:bg-mc-accent-hi disabled:opacity-40"
-								>
-									<ArrowUp className="h-4 w-4" />
-								</button>
-							</div>
+							<input
+								value={question}
+								onChange={(e) => setQuestion(e.target.value)}
+								disabled={chat.state.status === 'pending'}
+								placeholder={`Ask about ${project.name}…`}
+								className="flex-1 bg-transparent text-[14.5px] text-mc-text placeholder:text-mc-muted focus:outline-none"
+							/>
+							<button
+								type="submit"
+								disabled={!question.trim() || chat.state.status === 'pending'}
+								className="flex h-[34px] w-[34px] items-center justify-center rounded-xl bg-mc-accent text-white shadow-[0_4px_12px_rgba(26,115,232,.3)] transition-colors hover:bg-mc-accent-hi disabled:opacity-40"
+							>
+								<ArrowUp className="h-4 w-4" />
+							</button>
 						</form>
 					</div>
 				</div>

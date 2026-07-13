@@ -32,8 +32,8 @@ export function ContextRail({
 				) : (
 					<>
 						<div className="flex items-center gap-2.5">
-							<div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[.06]">
-								<div className="h-full rounded-full" style={{ width: `${Math.round(confidence * 100)}%`, background: 'linear-gradient(90deg,#55C784,#3A8C63)' }} />
+							<div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/[.07]">
+								<div className="h-full rounded-full" style={{ width: `${Math.round(confidence * 100)}%`, background: 'linear-gradient(90deg,#1E9E6A,#15784F)' }} />
 							</div>
 							<span className="font-semibold text-[13px] text-mc-success">{Math.round(confidence * 100)}%</span>
 						</div>
@@ -53,9 +53,9 @@ export function ContextRail({
 							return (
 								<div
 									key={c.sourcePath}
-									className={cn('flex items-center gap-2.5 rounded-[10px] border p-2.5', i === 0 ? 'border-mc-accent/25 bg-mc-accent/[.06]' : 'border-white/[.06] bg-[rgba(18,18,24,.5)]')}
+									className={cn('flex items-center gap-2.5 rounded-xl border p-2.5', i === 0 ? 'border-mc-accent/25 bg-mc-accent/[.06]' : 'border-black/[.06] bg-white shadow-[0_1px_3px_rgba(16,24,40,.04)]')}
 								>
-									{code ? <FileCode2 className="h-3.5 w-3.5 flex-none text-mc-teal" /> : <FileText className="h-3.5 w-3.5 flex-none text-mc-indexing" />}
+									{code ? <FileCode2 className="h-3.5 w-3.5 flex-none text-mc-accent" /> : <FileText className="h-3.5 w-3.5 flex-none text-mc-purple" />}
 									<div className="flex min-w-0 flex-1 flex-col">
 										<span className="truncate font-mono text-[11.5px] text-mc-text">{c.sourcePath.split('/').pop()}</span>
 										<span className="truncate font-mono text-[10px] text-mc-muted">{c.sourcePath}</span>
@@ -76,7 +76,7 @@ export function ContextRail({
 							<Link
 								key={c.id}
 								to={`/projects/${projectId}/chat?c=${c.id}`}
-								className="flex items-center gap-2 rounded-lg border border-white/[.06] px-2.5 py-2 text-[12px] text-mc-text-2 transition-colors hover:border-white/15 hover:text-mc-text"
+								className="flex items-center gap-2 rounded-lg border border-black/[.06] bg-white px-2.5 py-2 text-[12px] text-mc-text-3 shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-colors hover:border-mc-accent/30 hover:text-mc-text"
 							>
 								<MessageSquare className="h-3 w-3 flex-none text-mc-muted-2" />
 								<span className="truncate">{c.title ?? 'Untitled conversation'}</span>

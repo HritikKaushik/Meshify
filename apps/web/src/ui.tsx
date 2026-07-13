@@ -26,7 +26,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 /** Pretty-prints any value; used to show raw API responses. */
 export function Json({ value }: { value: unknown }) {
 	return (
-		<pre className="mt-3 max-h-80 overflow-auto rounded-md border bg-black/20 p-3 text-xs">
+		<pre className="mt-3 max-h-80 overflow-auto rounded-md border bg-muted p-3 font-mono text-xs text-foreground">
 			{typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
 		</pre>
 	);

@@ -2,33 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Mission Control theme — near-black neutrals, one amber accent reserved for
-   actions and "Mesh" (the AI). Dark-only for v1 (matches the design doc);
-   `darkMode: 'class'` stays available for a future light mode. index.html sets
-   class="dark" on <html> so this is the only theme in effect today. */
+/* Meshify light theme — a calm, engineered light surface (canvas #F7F8FB, white
+   cards) with Google-Blue actions and an indigo "Mesh" (AI) accent. Matches the
+   Meshify Design Doc / Brand v1. `darkMode: 'class'` stays wired for a future
+   dark mode, but light is the only theme in effect today. */
 @layer base {
-	:root,
-	.dark {
-		--background: 240 20% 4%; /* #08080B */
-		--foreground: 240 8% 95%; /* #F2F2F4 */
-		--card: 240 12% 5%; /* #0B0B0E */
-		--card-foreground: 240 8% 95%;
-		--popover: 240 11% 8%; /* #121216 */
-		--popover-foreground: 240 8% 95%;
-		--primary: 32 72% 59%; /* #E39A4C amber */
-		--primary-foreground: 240 12% 5%;
-		--secondary: 240 11% 10%; /* #17171C */
-		--secondary-foreground: 240 8% 95%;
-		--muted: 240 11% 10%;
-		--muted-foreground: 240 6% 67%; /* #A6A6B0 */
-		--accent: 240 11% 12%;
-		--accent-foreground: 240 8% 95%;
-		--destructive: 6 72% 60%; /* #E0604F */
+	:root {
+		--background: 222 30% 98%; /* #F7F8FB canvas */
+		--foreground: 222 22% 9%; /* #12141A ink */
+		--card: 0 0% 100%; /* #FFFFFF */
+		--card-foreground: 222 22% 9%;
+		--popover: 0 0% 100%;
+		--popover-foreground: 222 22% 9%;
+		--primary: 214 82% 51%; /* #1A73E8 Google Blue */
+		--primary-foreground: 0 0% 100%;
+		--secondary: 222 30% 96%; /* #F4F6FA */
+		--secondary-foreground: 222 22% 9%;
+		--muted: 222 30% 96%;
+		--muted-foreground: 222 12% 40%; /* #5A6072 */
+		--accent: 222 30% 95%;
+		--accent-foreground: 222 22% 9%;
+		--destructive: 359 76% 59%; /* #E5484D */
 		--destructive-foreground: 0 0% 100%;
-		--border: 240 10% 15%;
-		--input: 240 10% 15%;
-		--ring: 32 72% 59%;
-		--radius: 0.6rem;
+		--border: 222 30% 90%; /* ~rgba(16,24,40,.08) */
+		--input: 222 25% 88%;
+		--ring: 214 82% 51%;
+		--radius: 0.7rem;
 	}
 
 	* {
@@ -41,17 +40,17 @@
 		-webkit-font-smoothing: antialiased;
 	}
 
-	/* Thin, dark scrollbars to match the flight-deck aesthetic. */
+	/* Thin, light scrollbars to match the calm light surface. */
 	* {
 		scrollbar-width: thin;
-		scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+		scrollbar-color: rgba(16, 24, 40, 0.16) transparent;
 	}
 	*::-webkit-scrollbar {
 		width: 8px;
 		height: 8px;
 	}
 	*::-webkit-scrollbar-thumb {
-		background: rgba(255, 255, 255, 0.12);
+		background: rgba(16, 24, 40, 0.16);
 		border-radius: 99px;
 	}
 	*::-webkit-scrollbar-track {
