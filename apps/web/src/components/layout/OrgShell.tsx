@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
 import { toast } from 'sonner';
-import { Search, Plus, Bell } from 'lucide-react';
+import { Search, Bell } from 'lucide-react';
 import { api } from '@/api-client';
 import type { Project } from '@/api';
 import { useAsync } from '@/ui';
@@ -94,9 +94,6 @@ export function OrgShell() {
 					<kbd className="hidden rounded border border-black/[.12] px-1.5 py-0.5 font-mono text-[10px] sm:inline">⌘K</kbd>
 				</button>
 				<div className="flex-1" />
-				<Button variant="mesh" size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
-					<Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">New Project</span>
-				</Button>
 				<button className="relative hidden h-8 w-8 items-center justify-center rounded-lg border border-black/[.07] bg-white text-mc-text-3 shadow-[0_1px_3px_rgba(16,24,40,.04)] sm:flex" title="Notifications">
 					<Bell className="h-4 w-4" />
 					<span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full border-[1.5px] border-white bg-mc-danger" />

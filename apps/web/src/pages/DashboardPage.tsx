@@ -76,7 +76,7 @@ export function DashboardPage() {
 			<div className="flex flex-wrap items-end gap-4">
 				<div>
 					<Kicker className="text-mc-accent">{(user?.firstName ? `${user.firstName}'s` : 'Rocketride') + ' workspace'}</Kicker>
-					<h1 className="mt-2 text-[34px] font-semibold leading-tight tracking-[-.03em] text-mc-text">
+					<h1 className="mt-2 text-[34px] font-semibold leading-tight tracking-[-.03em] text-mc-accent">
 						{greeting()}
 						{user?.firstName ? `, ${user.firstName}` : ''}
 					</h1>

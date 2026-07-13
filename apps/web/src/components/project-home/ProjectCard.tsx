@@ -47,7 +47,7 @@ export function ProjectCard({
 			tabIndex={0}
 			onClick={open}
 			onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && open()}
-			className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-black/[.06] bg-white p-5 text-left shadow-[0_10px_30px_rgba(16,24,40,.06),0_1px_2px_rgba(16,24,40,.04)] transition-all hover:-translate-y-0.5 hover:border-mc-accent/25 hover:shadow-[0_16px_40px_rgba(26,115,232,.1)]"
+			className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-black/[.06] bg-white px-5 pt-5 pb-[70px] text-left shadow-[0_10px_30px_rgba(16,24,40,.06),0_1px_2px_rgba(16,24,40,.04)] transition-all hover:-translate-y-0.5 hover:border-mc-accent/25 hover:shadow-[0_16px_40px_rgba(26,115,232,.1)]"
 		>
 			{/* header */}
 			<div className="flex items-center gap-2.5">
