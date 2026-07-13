@@ -4,6 +4,7 @@ import { OrgNotFoundError } from '../application/create-project.usecase.js';
 import type { DeleteProjectUseCase } from '../application/delete-project.usecase.js';
 import { ProjectNotFoundError } from '../application/delete-project.usecase.js';
 import type { GetProjectUseCase } from '../application/get-project.usecase.js';
+import type { GetProjectStatsUseCase } from '../application/get-project-stats.usecase.js';
 import type { ListProjectsUseCase } from '../application/list-projects.usecase.js';
 import { createProjectSchema } from './dto.js';
 import { projectIsolationGuard } from './project-isolation.guard.js';
@@ -27,6 +28,7 @@ export function createProjectsController(deps: {
 	createProject: CreateProjectUseCase;
 	deleteProject: DeleteProjectUseCase;
 	getProject: GetProjectUseCase;
+	getProjectStats: GetProjectStatsUseCase;
 	listProjects: ListProjectsUseCase;
 }): Router {
 	const router = Router();
@@ -58,6 +60,12 @@ export function createProjectsController(deps: {
 
 	router.get('/v1/projects/:projectId', projectIsolationGuard(deps.getProject), (req, res) => {
 		res.status(200).json(toResponse(req.project!));
+	});
+
+	// Real aggregate counts (repositories, documents, conversations, coverage) for Project Home.
+	router.get('/v1/projects/:projectId/stats', projectIsolationGuard(deps.getProject), async (req, res) => {
+		const stats = await deps.getProjectStats.execute(req.project!.id);
+		res.status(200).json(stats);
 	});
 
 	router.delete('/v1/projects/:projectId', projectIsolationGuard(deps.getProject), async (req, res) => {

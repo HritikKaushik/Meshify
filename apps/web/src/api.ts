@@ -155,6 +155,24 @@ export interface Repository {
 	createdAt: string;
 }
 
+export interface DocumentSummary {
+	id: string;
+	filename: string;
+	sourceType: 'pdf' | 'docx' | 'pptx' | 'txt' | 'md' | 'readme';
+	status: 'pending' | 'parsed' | 'embedded' | 'failed';
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface ProjectStats {
+	repositories: { total: number; synced: number };
+	documents: { total: number; embedded: number };
+	conversations: number;
+	/** Fraction of documents embedded (0–1), or null when the project has no documents. */
+	coverage: number | null;
+	lastActivityAt: string | null;
+}
+
 export interface HealthReport {
 	status: string;
 	dependencies?: Array<{ name: string; status: string; latencyMs: number }>;
@@ -203,6 +221,11 @@ export class MeshifyApi {
 		return this.parse(await fetch(this.url(`/api/v1/projects/${id}`), { credentials: 'include' }));
 	}
 
+	/** Real aggregate counts for a project (repositories, documents, conversations, coverage). */
+	async getProjectStats(id: string): Promise<ProjectStats> {
+		return this.parse(await fetch(this.url(`/api/v1/projects/${id}/stats`), { credentials: 'include' }));
+	}
+
 	async deleteProject(id: string): Promise<void> {
 		const res = await fetch(this.url(`/api/v1/projects/${id}`), { method: 'DELETE', credentials: 'include' });
 		if (!res.ok && res.status !== 204) await this.parse(res);
@@ -213,6 +236,20 @@ export class MeshifyApi {
 		const form = new FormData();
 		form.append('file', file);
 		return this.parse(await fetch(this.url(`/api/v1/projects/${projectId}/documents`), { method: 'POST', credentials: 'include', body: form }));
+	}
+
+	/** All ingested documents for a project (newest first). */
+	async listDocuments(projectId: string): Promise<DocumentSummary[]> {
+		const { documents } = await this.parse<{ documents: DocumentSummary[] }>(
+			await fetch(this.url(`/api/v1/projects/${projectId}/documents`), { credentials: 'include' })
+		);
+		return documents;
+	}
+
+	/** Remove an ingested document — purges its vectors, raw upload, and record. */
+	async deleteDocument(projectId: string, documentId: string): Promise<void> {
+		const res = await fetch(this.url(`/api/v1/projects/${projectId}/documents/${documentId}`), { method: 'DELETE', credentials: 'include' });
+		if (!res.ok && res.status !== 204) await this.parse(res);
 	}
 
 	async getJob(jobId: string): Promise<Job> {

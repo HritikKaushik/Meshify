@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
-import { Plus, Search, Pin, Star, MessageSquare, ChevronLeft, FolderClosed, Share2, BrainCircuit } from 'lucide-react';
+import { Plus, Search, Pin, Star, MessageSquare, ChevronLeft, FolderClosed, Share2, BrainCircuit, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { api } from '@/api-client';
 import type { Conversation, Project } from '@/api';
 import { projectColor } from '@/lib/project-color';
@@ -23,6 +23,8 @@ export function WorkspaceSidebar({
 	activeId,
 	refreshConversations,
 	open = false,
+	collapsed = false,
+	onToggleCollapse,
 }: {
 	project: Project;
 	conversations: Conversation[];
@@ -30,6 +32,9 @@ export function WorkspaceSidebar({
 	refreshConversations: () => Promise<unknown>;
 	/** Mobile drawer open state — ignored at lg+, where the sidebar is static. */
 	open?: boolean;
+	/** Desktop-only: collapse to a slim icon rail (persisted in WorkspaceShell). */
+	collapsed?: boolean;
+	onToggleCollapse?: () => void;
 }) {
 	const navigate = useNavigate();
 	const [query, setQuery] = useState('');
@@ -49,23 +54,58 @@ export function WorkspaceSidebar({
 	const openConversation = (id: string) => navigate(`/projects/${project.id}/chat?c=${id}`);
 
 	return (
-		<aside
-			className={cn(
-				'flex h-full w-[264px] flex-none flex-col gap-1 border-r border-black/[.06] bg-white px-3 py-3.5',
-				// Off-canvas drawer below lg; static column at lg+.
-				'fixed inset-y-0 left-0 z-40 transform shadow-xl transition-transform duration-200 lg:static lg:z-10 lg:translate-x-0 lg:shadow-none',
-				open ? 'translate-x-0' : '-translate-x-full'
-			)}
-		>
-			{/* Workspace context */}
-			<div className="flex items-center gap-2.5 px-1.5 pb-2.5">
-				<MeshLogo size={27} />
-				<div className="flex min-w-0 flex-1 flex-col">
-					<span className="truncate text-[13px] font-semibold tracking-[-.01em] text-mc-text">{project.name}</span>
-					<span className="font-mono text-[9px] tracking-[.05em] text-mc-muted-2">WORKSPACE</span>
+		<>
+			{/* Collapsed desktop rail (design 4d/4e) — slim icon column. */}
+			<aside
+				className={cn(
+					'hidden h-full w-16 flex-none flex-col items-center gap-3 border-r border-black/[.06] bg-white py-4',
+					collapsed ? 'lg:flex' : 'lg:hidden'
+				)}
+			>
+				<MeshLogo size={30} />
+				<button
+					onClick={() => navigate(`/projects/${project.id}/chat`)}
+					title="New conversation"
+					className="flex h-[34px] w-[34px] items-center justify-center rounded-xl bg-mc-accent text-white shadow-[0_4px_12px_rgba(26,115,232,.28)] transition-colors hover:bg-mc-accent-hi"
+				>
+					<Plus className="h-4 w-4" />
+				</button>
+				<button
+					onClick={onToggleCollapse}
+					title="Expand sidebar"
+					className="flex h-[34px] w-[34px] items-center justify-center rounded-xl text-mc-text-3 transition-colors hover:bg-mc-surface hover:text-mc-text"
+				>
+					<PanelLeftOpen className="h-4 w-4" />
+				</button>
+				<div className="flex-1" />
+				<UserButton afterSignOutUrl="/" />
+			</aside>
+
+			<aside
+				className={cn(
+					'flex h-full w-[264px] flex-none flex-col gap-1 border-r border-black/[.06] bg-white px-3 py-3.5',
+					// Off-canvas drawer below lg; static column at lg+. Hidden on desktop when collapsed (the rail takes over).
+					'fixed inset-y-0 left-0 z-40 transform shadow-xl transition-transform duration-200 lg:static lg:z-10 lg:translate-x-0 lg:shadow-none',
+					open ? 'translate-x-0' : '-translate-x-full',
+					collapsed && 'lg:hidden'
+				)}
+			>
+				{/* Workspace context */}
+				<div className="flex items-center gap-2.5 px-1.5 pb-2.5">
+					<MeshLogo size={27} />
+					<div className="flex min-w-0 flex-1 flex-col">
+						<span className="truncate text-[13px] font-semibold tracking-[-.01em] text-mc-text">{project.name}</span>
+						<span className="font-mono text-[9px] tracking-[.05em] text-mc-muted-2">WORKSPACE</span>
+					</div>
+					<span className="h-2.5 w-2.5 flex-none rounded-sm" style={{ background: projectColor(project.id) }} />
+					<button
+						onClick={onToggleCollapse}
+						title="Collapse sidebar"
+						className="hidden h-7 w-7 flex-none items-center justify-center rounded-lg text-mc-muted transition-colors hover:bg-mc-surface hover:text-mc-text-2 lg:flex"
+					>
+						<PanelLeftClose className="h-4 w-4" />
+					</button>
 				</div>
-				<span className="h-2.5 w-2.5 flex-none rounded-sm" style={{ background: projectColor(project.id) }} />
-			</div>
 
 			{/* New conversation */}
 			<button
@@ -120,6 +160,7 @@ export function WorkspaceSidebar({
 				</Link>
 			</div>
 		</aside>
+		</>
 	);
 }
 

@@ -14,12 +14,15 @@ import { QdrantCollectionProvisioner } from '@meshify/vector-store';
 import { CreateProjectUseCase } from './modules/projects/application/create-project.usecase.js';
 import { DeleteProjectUseCase } from './modules/projects/application/delete-project.usecase.js';
 import { GetProjectUseCase } from './modules/projects/application/get-project.usecase.js';
+import { GetProjectStatsUseCase } from './modules/projects/application/get-project-stats.usecase.js';
 import { ListProjectsUseCase } from './modules/projects/application/list-projects.usecase.js';
 import { createProjectsController } from './modules/projects/interface/projects.controller.js';
 import { PostgresDocumentRepository, PostgresPipelineJobRepository } from '@meshify/data-access';
 import { ObjectStorageClient } from '@meshify/object-storage';
 import { createDocumentIngestQueue } from '@meshify/queues';
 import { UploadDocumentUseCase } from './modules/documents/application/upload-document.usecase.js';
+import { ListDocumentsUseCase } from './modules/documents/application/list-documents.usecase.js';
+import { DeleteDocumentUseCase } from './modules/documents/application/delete-document.usecase.js';
 import { createDocumentsController } from './modules/documents/interface/documents.controller.js';
 import { GetJobStatusUseCase } from './modules/jobs/application/get-job-status.usecase.js';
 import { createJobsController } from './modules/jobs/interface/jobs.controller.js';
@@ -85,7 +88,8 @@ async function bootstrap(): Promise<void> {
 	});
 	const ingestQueue = createDocumentIngestQueue(bullRedis);
 	const uploadDocument = new UploadDocumentUseCase(documentRepository, pipelineJobRepository, objectStorage, ingestQueue);
-	const getJobStatus = new GetJobStatusUseCase(pipelineJobRepository);
+	const listDocuments = new ListDocumentsUseCase(documentRepository);
+		const getJobStatus = new GetJobStatusUseCase(pipelineJobRepository);
 
 	const repositoryRepository = new PostgresRepositoryRepository(pgPool);
 	const repoIngestQueue = createRepoIngestQueue(bullRedis);
@@ -98,6 +102,9 @@ async function bootstrap(): Promise<void> {
 	const qdrantSearchClient = new QdrantSearchClient(env.QDRANT_URL, env.QDRANT_API_KEY);
 	const embeddingProviderFactory = new ConfiguredEmbeddingProviderFactory(env.ROCKETRIDE_OPENAI_KEY);
 	const search = new SearchUseCase(embeddingProviderFactory, qdrantSearchClient);
+
+		// Document teardown reuses the same object-storage + Qdrant clients as ingest/search.
+		const deleteDocument = new DeleteDocumentUseCase(documentRepository, objectStorage, qdrantSearchClient, (ctx, msg) => logger.error(ctx, msg));
 
 	// Chat is the one synchronous RocketRide path in the API: questions run
 	// against each project's persistent chat pipeline (useExisting semantics
@@ -112,6 +119,9 @@ async function bootstrap(): Promise<void> {
 	const chatContextRetriever = new VectorSearchContextRetriever(embeddingProviderFactory, qdrantSearchClient);
 	const chatRepository = new PostgresChatRepository(pgPool);
 	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver, chatContextRetriever);
+
+		// Project Home aggregate stats — real counts composed from existing repositories.
+		const getProjectStats = new GetProjectStatsUseCase(documentRepository, repositoryRepository, chatRepository);
 
 	// Evaluation reuses the same RAG seam + chat-pipeline resolver + context
 	// retriever as live chat, so a golden-set run exercises the exact path
@@ -141,8 +151,8 @@ async function bootstrap(): Promise<void> {
 	app.use(rateLimitGuard(rateLimiter));
 	app.use(auditLogMiddleware(auditLogRepository));
 
-	app.use(createProjectsController({ createProject, deleteProject, getProject, listProjects }));
-	app.use(createDocumentsController({ getProject, uploadDocument }));
+	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
+	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument }));
 	app.use(createJobsController({ getJobStatus }));
 	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories }));
 	app.use(createChatController({ getProject, askQuestion, chats: chatRepository }));

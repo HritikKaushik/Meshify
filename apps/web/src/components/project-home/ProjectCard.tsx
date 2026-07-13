@@ -1,49 +1,67 @@
 import { useNavigate } from 'react-router-dom';
-import { Pin, ArrowUpRight } from 'lucide-react';
-import type { Project } from '@/api';
+import { Pin, Sparkles, FolderGit2, Settings } from 'lucide-react';
+import type { Project, ProjectStats } from '@/api';
 import { projectColor } from '@/lib/project-color';
 import { timeAgo } from '@/lib/time';
-import { StatusDot } from '@/components/mc/primitives';
 import { cn } from '@/lib/utils';
 
 /**
- * Project card (design 3b). Populated entirely from the real project record —
- * name, status, description, LLM profile, last-updated. The design's "coverage
- * ring" needs a per-project coverage metric the backend doesn't expose, so it's
- * intentionally omitted rather than faked; a status dot conveys health instead.
- * Pinning is a client-side preference (see usePinnedProjects), a real user
- * action persisted locally — not fabricated data.
+ * Project card (design 4b). Everything shown is real: name, status, a knowledge
+ * coverage ring (share of documents embedded — from GetProjectStats), repo /
+ * document counts, sync state, and last activity. The design's team-avatar
+ * stack has no per-project membership backend yet, so it is omitted rather than
+ * faked. Hover reveals real navigations (Open / Ask / Repo / Settings). Pinning
+ * is a local user preference.
  */
 export function ProjectCard({
 	project,
+	stats,
 	pinned,
 	onTogglePin,
 }: {
 	project: Project;
+	stats?: ProjectStats;
 	pinned: boolean;
 	onTogglePin: (id: string) => void;
 }) {
 	const navigate = useNavigate();
-	const active = project.status === 'active';
+	const color = projectColor(project.id);
+	const open = () => navigate(`/projects/${project.id}`);
+
+	const coveragePct = stats && stats.coverage !== null ? Math.round(stats.coverage * 100) : null;
+	const indexing =
+		!!stats &&
+		((stats.repositories.total > 0 && stats.repositories.synced < stats.repositories.total) ||
+			(stats.documents.total > 0 && stats.documents.embedded < stats.documents.total));
+	const syncLabel = !stats
+		? '—'
+		: stats.repositories.total === 0
+			? 'No repos'
+			: stats.repositories.synced === stats.repositories.total
+				? 'Synced'
+				: 'Syncing';
+
 	return (
 		<div
 			role="button"
 			tabIndex={0}
-			onClick={() => navigate(`/projects/${project.id}`)}
-			onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate(`/projects/${project.id}`)}
-			className="group relative flex cursor-pointer flex-col gap-3 overflow-hidden rounded-2xl border border-black/[.06] bg-white p-4 text-left shadow-[0_10px_30px_rgba(16,24,40,.06),0_1px_2px_rgba(16,24,40,.04)] transition-all hover:-translate-y-0.5 hover:border-mc-accent/30 hover:shadow-[0_16px_40px_rgba(26,115,232,.12)]"
+			onClick={open}
+			onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && open()}
+			className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-black/[.06] bg-white p-5 text-left shadow-[0_10px_30px_rgba(16,24,40,.06),0_1px_2px_rgba(16,24,40,.04)] transition-all hover:-translate-y-0.5 hover:border-mc-accent/25 hover:shadow-[0_16px_40px_rgba(26,115,232,.1)]"
 		>
-			<div
-				className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity group-hover:opacity-30"
-				style={{ background: projectColor(project.id) }}
-			/>
-			<div className="relative flex items-center gap-2.5">
-				<span className="h-[9px] w-[9px] flex-none rounded-sm" style={{ background: projectColor(project.id) }} />
-				<span className="flex-1 truncate text-[15px] font-semibold text-mc-text">{project.name}</span>
-				<span className="flex items-center gap-1.5 rounded-full border border-black/[.06] bg-mc-surface px-2 py-0.5 font-mono text-[9.5px] text-mc-text-3">
-					<StatusDot color={active ? 'success' : 'muted'} glow={active} />
-					{project.status.toUpperCase()}
-				</span>
+			{/* header */}
+			<div className="flex items-center gap-2.5">
+				<span className="h-[9px] w-[9px] flex-none rounded-sm" style={{ background: color }} />
+				<span className="flex-1 truncate text-[16px] font-semibold text-mc-text">{project.name}</span>
+				{indexing ? (
+					<span className="flex items-center gap-1.5 rounded-full bg-mc-accent/[.09] px-2.5 py-1 font-mono text-[10px] font-medium text-mc-accent">
+						<span className="h-[5px] w-[5px] animate-meshpulse rounded-full bg-mc-accent" /> INDEXING
+					</span>
+				) : (
+					<span className="flex items-center gap-1.5 rounded-full bg-mc-success/[.09] px-2.5 py-1 font-mono text-[10px] font-medium text-mc-success">
+						<span className="h-[5px] w-[5px] rounded-full bg-mc-success" /> AI HEALTHY
+					</span>
+				)}
 				<button
 					onClick={(e) => {
 						e.stopPropagation();
@@ -55,14 +73,78 @@ export function ProjectCard({
 					<Pin className={cn('h-3.5 w-3.5', pinned && 'fill-current')} />
 				</button>
 			</div>
-			<p className="relative line-clamp-2 min-h-[2.5rem] text-xs leading-relaxed text-mc-text-3">{project.description || 'No description.'}</p>
-			<div className="relative flex items-center justify-between border-t border-black/[.06] pt-3 font-mono text-[11px] text-mc-muted">
-				<span className="truncate">{project.llmProfile}</span>
-				<span className="flex items-center gap-2">
-					<span>Active {timeAgo(project.updatedAt)}</span>
-					<ArrowUpRight className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
-				</span>
+
+			{/* body: coverage ring + counts */}
+			<div className="mt-[18px] flex items-center gap-5">
+				<CoverageRing pct={coveragePct} color={color} />
+				<div className="flex flex-1 flex-col gap-2.5">
+					<div className="flex gap-6">
+						<Stat label="Repos" value={stats ? String(stats.repositories.total) : '—'} />
+						<Stat label="Documents" value={stats ? String(stats.documents.total) : '—'} />
+						<Stat label="Sync" value={syncLabel} valueClass={syncLabel === 'Synced' ? 'text-mc-success' : undefined} />
+					</div>
+					<div className="text-[11.5px] text-mc-muted-2">
+						{stats?.lastActivityAt ? `Last activity ${timeAgo(stats.lastActivityAt)}` : `Updated ${timeAgo(project.updatedAt)}`}
+					</div>
+				</div>
+			</div>
+
+			{/* hover action overlay */}
+			<div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-2 items-center gap-2 border-t border-black/[.06] bg-gradient-to-t from-white to-white/75 px-4 py-3 opacity-0 backdrop-blur-sm transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
+				<button
+					onClick={(e) => { e.stopPropagation(); open(); }}
+					className="flex-1 rounded-full bg-mc-accent py-2 text-[11.5px] font-semibold text-white shadow-[0_4px_12px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi"
+				>
+					Open Workspace
+				</button>
+				<OverlayIcon title="Ask Mesh" onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/chat`); }} accent>
+					<Sparkles className="h-3.5 w-3.5" />
+				</OverlayIcon>
+				<OverlayIcon title="Repository" onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/repository`); }}>
+					<FolderGit2 className="h-3.5 w-3.5" />
+				</OverlayIcon>
+				<OverlayIcon title="Settings" onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/settings`); }}>
+					<Settings className="h-3.5 w-3.5" />
+				</OverlayIcon>
 			</div>
 		</div>
+	);
+}
+
+function CoverageRing({ pct, color }: { pct: number | null; color: string }) {
+	const value = pct ?? 0;
+	return (
+		<div
+			className="relative flex h-[62px] w-[62px] flex-none items-center justify-center rounded-full"
+			style={{ background: `conic-gradient(${color} 0% ${value}%, #E7EBF3 ${value}% 100%)` }}
+		>
+			<div className="absolute inset-[5px] flex items-center justify-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(16,24,40,.04)]">
+				<span className="text-[15px] font-semibold text-mc-text">{pct === null ? '—' : `${pct}%`}</span>
+			</div>
+		</div>
+	);
+}
+
+function Stat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+	return (
+		<div>
+			<div className="text-[10px] font-medium text-mc-muted-2">{label}</div>
+			<div className={cn('text-[15px] font-semibold text-mc-text-2', valueClass)}>{value}</div>
+		</div>
+	);
+}
+
+function OverlayIcon({ children, title, onClick, accent }: { children: React.ReactNode; title: string; onClick: (e: React.MouseEvent) => void; accent?: boolean }) {
+	return (
+		<button
+			title={title}
+			onClick={onClick}
+			className={cn(
+				'flex h-8 w-8 items-center justify-center rounded-full border transition-colors',
+				accent ? 'border-mc-purple/22 bg-white text-[#4F46E5] hover:bg-mc-purple/[.06]' : 'border-black/[.1] bg-white text-mc-text-3 hover:text-mc-text'
+			)}
+		>
+			{children}
+		</button>
 	);
 }

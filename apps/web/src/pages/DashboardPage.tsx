@@ -1,120 +1,158 @@
-import { useMemo } from 'react';
-import { Plus, Sparkles, Activity } from 'lucide-react';
-import type { Project } from '@/api';
+import { useEffect, useMemo, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
+import type { Project, ProjectStats } from '@/api';
+import { api } from '@/api-client';
 import { usePersistent } from '@/store';
 import { useOrg } from '@/components/layout/OrgShell';
-import { StatTile } from '@/components/project-home/StatTile';
 import { ProjectCard } from '@/components/project-home/ProjectCard';
-import { GlassCard, Kicker } from '@/components/mc/primitives';
+import { Kicker } from '@/components/mc/primitives';
 import { SectionHeading } from '@/components/common/SectionHeading';
 
+function greeting(): string {
+	const h = new Date().getHours();
+	if (h < 12) return 'Good morning';
+	if (h < 18) return 'Good afternoon';
+	return 'Good evening';
+}
+
 /**
- * Project Home (design 3b) — the org dashboard and post-login default. Real
- * project data drives the stat tiles and project cards; pinning is a local
- * user preference. The design's org-level widgets (activity feed, indexing
- * jobs, AI suggestions, coverage %) have no backend yet, so they are shown as
- * honest "coming soon" states rather than fabricated numbers.
+ * Project Home (design 4b) — the org dashboard and post-login default: a
+ * greeting, real org-wide stats, and the project grid. Stats (repositories,
+ * documents, knowledge coverage, active conversations) are aggregated from the
+ * per-project GetProjectStats endpoint — all real. The design's right rail
+ * (AI suggestions / indexing feed / recent activity) has no backend yet and is
+ * intentionally omitted rather than faked; pinning is a local preference.
  */
 export function DashboardPage() {
 	const { projects, loading, openCreate } = useOrg();
+	const { user } = useUser();
 	const [pinnedIds, setPinnedIds] = usePersistent<string[]>('meshify.pinnedProjects', []);
+	const [stats, setStats] = useState<Record<string, ProjectStats>>({});
 
 	const togglePin = (id: string) =>
 		setPinnedIds(pinnedIds.includes(id) ? pinnedIds.filter((x) => x !== id) : [...pinnedIds, id]);
 
-	const weekAgo = Date.now() - 7 * 864e5;
-	const { pinned, recent, activeCount, updatedThisWeek } = useMemo(() => {
-		const byRecent = [...projects].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
-		return {
-			pinned: byRecent.filter((p) => pinnedIds.includes(p.id)),
-			recent: byRecent,
-			activeCount: projects.filter((p) => p.status === 'active').length,
-			updatedThisWeek: projects.filter((p) => +new Date(p.updatedAt) > weekAgo).length,
+	// Fetch each project's real stats in parallel; tolerate individual failures.
+	useEffect(() => {
+		let cancelled = false;
+		if (projects.length === 0) return;
+		void Promise.all(
+			projects.map(async (p) => {
+				try {
+					return [p.id, await api.getProjectStats(p.id)] as const;
+				} catch {
+					return null;
+				}
+			})
+		).then((entries) => {
+			if (cancelled) return;
+			setStats(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, ProjectStats]>));
+		});
+		return () => {
+			cancelled = true;
 		};
-	}, [projects, pinnedIds, weekAgo]);
+	}, [projects]);
+
+	const org = useMemo(() => {
+		const values = Object.values(stats);
+		const repositories = values.reduce((n, s) => n + s.repositories.total, 0);
+		const conversations = values.reduce((n, s) => n + s.conversations, 0);
+		const totalDocs = values.reduce((n, s) => n + s.documents.total, 0);
+		const embedded = values.reduce((n, s) => n + s.documents.embedded, 0);
+		const coverage = totalDocs > 0 ? Math.round((embedded / totalDocs) * 100) : null;
+		return { repositories, conversations, coverage };
+	}, [stats]);
+
+	const sorted = useMemo(
+		() => [...projects].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)),
+		[projects]
+	);
+	const pinned = sorted.filter((p) => pinnedIds.includes(p.id));
 
 	return (
-		<div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-			{/* Main column */}
-			<div className="flex min-w-0 flex-col gap-6">
-				<div className="flex flex-col gap-1.5">
-					<Kicker className="text-mc-accent">// WORKSPACE</Kicker>
-					<h1 className="text-2xl font-semibold tracking-tight text-mc-text">Your workspace</h1>
-					<p className="text-sm text-mc-text-3">
-						{loading ? 'Loading projects…' : `${projects.length} project${projects.length === 1 ? '' : 's'} · each an isolated, RAG-queryable knowledge base.`}
-					</p>
+		<div className="flex flex-col gap-7">
+			{/* Greeting */}
+			<div className="flex flex-wrap items-end gap-4">
+				<div>
+					<Kicker className="text-mc-accent">{(user?.firstName ? `${user.firstName}'s` : 'Rocketride') + ' workspace'}</Kicker>
+					<h1 className="mt-2 text-[34px] font-semibold leading-tight tracking-[-.03em] text-mc-text">
+						{greeting()}
+						{user?.firstName ? `, ${user.firstName}` : ''}
+					</h1>
 				</div>
-
-				<div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-					<StatTile label="PROJECTS" value={projects.length} />
-					<StatTile label="ACTIVE" value={activeCount} accent="success" sub={activeCount === projects.length && projects.length > 0 ? 'all healthy' : undefined} />
-					<StatTile label="UPDATED · 7D" value={updatedThisWeek} accent="indexing" />
-				</div>
-
-				{pinned.length > 0 && (
-					<Section title="PINNED">
-						<CardGrid projects={pinned} pinnedIds={pinnedIds} onTogglePin={togglePin} />
-					</Section>
-				)}
-
-				<Section title={pinned.length > 0 ? 'ALL PROJECTS' : 'PROJECTS'}>
-					{!loading && projects.length === 0 ? (
-						<div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-black/[.14] bg-white py-16 text-center">
-							<p className="text-sm text-mc-text-3">No projects yet.</p>
-							<button onClick={openCreate} className="flex items-center gap-1.5 text-sm font-medium text-mc-accent hover:text-mc-accent-lo">
-								<Plus className="h-3.5 w-3.5" /> Create your first project
-							</button>
-						</div>
-					) : (
-						<CardGrid projects={recent} pinnedIds={pinnedIds} onTogglePin={togglePin} />
-					)}
-				</Section>
+				<div className="flex-1" />
+				<button
+					onClick={openCreate}
+					className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.28)] transition-colors hover:bg-mc-accent-hi"
+				>
+					<Plus className="h-3.5 w-3.5" /> New project
+				</button>
 			</div>
 
-			{/* Right rail — quick start (real) + honest placeholders for unbacked org widgets */}
-			<aside className="flex flex-col gap-4">
-				<GlassCard className="flex flex-col gap-3 p-4">
-					<Kicker>GET STARTED</Kicker>
-					<button onClick={openCreate} className="flex items-center gap-2.5 rounded-xl border border-mc-accent/25 bg-mc-accent/[.07] px-3 py-2.5 text-left text-[13px] font-medium text-mc-accent-lo transition-colors hover:bg-mc-accent/[.12]">
-						<Plus className="h-4 w-4" /> New project
-					</button>
-					<p className="text-[12px] leading-relaxed text-mc-text-3">
-						Open a project to connect a repository, upload documents, and ask Mesh grounded, cited questions.
-					</p>
-				</GlassCard>
+			{/* Inline org stats */}
+			<div className="flex flex-wrap items-center gap-y-4 border-b border-black/[.07] pb-6">
+				<InlineStat value={projects.length} label="Projects" first />
+				<Divider />
+				<InlineStat value={org.repositories} label="Repositories" />
+				<Divider />
+				<InlineStat value={org.coverage === null ? '—' : `${org.coverage}%`} label="Knowledge coverage" accent="success" />
+				<Divider />
+				<InlineStat value={org.conversations} label="Active conversations" accent="accent" />
+			</div>
 
-				<GlassCard className="flex flex-col gap-2.5 p-4">
-					<div className="flex items-center gap-2"><Activity className="h-3.5 w-3.5 text-mc-muted-2" /><Kicker>ACTIVITY</Kicker></div>
-					<p className="text-[12px] leading-relaxed text-mc-text-3">
-						Org-wide activity (uploads, syncs, indexing) will appear here once activity tracking ships. Per-project status is live inside each workspace.
-					</p>
-				</GlassCard>
+			{/* Pinned */}
+			{pinned.length > 0 && (
+				<Section title="Pinned projects">
+					<Grid projects={pinned} stats={stats} pinnedIds={pinnedIds} onTogglePin={togglePin} />
+				</Section>
+			)}
 
-				<GlassCard className="flex flex-col gap-2.5 p-4">
-					<div className="flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-mc-accent" /><Kicker>AI SUGGESTIONS</Kicker></div>
-					<p className="text-[12px] leading-relaxed text-mc-text-3">
-						Mesh surfaces documentation gaps and drift inside each project. Open a project and ask Mesh to get started.
-					</p>
-				</GlassCard>
-			</aside>
+			{/* All projects */}
+			<Section title={pinned.length > 0 ? 'All projects' : 'Projects'}>
+				{!loading && projects.length === 0 ? (
+					<div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-black/[.14] bg-white py-16 text-center">
+						<p className="text-sm text-mc-text-3">No projects yet.</p>
+						<button onClick={openCreate} className="flex items-center gap-1.5 text-sm font-medium text-mc-accent hover:text-mc-accent-lo">
+							<Plus className="h-3.5 w-3.5" /> Create your first project
+						</button>
+					</div>
+				) : (
+					<Grid projects={sorted} stats={stats} pinnedIds={pinnedIds} onTogglePin={togglePin} />
+				)}
+			</Section>
 		</div>
 	);
 }
 
+function InlineStat({ value, label, accent, first }: { value: React.ReactNode; label: string; accent?: 'success' | 'accent'; first?: boolean }) {
+	const color = accent === 'success' ? 'text-mc-success' : accent === 'accent' ? 'text-mc-accent' : 'text-mc-text';
+	return (
+		<div className={first ? 'pr-8' : 'px-8'}>
+			<div className={`text-[28px] font-semibold tracking-[-.02em] ${color}`}>{value}</div>
+			<div className="mt-0.5 text-[12px] text-mc-muted">{label}</div>
+		</div>
+	);
+}
+
+function Divider() {
+	return <div className="h-[38px] w-px bg-black/[.08]" />;
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
 	return (
-		<div className="flex flex-col gap-3">
-			<SectionHeading divider>{title}</SectionHeading>
+		<div className="flex flex-col gap-3.5">
+			<SectionHeading>{title}</SectionHeading>
 			{children}
 		</div>
 	);
 }
 
-function CardGrid({ projects, pinnedIds, onTogglePin }: { projects: Project[]; pinnedIds: string[]; onTogglePin: (id: string) => void }) {
+function Grid({ projects, stats, pinnedIds, onTogglePin }: { projects: Project[]; stats: Record<string, ProjectStats>; pinnedIds: string[]; onTogglePin: (id: string) => void }) {
 	return (
-		<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+		<div className="grid grid-cols-1 gap-[18px] md:grid-cols-2 xl:grid-cols-3">
 			{projects.map((p) => (
-				<ProjectCard key={p.id} project={p} pinned={pinnedIds.includes(p.id)} onTogglePin={onTogglePin} />
+				<ProjectCard key={p.id} project={p} stats={stats[p.id]} pinned={pinnedIds.includes(p.id)} onTogglePin={onTogglePin} />
 			))}
 		</div>
 	);

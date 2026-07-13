@@ -49,6 +49,15 @@ export class PostgresDocumentRepository implements DocumentRepository {
 		return row ? toDomain(row) : undefined;
 	}
 
+	async listByProject(projectId: string): Promise<Document[]> {
+		const { rows } = await this.pool.query<DocumentRow>('select * from documents where project_id = $1 order by created_at desc', [projectId]);
+		return rows.map(toDomain);
+	}
+
+	async delete(id: string): Promise<void> {
+		await this.pool.query('delete from documents where id = $1', [id]);
+	}
+
 	async findByProjectAndHash(projectId: string, contentHash: string): Promise<Document | undefined> {
 		const { rows } = await this.pool.query<DocumentRow>('select * from documents where project_id = $1 and content_hash = $2 order by created_at desc limit 1', [projectId, contentHash]);
 		const row = rows[0];

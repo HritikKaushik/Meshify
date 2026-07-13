@@ -13,6 +13,8 @@ export interface SearchFilters {
 	parentType?: 'document' | 'file';
 	/** payload.source_path prefix (e.g. "src/"). */
 	sourcePathPrefix?: string;
+	/** payload.source_path exact match (e.g. "refund-runbook.md") — used for targeted deletion. */
+	sourcePathExact?: string;
 }
 
 export interface QdrantSearchHit {
@@ -27,6 +29,7 @@ export function buildQdrantFilter(filters: SearchFilters): Record<string, unknow
 	if (filters.language) must.push({ key: 'language', match: { value: filters.language } });
 	if (filters.parentType) must.push({ key: 'parent_type', match: { value: filters.parentType } });
 	if (filters.sourcePathPrefix) must.push({ key: 'source_path', match: { text: filters.sourcePathPrefix } });
+	if (filters.sourcePathExact) must.push({ key: 'source_path', match: { value: filters.sourcePathExact } });
 	return must.length > 0 ? { must } : undefined;
 }
 
@@ -58,6 +61,28 @@ export class QdrantSearchClient {
 
 		const body = (await res.json()) as { result?: Array<{ id: string | number; score: number; payload?: Record<string, unknown> }> };
 		return (body.result ?? []).map((hit) => ({ id: String(hit.id), score: hit.score, payload: hit.payload ?? {} }));
+	}
+
+	/**
+	 * Deletes every point in a collection whose payload matches the filter —
+	 * used to purge a document's chunks when it is removed. Tolerates a missing
+	 * collection (404) as a no-op: a document that was never embedded has no
+	 * points to delete. Other failures throw so the caller can decide.
+	 */
+	async deleteByFilter(collection: string, filters: SearchFilters): Promise<void> {
+		const filter = buildQdrantFilter(filters);
+		if (!filter) throw new Error('deleteByFilter requires at least one filter — refusing to delete an entire collection');
+
+		const res = await fetch(new URL(`/collections/${collection}/points/delete`, this.baseUrl), {
+			method: 'POST',
+			headers: this.headers(),
+			body: JSON.stringify({ filter }),
+			signal: AbortSignal.timeout(10_000),
+		});
+
+		if (!res.ok && res.status !== 404) {
+			throw new Error(`Qdrant delete on "${collection}" failed: ${res.status} ${await res.text()}`);
+		}
 	}
 
 	private headers(): Record<string, string> {

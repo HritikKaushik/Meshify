@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { ArrowUp, Star } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import { api } from '@/api-client';
-import type { ChatCitation, ChatMessage } from '@/api';
+import type { ChatMessage } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { MeshAvatar, Kicker } from '@/components/mc/primitives';
 import { SuggestionChip } from '@/components/common/SuggestionChip';
 import { MeshMessage, StreamingIndicator } from '@/components/chat/MeshMessage';
-import { ContextRail } from '@/components/chat/ContextRail';
 import type { Turn } from '@/components/chat/chat-util';
 
 const SUGGESTED = ['Summarize the ingested knowledge', 'What does this project do?', 'Where is authentication handled?'];
@@ -98,97 +97,92 @@ export function ChatPage() {
 		threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' });
 	}, [turns, chat.state.status]);
 
-	// Aggregate every cited source across the thread; latest confidence for the rail.
+	// Aggregate every cited source across the thread for the header count.
 	const sources = useMemo(() => {
-		const map = new Map<string, ChatCitation>();
-		for (const t of turns) for (const c of t.citations ?? []) {
-			const prev = map.get(c.sourcePath);
-			if (!prev || c.score > prev.score) map.set(c.sourcePath, c);
-		}
-		return [...map.values()].sort((a, b) => b.score - a.score);
+		const seen = new Set<string>();
+		for (const t of turns) for (const c of t.citations ?? []) seen.add(c.sourcePath);
+		return seen;
 	}, [turns]);
-	const latestConfidence = useMemo(() => [...turns].reverse().find((t) => t.confidence !== undefined)?.confidence, [turns]);
 
 	const currentTitle = conversations.find((c) => c.id === conversationId)?.title;
-	const related = conversations.filter((c) => c.id !== conversationId);
 
 	return (
-		<div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_300px]">
-			{/* Thread */}
-			<div className="flex min-h-[560px] flex-col overflow-hidden rounded-2xl border border-black/[.06] bg-white shadow-[0_10px_30px_rgba(16,24,40,.06),0_1px_2px_rgba(16,24,40,.04)]">
-				<div className="flex items-center gap-2.5 border-b border-black/[.06] px-5 py-3">
-					{conversationId ? <Star className="h-3.5 w-3.5 fill-current text-mc-accent" /> : <MeshAvatar size={24} />}
-					<span className="truncate text-[13.5px] font-semibold text-mc-text">{currentTitle ?? (conversationId ? 'Conversation' : 'New conversation')}</span>
-					<span className="font-mono text-[11px] text-mc-muted">
-						{project.name} · {sources.length} citation{sources.length === 1 ? '' : 's'}
-					</span>
-				</div>
-
-				<div ref={threadRef} className="flex flex-1 flex-col items-center gap-6 overflow-y-auto px-6 py-7">
-					<div className="flex w-full max-w-2xl flex-1 flex-col gap-6">
-						{turns.length === 0 && chat.state.status !== 'pending' && history.state.status !== 'pending' && (
-							<div className="flex flex-col items-center gap-3 pt-16 text-center">
-								<MeshAvatar size={40} breathe />
-								<Kicker className="text-mc-accent">// GROUNDED · CITED · SCOPED TO THIS PROJECT</Kicker>
-								<p className="max-w-sm text-sm text-mc-text-3">
-									Ask anything about {project.name}. Mesh answers only from this project's indexed documents and code, with sources.
-								</p>
+		<div className="flex h-full flex-col">
+			{/* Reading column — fills the main area, centered ~760px (design 4c) */}
+			<div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto">
+				<div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 px-5 pb-6 pt-9 sm:px-10">
+					{/* Conversation title (scrolls with the thread) */}
+					{turns.length > 0 && (
+						<div className="flex flex-col gap-1">
+							<h1 className="text-[22px] font-semibold tracking-[-.02em] text-mc-text">{currentTitle ?? (conversationId ? 'Conversation' : 'New conversation')}</h1>
+							<div className="text-[12px] text-mc-muted-2">
+								{sources.size} source{sources.size === 1 ? '' : 's'} · {project.name}
 							</div>
-						)}
+						</div>
+					)}
 
-						{history.state.status === 'pending' && <p className="pt-10 text-center text-sm text-mc-text-3">Loading conversation…</p>}
+					{turns.length === 0 && chat.state.status !== 'pending' && history.state.status !== 'pending' && (
+						<div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
+							<MeshAvatar size={40} breathe />
+							<Kicker className="text-mc-accent">// GROUNDED · CITED · SCOPED TO THIS PROJECT</Kicker>
+							<p className="max-w-sm text-sm text-mc-text-3">
+								Ask anything about {project.name}. Mesh answers only from this project's indexed documents and code, with sources.
+							</p>
+						</div>
+					)}
 
-						{turns.map((t, i) =>
-							t.role === 'user' ? (
-								<div key={i} className="ml-auto max-w-[80%] rounded-[18px] rounded-br-md bg-[#EEF2FB] px-4 py-3">
-									<p className="text-[14.5px] leading-relaxed text-mc-text-2">{t.content}</p>
-								</div>
-							) : (
-								<MeshMessage key={i} turn={t} reveal={i === turns.length - 1 && !!t.live} />
-							)
-						)}
+					{history.state.status === 'pending' && <p className="pt-10 text-center text-sm text-mc-text-3">Loading conversation…</p>}
 
-						{chat.state.status === 'pending' && <StreamingIndicator />}
-						{chat.state.status === 'error' && (
-							<div className="rounded-xl border border-mc-danger/30 bg-mc-danger/[.07] px-4 py-3 text-sm text-mc-danger">{(chat.state.error as Error).message}</div>
-						)}
-					</div>
-
-					{/* Composer */}
-					<div className="sticky bottom-0 w-full max-w-2xl">
-						{turns.length > 0 && (
-							<div className="mb-2.5 flex flex-wrap gap-1.5">
-								{SUGGESTED.slice(0, 3).map((s) => (
-									<SuggestionChip key={s} onClick={() => ask(s)}>
-										{s}
-									</SuggestionChip>
-								))}
+					{turns.map((t, i) =>
+						t.role === 'user' ? (
+							<div key={i} className="ml-auto max-w-[80%] rounded-[18px] rounded-br-md bg-[#EEF2FB] px-4 py-3">
+								<p className="text-[14.5px] leading-relaxed text-mc-text-2">{t.content}</p>
 							</div>
-						)}
-						<form
-							onSubmit={(e: FormEvent) => { e.preventDefault(); ask(question); }}
-							className="flex items-center gap-3 rounded-[18px] border border-black/[.09] bg-white px-4 py-3 shadow-[0_12px_36px_rgba(16,24,40,.1),0_2px_8px_rgba(16,24,40,.05)] transition-colors focus-within:border-mc-accent/40"
-						>
-							<input
-								value={question}
-								onChange={(e) => setQuestion(e.target.value)}
-								disabled={chat.state.status === 'pending'}
-								placeholder={`Ask about ${project.name}…`}
-								className="flex-1 bg-transparent text-[14.5px] text-mc-text placeholder:text-mc-muted focus:outline-none"
-							/>
-							<button
-								type="submit"
-								disabled={!question.trim() || chat.state.status === 'pending'}
-								className="flex h-[34px] w-[34px] items-center justify-center rounded-xl bg-mc-accent text-white shadow-[0_4px_12px_rgba(26,115,232,.3)] transition-colors hover:bg-mc-accent-hi disabled:opacity-40"
-							>
-								<ArrowUp className="h-4 w-4" />
-							</button>
-						</form>
-					</div>
+						) : (
+							<MeshMessage key={i} turn={t} reveal={i === turns.length - 1 && !!t.live} />
+						)
+					)}
+
+					{chat.state.status === 'pending' && <StreamingIndicator />}
+					{chat.state.status === 'error' && (
+						<div className="rounded-xl border border-mc-danger/30 bg-mc-danger/[.07] px-4 py-3 text-sm text-mc-danger">{(chat.state.error as Error).message}</div>
+					)}
 				</div>
 			</div>
 
-			<ContextRail confidence={latestConfidence} sources={sources} related={related} projectId={project.id} />
+			{/* Floating composer — fades into the canvas at the bottom of the column */}
+			<div className="flex-none px-5 pb-6 pt-3 sm:px-10" style={{ background: 'linear-gradient(0deg,#F7F8FB 62%,transparent)' }}>
+				<div className="mx-auto w-full max-w-3xl">
+					{turns.length > 0 && (
+						<div className="mb-3 flex flex-wrap gap-1.5">
+							{SUGGESTED.slice(0, 3).map((s) => (
+								<SuggestionChip key={s} onClick={() => ask(s)}>
+									{s}
+								</SuggestionChip>
+							))}
+						</div>
+					)}
+					<form
+						onSubmit={(e: FormEvent) => { e.preventDefault(); ask(question); }}
+						className="flex items-center gap-3 rounded-[18px] border border-black/[.09] bg-white px-4 py-3 shadow-[0_12px_36px_rgba(16,24,40,.1),0_2px_8px_rgba(16,24,40,.05)] transition-colors focus-within:border-mc-accent/40"
+					>
+						<input
+							value={question}
+							onChange={(e) => setQuestion(e.target.value)}
+							disabled={chat.state.status === 'pending'}
+							placeholder={`Ask about ${project.name}…`}
+							className="flex-1 bg-transparent text-[14.5px] text-mc-text placeholder:text-mc-muted focus:outline-none"
+						/>
+						<button
+							type="submit"
+							disabled={!question.trim() || chat.state.status === 'pending'}
+							className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-xl bg-mc-accent text-white shadow-[0_4px_12px_rgba(26,115,232,.3)] transition-colors hover:bg-mc-accent-hi disabled:opacity-40"
+						>
+							<ArrowUp className="h-4 w-4" />
+						</button>
+					</form>
+				</div>
+			</div>
 		</div>
 	);
 }
