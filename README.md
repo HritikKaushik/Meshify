@@ -1,10 +1,14 @@
 # Meshify — Enterprise Knowledge Platform (Phase I: AI Platform)
 
-AI Backend-as-a-Service for project-scoped RAG over source code, documents, and
-repositories. No frontend in this phase — API-only. Built around
+AI platform for project-scoped RAG over source code, documents, and
+repositories, with a React web workspace (`apps/web`) served through a
+backend-for-frontend. Built around
 [RocketRide](.rocketride/docs/ROCKETRIDE_README.md) for all LLM/embedding/RAG/agent
-orchestration; see `ai-platform-architecture` (published artifact) for the full
-design.
+orchestration.
+
+> **📖 Engineering documentation:** the canonical handbook lives at
+> **[docs/README.md](docs/README.md)** — architecture, subsystems, AI/RAG,
+> testing, operations, and per-package READMEs. Start there.
 
 ## Local bootstrap
 
@@ -58,7 +62,9 @@ docs/                           Architecture, FolderStructure, DevelopmentGuide,
 .rocketride/                    RocketRide docs + generated component catalog
 ```
 
-Full documentation lives in [docs/](docs/) — start with [docs/Architecture.md](docs/Architecture.md) and [docs/DevelopmentGuide.md](docs/DevelopmentGuide.md).
+Full documentation lives in the **[Engineering Handbook](docs/README.md)** —
+start with [System Overview](docs/architecture/overview.md) and
+[Getting Started](docs/development/getting-started.md).
 
 ## Workspace commands
 
