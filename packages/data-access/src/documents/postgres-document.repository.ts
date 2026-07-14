@@ -58,6 +58,18 @@ export class PostgresDocumentRepository implements DocumentRepository {
 		await this.pool.query('delete from documents where id = $1', [id]);
 	}
 
+	async statsByProject(projectId: string): Promise<{ total: number; embedded: number; lastUpdatedAt: Date | null }> {
+		const { rows } = await this.pool.query<{ total: number; embedded: number; last_updated_at: Date | null }>(
+			`select count(*)::int as total,
+			        count(*) filter (where status = 'embedded')::int as embedded,
+			        max(updated_at) as last_updated_at
+			 from documents where project_id = $1`,
+			[projectId]
+		);
+		const row = rows[0]!;
+		return { total: row.total, embedded: row.embedded, lastUpdatedAt: row.last_updated_at };
+	}
+
 	async findByProjectAndHash(projectId: string, contentHash: string): Promise<Document | undefined> {
 		const { rows } = await this.pool.query<DocumentRow>('select * from documents where project_id = $1 and content_hash = $2 order by created_at desc limit 1', [projectId, contentHash]);
 		const row = rows[0];

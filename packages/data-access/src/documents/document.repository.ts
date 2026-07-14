@@ -12,8 +12,10 @@ export interface CreateDocumentInput {
 export interface DocumentRepository {
 	create(input: CreateDocumentInput): Promise<Document>;
 	findById(id: string): Promise<Document | undefined>;
-	/** All documents for a project, newest first — powers the Documents screen and project stats. */
+	/** All documents for a project, newest first — powers the Documents screen. */
 	listByProject(projectId: string): Promise<Document[]>;
+	/** Single-row aggregate for project stats — counts + latest activity without loading rows. */
+	statsByProject(projectId: string): Promise<{ total: number; embedded: number; lastUpdatedAt: Date | null }>;
 	/** Dedupe check: an existing document for this project with the same content, regardless of filename. */
 	findByProjectAndHash(projectId: string, contentHash: string): Promise<Document | undefined>;
 	updateStatus(id: string, status: DocumentStatus): Promise<void>;

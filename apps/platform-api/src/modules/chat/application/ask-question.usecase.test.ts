@@ -48,6 +48,10 @@ class FakeChatRepository implements ChatRepository {
 		this.messages = this.messages.filter((m) => m.chatId !== id);
 	}
 
+	async countByProject(projectId: string): Promise<number> {
+		return [...this.chats.values()].filter((c) => c.projectId === projectId).length;
+	}
+
 	async createMessage(input: { id: string; chatId: string; role: Message['role']; content: string; citations?: Message['citations']; latencyMs?: number; modelUsed?: string; tokensUsed?: number }): Promise<Message> {
 		const message: Message = {
 			id: input.id,

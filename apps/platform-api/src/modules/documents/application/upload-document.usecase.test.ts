@@ -19,6 +19,13 @@ function makeFakes(existing?: Partial<Document>) {
 			return existing as Document | undefined;
 		},
 		async updateStatus() {},
+		async listByProject() {
+			return [];
+		},
+		async delete() {},
+		async statsByProject() {
+			return { total: 0, embedded: 0, lastUpdatedAt: null };
+		},
 	} satisfies DocumentRepository;
 
 	const jobsCreated: unknown[] = [];

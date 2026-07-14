@@ -4,24 +4,38 @@ import { GetProjectStatsUseCase } from './get-project-stats.usecase.js';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 
+function maxDate(dates: Date[]): Date | null {
+	return dates.reduce<Date | null>((latest, ts) => (!latest || ts > latest ? ts : latest), null);
+}
+
 function makeFakes(opts: {
 	documents?: Array<{ status: string; updatedAt: Date }>;
 	repositories?: Array<{ syncStatus: string; updatedAt: Date }>;
 	conversations?: number;
 }) {
+	const docs = opts.documents ?? [];
+	const repos = opts.repositories ?? [];
 	const documents = {
-		async listByProject() {
-			return (opts.documents ?? []) as never;
+		async statsByProject() {
+			return {
+				total: docs.length,
+				embedded: docs.filter((d) => d.status === 'embedded').length,
+				lastUpdatedAt: maxDate(docs.map((d) => d.updatedAt)),
+			};
 		},
 	} as unknown as DocumentRepository;
 	const repositories = {
-		async listByProject() {
-			return (opts.repositories ?? []) as never;
+		async statsByProject() {
+			return {
+				total: repos.length,
+				synced: repos.filter((r) => r.syncStatus === 'synced').length,
+				lastUpdatedAt: maxDate(repos.map((r) => r.updatedAt)),
+			};
 		},
 	} as unknown as RepositoryRepository;
 	const chats = {
-		async findByProjectId() {
-			return Array.from({ length: opts.conversations ?? 0 }, () => ({})) as never;
+		async countByProject() {
+			return opts.conversations ?? 0;
 		},
 	} as unknown as ChatRepository;
 	return new GetProjectStatsUseCase(documents, repositories, chats);

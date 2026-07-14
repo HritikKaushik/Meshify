@@ -28,6 +28,8 @@ export interface ChatRepository {
 	findChatById(id: string): Promise<Chat | undefined>;
 	/** All conversations for a project, pinned first then newest, each with its message count. */
 	findByProjectId(projectId: string): Promise<ChatSummary[]>;
+	/** Conversation count for a project — for stats, without loading rows or per-chat message counts. */
+	countByProject(projectId: string): Promise<number>;
 	/** Patch a conversation's title/pinned flag. Returns the updated chat, or undefined if it doesn't exist. */
 	updateChat(id: string, patch: UpdateChatInput): Promise<Chat | undefined>;
 	/** Delete a conversation and (via ON DELETE CASCADE) all of its messages. */

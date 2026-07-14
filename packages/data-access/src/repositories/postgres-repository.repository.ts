@@ -64,6 +64,18 @@ export class PostgresRepositoryRepository implements RepositoryRepository {
 		await this.pool.query('delete from repositories where id = $1', [id]);
 	}
 
+	async statsByProject(projectId: string): Promise<{ total: number; synced: number; lastUpdatedAt: Date | null }> {
+		const { rows } = await this.pool.query<{ total: number; synced: number; last_updated_at: Date | null }>(
+			`select count(*)::int as total,
+			        count(*) filter (where sync_status = 'synced')::int as synced,
+			        max(updated_at) as last_updated_at
+			 from repositories where project_id = $1`,
+			[projectId]
+		);
+		const row = rows[0]!;
+		return { total: row.total, synced: row.synced, lastUpdatedAt: row.last_updated_at };
+	}
+
 	async markSynced(id: string, commitSha: string | null, defaultBranch: string | null): Promise<void> {
 		await this.pool.query(
 			`update repositories set sync_status = 'synced', last_synced_commit = coalesce($2, last_synced_commit),

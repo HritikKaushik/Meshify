@@ -70,6 +70,11 @@ export class PostgresChatRepository implements ChatRepository {
 		return rows.map((row) => ({ ...chatToDomain(row), messageCount: Number(row.message_count) }));
 	}
 
+	async countByProject(projectId: string): Promise<number> {
+		const { rows } = await this.pool.query<{ count: number }>('select count(*)::int as count from chats where project_id = $1', [projectId]);
+		return rows[0]!.count;
+	}
+
 	async updateChat(id: string, patch: UpdateChatInput): Promise<Chat | undefined> {
 		const sets: string[] = [];
 		const values: unknown[] = [];

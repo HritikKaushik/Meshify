@@ -26,25 +26,21 @@ export class GetProjectStatsUseCase {
 
 	async execute(projectId: string): Promise<ProjectStats> {
 		const [documents, repositories, conversations] = await Promise.all([
-			this.documents.listByProject(projectId),
-			this.repositories.listByProject(projectId),
-			this.chats.findByProjectId(projectId),
+			this.documents.statsByProject(projectId),
+			this.repositories.statsByProject(projectId),
+			this.chats.countByProject(projectId),
 		]);
 
-		const embedded = documents.filter((d) => d.status === 'embedded').length;
-		const synced = repositories.filter((r) => r.syncStatus === 'synced').length;
-
-		const timestamps = [
-			...documents.map((d) => d.updatedAt),
-			...repositories.map((r) => r.updatedAt),
-		];
-		const lastActivity = timestamps.reduce<Date | null>((latest, ts) => (!latest || ts > latest ? ts : latest), null);
+		const lastActivity = [documents.lastUpdatedAt, repositories.lastUpdatedAt].reduce<Date | null>(
+			(latest, ts) => (ts && (!latest || ts > latest) ? ts : latest),
+			null
+		);
 
 		return {
-			repositories: { total: repositories.length, synced },
-			documents: { total: documents.length, embedded },
-			conversations: conversations.length,
-			coverage: documents.length > 0 ? embedded / documents.length : null,
+			repositories: { total: repositories.total, synced: repositories.synced },
+			documents: { total: documents.total, embedded: documents.embedded },
+			conversations,
+			coverage: documents.total > 0 ? documents.embedded / documents.total : null,
 			lastActivityAt: lastActivity ? lastActivity.toISOString() : null,
 		};
 	}
