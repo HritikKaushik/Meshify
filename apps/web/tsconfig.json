@@ -15,7 +15,6 @@
 		"isolatedModules": true,
 		"noEmit": true,
 		"forceConsistentCasingInFileNames": true,
-		"baseUrl": ".",
 		"paths": {
 			"@/*": ["./src/*"]
 		}
