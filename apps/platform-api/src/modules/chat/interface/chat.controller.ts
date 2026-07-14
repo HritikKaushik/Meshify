@@ -1,10 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import type { ChatRepository } from '@meshify/data-access';
+import type { Chat, ChatSummary, Message } from '@meshify/data-access';
 import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
 import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
 import type { AskQuestionUseCase } from '../application/ask-question.usecase.js';
 import { ChatNotFoundError } from '../application/ask-question.usecase.js';
+import type { ListConversationsUseCase } from '../application/list-conversations.usecase.js';
+import type { UpdateConversationUseCase } from '../application/update-conversation.usecase.js';
+import type { DeleteConversationUseCase } from '../application/delete-conversation.usecase.js';
+import type { GetConversationMessagesUseCase } from '../application/get-conversation-messages.usecase.js';
 
 const askSchema = z.object({
 	conversationId: z.string().uuid().optional(),
@@ -18,7 +22,35 @@ const updateChatSchema = z
 	})
 	.refine((v) => v.title !== undefined || v.pinned !== undefined, { message: 'Provide at least one of: title, pinned' });
 
-export function createChatController(deps: { getProject: GetProjectUseCase; askQuestion: AskQuestionUseCase; chats: ChatRepository }): Router {
+function toConversationSummary(c: ChatSummary) {
+	return { id: c.id, title: c.title, pinned: c.pinned, messageCount: c.messageCount, createdAt: c.createdAt.toISOString() };
+}
+
+function toConversation(c: Chat) {
+	return { id: c.id, title: c.title, pinned: c.pinned, createdAt: c.createdAt.toISOString() };
+}
+
+function toMessage(m: Message) {
+	return {
+		id: m.id,
+		role: m.role,
+		content: m.content,
+		citations: m.citations,
+		latencyMs: m.latencyMs,
+		modelUsed: m.modelUsed,
+		tokensUsed: m.tokensUsed,
+		createdAt: m.createdAt.toISOString(),
+	};
+}
+
+export function createChatController(deps: {
+	getProject: GetProjectUseCase;
+	askQuestion: AskQuestionUseCase;
+	listConversations: ListConversationsUseCase;
+	updateConversation: UpdateConversationUseCase;
+	deleteConversation: DeleteConversationUseCase;
+	getConversationMessages: GetConversationMessagesUseCase;
+}): Router {
 	const router = Router();
 	const guard = projectIsolationGuard(deps.getProject);
 
@@ -49,16 +81,8 @@ export function createChatController(deps: { getProject: GetProjectUseCase; askQ
 
 	// List a project's conversations (pinned first, then newest) for the workspace sidebar.
 	router.get('/v1/projects/:projectId/chats', guard, async (req, res) => {
-		const chats = await deps.chats.findByProjectId(req.project!.id);
-		res.status(200).json({
-			conversations: chats.map((c) => ({
-				id: c.id,
-				title: c.title,
-				pinned: c.pinned,
-				messageCount: c.messageCount,
-				createdAt: c.createdAt.toISOString(),
-			})),
-		});
+		const conversations = await deps.listConversations.execute(req.project!.id);
+		res.status(200).json({ conversations: conversations.map(toConversationSummary) });
 	});
 
 	// Pin/unpin or rename a conversation.
@@ -69,49 +93,45 @@ export function createChatController(deps: { getProject: GetProjectUseCase; askQ
 			return;
 		}
 		const chatId = req.params.chatId as string;
-		const existing = await deps.chats.findChatById(chatId);
-		if (!existing || existing.projectId !== req.project!.id) {
-			res.status(404).json({ error: `Conversation "${chatId}" not found` });
-			return;
+		try {
+			const updated = await deps.updateConversation.execute({ projectId: req.project!.id, chatId, patch: parsed.data });
+			res.status(200).json(toConversation(updated));
+		} catch (err) {
+			if (err instanceof ChatNotFoundError) {
+				res.status(404).json({ error: `Conversation "${chatId}" not found` });
+				return;
+			}
+			throw err;
 		}
-		const updated = await deps.chats.updateChat(chatId, parsed.data);
-		res.status(200).json({ id: updated!.id, title: updated!.title, pinned: updated!.pinned, createdAt: updated!.createdAt.toISOString() });
 	});
 
 	// Delete a conversation (and, via ON DELETE CASCADE, its messages).
 	router.delete('/v1/projects/:projectId/chats/:chatId', guard, async (req, res) => {
 		const chatId = req.params.chatId as string;
-		const existing = await deps.chats.findChatById(chatId);
-		if (!existing || existing.projectId !== req.project!.id) {
-			res.status(404).json({ error: `Conversation "${chatId}" not found` });
-			return;
+		try {
+			await deps.deleteConversation.execute({ projectId: req.project!.id, chatId });
+			res.status(204).send();
+		} catch (err) {
+			if (err instanceof ChatNotFoundError) {
+				res.status(404).json({ error: `Conversation "${chatId}" not found` });
+				return;
+			}
+			throw err;
 		}
-		await deps.chats.deleteChat(chatId);
-		res.status(204).send();
 	});
 
 	router.get('/v1/projects/:projectId/chats/:chatId/messages', guard, async (req, res) => {
 		const chatId = req.params.chatId as string;
-		const chat = await deps.chats.findChatById(chatId);
-		if (!chat || chat.projectId !== req.project!.id) {
-			res.status(404).json({ error: `Conversation "${chatId}" not found` });
-			return;
+		try {
+			const { chat, messages } = await deps.getConversationMessages.execute({ projectId: req.project!.id, chatId });
+			res.status(200).json({ conversationId: chat.id, messages: messages.map(toMessage) });
+		} catch (err) {
+			if (err instanceof ChatNotFoundError) {
+				res.status(404).json({ error: `Conversation "${chatId}" not found` });
+				return;
+			}
+			throw err;
 		}
-
-		const messages = await deps.chats.listMessages(chatId, 200);
-		res.status(200).json({
-			conversationId: chat.id,
-			messages: messages.map((m) => ({
-				id: m.id,
-				role: m.role,
-				content: m.content,
-				citations: m.citations,
-				latencyMs: m.latencyMs,
-				modelUsed: m.modelUsed,
-				tokensUsed: m.tokensUsed,
-				createdAt: m.createdAt.toISOString(),
-			})),
-		});
 	});
 
 	return router;

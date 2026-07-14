@@ -39,6 +39,10 @@ import { PipelineRegistry, RocketRideClientPool, RocketRideRagService } from '@m
 import { RocketRideChatPipelineResolver } from './modules/chat/infrastructure/rocketride-chat-pipeline.resolver.js';
 import { VectorSearchContextRetriever } from './modules/chat/infrastructure/vector-search-context-retriever.js';
 import { AskQuestionUseCase } from './modules/chat/application/ask-question.usecase.js';
+import { ListConversationsUseCase } from './modules/chat/application/list-conversations.usecase.js';
+import { UpdateConversationUseCase } from './modules/chat/application/update-conversation.usecase.js';
+import { DeleteConversationUseCase } from './modules/chat/application/delete-conversation.usecase.js';
+import { GetConversationMessagesUseCase } from './modules/chat/application/get-conversation-messages.usecase.js';
 import { createChatController } from './modules/chat/interface/chat.controller.js';
 import { QdrantSearchClient } from '@meshify/vector-store';
 import { SearchUseCase } from './modules/search/application/search.usecase.js';
@@ -123,6 +127,11 @@ async function bootstrap(): Promise<void> {
 	const chatRepository = new PostgresChatRepository(pgPool);
 	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver, chatContextRetriever);
 
+		const listConversations = new ListConversationsUseCase(chatRepository);
+		const updateConversation = new UpdateConversationUseCase(chatRepository);
+		const deleteConversation = new DeleteConversationUseCase(chatRepository);
+		const getConversationMessages = new GetConversationMessagesUseCase(chatRepository);
+
 		// Project Home aggregate stats — real counts composed from existing repositories.
 		const getProjectStats = new GetProjectStatsUseCase(documentRepository, repositoryRepository, chatRepository);
 
@@ -158,7 +167,7 @@ async function bootstrap(): Promise<void> {
 	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument }));
 	app.use(createJobsController({ getJobStatus }));
 	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories, deleteRepository }));
-	app.use(createChatController({ getProject, askQuestion, chats: chatRepository }));
+	app.use(createChatController({ getProject, askQuestion, listConversations, updateConversation, deleteConversation, getConversationMessages }));
 	app.use(createSearchController({ getProject, search }));
 	app.use(createEvaluationController({ getProject, runEvaluation }));
 
