@@ -13,7 +13,17 @@
 			"dependsOn": ["^build"]
 		},
 		"test": {
-			"dependsOn": ["^build"]
+			"dependsOn": ["^build"],
+			"inputs": ["src/**", "tests/**", "vitest.config.*", "package.json", "tsconfig.json"],
+			"outputs": []
+		},
+		"test:integration": {
+			"dependsOn": ["^build"],
+			"cache": false
+		},
+		"test:e2e": {
+			"dependsOn": ["^build"],
+			"cache": false
 		},
 		"lint": {}
 	}

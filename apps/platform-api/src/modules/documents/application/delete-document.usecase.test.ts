@@ -1,82 +1,46 @@
-import { describe, expect, it } from 'vitest';
-import type { Document, DocumentRepository } from '@meshify/data-access';
+import { describe, expect, it, vi } from 'vitest';
+import type { Document } from '@meshify/data-access';
+import { InMemoryDocumentRepository, buildDocument } from '@meshify/testing';
 import { DeleteDocumentUseCase, DocumentNotFoundError } from './delete-document.usecase.js';
 
-const PROJECT = { id: '11111111-1111-4111-8111-111111111111', qdrantCollectionDocs: 'proj_docs' };
+const PROJECT = { id: 'proj-1', qdrantCollectionDocs: 'proj_docs' };
 
-function makeFakes(doc?: Partial<Document>) {
-	const deleted: string[] = [];
-	const documents = {
-		async findById() {
-			return doc as Document | undefined;
-		},
-		async delete(id: string) {
-			deleted.push(id);
-		},
-	} as unknown as DocumentRepository;
-
-	const objectDeletes: string[] = [];
-	const storage = {
-		async deleteObject(key: string) {
-			objectDeletes.push(key);
-		},
-	};
-
-	const vectorDeletes: Array<{ collection: string; sourcePathExact: string }> = [];
-	const vectors = {
-		async deleteByFilter(collection: string, filters: { sourcePathExact: string }) {
-			vectorDeletes.push({ collection, sourcePathExact: filters.sourcePathExact });
-		},
-	};
-
-	return { documents, storage, vectors, deleted, objectDeletes, vectorDeletes };
+function makeDeps(...seed: Document[]) {
+	const documents = new InMemoryDocumentRepository(seed);
+	const storage = { deleteObject: vi.fn(async () => {}) };
+	const vectors = { deleteByFilter: vi.fn(async () => {}) };
+	return { documents, storage, vectors };
 }
-
-const DOC: Partial<Document> = {
-	id: 'doc-1',
-	projectId: PROJECT.id,
-	filename: 'refund-runbook.md',
-	objectStorageKey: `projects/${PROJECT.id}/documents/doc-1/refund-runbook.md`,
-	status: 'embedded',
-};
 
 describe('DeleteDocumentUseCase', () => {
 	it('404s when the document does not exist', async () => {
-		const f = makeFakes(undefined);
-		const usecase = new DeleteDocumentUseCase(f.documents, f.storage, f.vectors);
-		await expect(usecase.execute({ project: PROJECT, documentId: 'missing' })).rejects.toBeInstanceOf(DocumentNotFoundError);
-		expect(f.deleted).toHaveLength(0);
+		const { documents, storage, vectors } = makeDeps();
+		await expect(new DeleteDocumentUseCase(documents, storage, vectors).execute({ project: PROJECT, documentId: 'missing' })).rejects.toBeInstanceOf(DocumentNotFoundError);
 	});
 
 	it('refuses to delete a document belonging to another project (isolation)', async () => {
-		const f = makeFakes({ ...DOC, projectId: 'someone-else' });
-		const usecase = new DeleteDocumentUseCase(f.documents, f.storage, f.vectors);
-		await expect(usecase.execute({ project: PROJECT, documentId: 'doc-1' })).rejects.toBeInstanceOf(DocumentNotFoundError);
-		expect(f.deleted).toHaveLength(0);
-		expect(f.vectorDeletes).toHaveLength(0);
+		const { documents, storage, vectors } = makeDeps(buildDocument({ id: 'doc-1', projectId: 'someone-else' }));
+		await expect(new DeleteDocumentUseCase(documents, storage, vectors).execute({ project: PROJECT, documentId: 'doc-1' })).rejects.toBeInstanceOf(DocumentNotFoundError);
+		expect(vectors.deleteByFilter).not.toHaveBeenCalled();
+		expect(await documents.findById('doc-1')).toBeDefined();
 	});
 
 	it('purges vectors, object, and row', async () => {
-		const f = makeFakes(DOC);
-		const usecase = new DeleteDocumentUseCase(f.documents, f.storage, f.vectors);
-		await usecase.execute({ project: PROJECT, documentId: 'doc-1' });
-		expect(f.vectorDeletes).toEqual([{ collection: 'proj_docs', sourcePathExact: 'refund-runbook.md' }]);
-		expect(f.objectDeletes).toEqual([DOC.objectStorageKey]);
-		expect(f.deleted).toEqual(['doc-1']);
+		const doc = buildDocument({ id: 'doc-1', filename: 'refund-runbook.md' });
+		const { documents, storage, vectors } = makeDeps(doc);
+		await new DeleteDocumentUseCase(documents, storage, vectors).execute({ project: PROJECT, documentId: 'doc-1' });
+		expect(vectors.deleteByFilter).toHaveBeenCalledWith('proj_docs', { sourcePathExact: 'refund-runbook.md' });
+		expect(storage.deleteObject).toHaveBeenCalledWith(doc.objectStorageKey);
+		expect(await documents.findById('doc-1')).toBeUndefined();
 	});
 
 	it('still removes the row when external cleanup fails (best-effort teardown)', async () => {
-		const f = makeFakes(DOC);
-		f.vectors.deleteByFilter = async () => {
-			throw new Error('qdrant down');
-		};
-		f.storage.deleteObject = async () => {
-			throw new Error('s3 down');
-		};
+		const { documents } = makeDeps(buildDocument({ id: 'doc-1' }));
+		const storage = { deleteObject: vi.fn(async () => { throw new Error('s3 down'); }) };
+		const vectors = { deleteByFilter: vi.fn(async () => { throw new Error('qdrant down'); }) };
 		const errors: string[] = [];
-		const usecase = new DeleteDocumentUseCase(f.documents, f.storage, f.vectors, (_ctx, msg) => errors.push(msg));
-		await usecase.execute({ project: PROJECT, documentId: 'doc-1' });
-		expect(f.deleted).toEqual(['doc-1']);
+		await new DeleteDocumentUseCase(documents, storage, vectors, (_ctx, msg) => errors.push(msg)).execute({ project: PROJECT, documentId: 'doc-1' });
+		expect(await documents.findById('doc-1')).toBeUndefined();
 		expect(errors).toHaveLength(2);
 	});
 });

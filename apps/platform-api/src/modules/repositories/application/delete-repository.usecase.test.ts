@@ -1,79 +1,58 @@
-import { describe, expect, it } from 'vitest';
-import type { FileRepository, RepoFile, Repository, RepositoryRepository } from '@meshify/data-access';
+import { describe, expect, it, vi } from 'vitest';
+import type { RepoFile, Repository } from '@meshify/data-access';
+import { InMemoryFileRepository, InMemoryRepositoryRepository, buildRepoFile, buildRepository } from '@meshify/testing';
 import { DeleteRepositoryUseCase } from './delete-repository.usecase.js';
 import { RepositoryNotFoundError } from './sync-repository.usecase.js';
 
-const PROJECT = { id: '11111111-1111-4111-8111-111111111111', qdrantCollectionCode: 'proj_code' };
+const PROJECT = { id: 'proj-1', qdrantCollectionCode: 'proj_code' };
 
-function makeFakes(repo?: Partial<Repository>, files: Array<Partial<RepoFile>> = []) {
-	const deleted: string[] = [];
-	const repositories = {
-		async findById() {
-			return repo as Repository | undefined;
-		},
-		async delete(id: string) {
-			deleted.push(id);
-		},
-	} as unknown as RepositoryRepository;
-
-	const fileRepo = {
-		async listByRepository() {
-			return files as RepoFile[];
-		},
-	} as unknown as FileRepository;
-
-	const objectDeletes: string[] = [];
-	const storage = { async deleteObject(key: string) { objectDeletes.push(key); } };
-
-	const vectorDeletes: Array<{ collection: string; paths: string[] }> = [];
-	const vectors = { async deleteBySourcePaths(collection: string, paths: string[]) { vectorDeletes.push({ collection, paths }); } };
-
-	return { repositories, fileRepo, storage, vectors, deleted, objectDeletes, vectorDeletes };
+function makeDeps(repo?: Repository, files: RepoFile[] = []) {
+	const repositories = new InMemoryRepositoryRepository(repo ? [repo] : []);
+	const fileRepo = new InMemoryFileRepository(files);
+	const storage = { deleteObject: vi.fn(async () => {}) };
+	const vectors = { deleteBySourcePaths: vi.fn(async () => {}) };
+	return { repositories, fileRepo, storage, vectors };
 }
-
-const REPO: Partial<Repository> = { id: 'repo-1', projectId: PROJECT.id, source: 'github', remoteUrl: 'https://github.com/o/r', archiveObjectKey: null };
 
 describe('DeleteRepositoryUseCase', () => {
 	it('404s when the repository does not exist', async () => {
-		const f = makeFakes(undefined);
-		const usecase = new DeleteRepositoryUseCase(f.repositories, f.fileRepo, f.storage, f.vectors);
-		await expect(usecase.execute({ project: PROJECT, repositoryId: 'missing' })).rejects.toBeInstanceOf(RepositoryNotFoundError);
-		expect(f.deleted).toHaveLength(0);
+		const { repositories, fileRepo, storage, vectors } = makeDeps();
+		await expect(new DeleteRepositoryUseCase(repositories, fileRepo, storage, vectors).execute({ project: PROJECT, repositoryId: 'missing' })).rejects.toBeInstanceOf(RepositoryNotFoundError);
 	});
 
 	it('rejects a repository owned by another project (isolation)', async () => {
-		const f = makeFakes({ ...REPO, projectId: 'someone-else' });
-		const usecase = new DeleteRepositoryUseCase(f.repositories, f.fileRepo, f.storage, f.vectors);
-		await expect(usecase.execute({ project: PROJECT, repositoryId: 'repo-1' })).rejects.toBeInstanceOf(RepositoryNotFoundError);
-		expect(f.deleted).toHaveLength(0);
-		expect(f.vectorDeletes).toHaveLength(0);
+		const { repositories, fileRepo, storage, vectors } = makeDeps(buildRepository({ id: 'repo-1', projectId: 'someone-else' }));
+		await expect(new DeleteRepositoryUseCase(repositories, fileRepo, storage, vectors).execute({ project: PROJECT, repositoryId: 'repo-1' })).rejects.toBeInstanceOf(RepositoryNotFoundError);
+		expect(vectors.deleteBySourcePaths).not.toHaveBeenCalled();
+		expect(await repositories.findById('repo-1')).toBeDefined();
 	});
 
 	it('purges code vectors by file path and deletes the row (github: no archive)', async () => {
-		const f = makeFakes(REPO, [{ path: 'src/a.ts' }, { path: 'src/b.ts' }]);
-		const usecase = new DeleteRepositoryUseCase(f.repositories, f.fileRepo, f.storage, f.vectors);
-		await usecase.execute({ project: PROJECT, repositoryId: 'repo-1' });
-		expect(f.vectorDeletes).toEqual([{ collection: 'proj_code', paths: ['src/a.ts', 'src/b.ts'] }]);
-		expect(f.objectDeletes).toHaveLength(0);
-		expect(f.deleted).toEqual(['repo-1']);
+		const files = [buildRepoFile({ id: 'f1', path: 'src/a.ts' }), buildRepoFile({ id: 'f2', path: 'src/b.ts' })];
+		const { repositories, fileRepo, storage, vectors } = makeDeps(buildRepository({ id: 'repo-1', source: 'github', archiveObjectKey: null }), files);
+		await new DeleteRepositoryUseCase(repositories, fileRepo, storage, vectors).execute({ project: PROJECT, repositoryId: 'repo-1' });
+		expect(vectors.deleteBySourcePaths).toHaveBeenCalledWith('proj_code', ['src/a.ts', 'src/b.ts']);
+		expect(storage.deleteObject).not.toHaveBeenCalled();
+		expect(await repositories.findById('repo-1')).toBeUndefined();
 	});
 
 	it('deletes the uploaded archive for ZIP repositories', async () => {
-		const f = makeFakes({ ...REPO, source: 'zip', archiveObjectKey: 'projects/p/repos/repo-1.zip' }, [{ path: 'x.ts' }]);
-		const usecase = new DeleteRepositoryUseCase(f.repositories, f.fileRepo, f.storage, f.vectors);
-		await usecase.execute({ project: PROJECT, repositoryId: 'repo-1' });
-		expect(f.objectDeletes).toEqual(['projects/p/repos/repo-1.zip']);
-		expect(f.deleted).toEqual(['repo-1']);
+		const { repositories, fileRepo, storage, vectors } = makeDeps(
+			buildRepository({ id: 'repo-1', source: 'zip', archiveObjectKey: 'projects/p/repos/repo-1.zip' }),
+			[buildRepoFile({ id: 'f1', path: 'x.ts' })]
+		);
+		await new DeleteRepositoryUseCase(repositories, fileRepo, storage, vectors).execute({ project: PROJECT, repositoryId: 'repo-1' });
+		expect(storage.deleteObject).toHaveBeenCalledWith('projects/p/repos/repo-1.zip');
+		expect(await repositories.findById('repo-1')).toBeUndefined();
 	});
 
 	it('still deletes the row when vector/archive cleanup fails (best-effort)', async () => {
-		const f = makeFakes({ ...REPO, source: 'zip', archiveObjectKey: 'a.zip' }, [{ path: 'x.ts' }]);
-		f.vectors.deleteBySourcePaths = async () => { throw new Error('qdrant down'); };
-		f.storage.deleteObject = async () => { throw new Error('s3 down'); };
+		const { repositories, fileRepo } = makeDeps(buildRepository({ id: 'repo-1', source: 'zip', archiveObjectKey: 'a.zip' }), [buildRepoFile({ id: 'f1', path: 'x.ts' })]);
+		const storage = { deleteObject: vi.fn(async () => { throw new Error('s3 down'); }) };
+		const vectors = { deleteBySourcePaths: vi.fn(async () => { throw new Error('qdrant down'); }) };
 		const errors: string[] = [];
-		const usecase = new DeleteRepositoryUseCase(f.repositories, f.fileRepo, f.storage, f.vectors, (_c, m) => errors.push(m));
-		await usecase.execute({ project: PROJECT, repositoryId: 'repo-1' });
-		expect(f.deleted).toEqual(['repo-1']);
+		await new DeleteRepositoryUseCase(repositories, fileRepo, storage, vectors, (_c, m) => errors.push(m)).execute({ project: PROJECT, repositoryId: 'repo-1' });
+		expect(await repositories.findById('repo-1')).toBeUndefined();
 		expect(errors).toHaveLength(2);
 	});
 });

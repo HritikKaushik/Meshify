@@ -1,0 +1,16 @@
+{
+	"name": "@meshify/root-tests",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Repository-wide test suites (smoke, contracts, integration, e2e). Not published; run by Turbo alongside the per-package suites.",
+	"scripts": {
+		"test": "vitest run smoke contracts --passWithNoTests",
+		"test:integration": "vitest run integration --passWithNoTests",
+		"test:e2e": "vitest run e2e --passWithNoTests"
+	},
+	"devDependencies": {
+		"@meshify/testing": "workspace:*",
+		"vitest": "^2.1.8"
+	}
+}

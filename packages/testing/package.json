@@ -1,0 +1,25 @@
+{
+	"name": "@meshify/testing",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Single source of truth for Meshify testing infrastructure — factories, in-memory mocks, custom matchers, helpers and shared setup. Consumed as source (no build step) by Vitest.",
+	"exports": {
+		".": "./src/index.ts",
+		"./factories": "./src/factories/index.ts",
+		"./mocks": "./src/mocks/index.ts",
+		"./matchers": "./src/custom-matchers/index.ts",
+		"./helpers": "./src/helpers/index.ts",
+		"./setup": "./src/setup/index.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@meshify/data-access": "workspace:*"
+	},
+	"devDependencies": {
+		"typescript": "^5.6.3",
+		"vitest": "^2.1.8"
+	}
+}
