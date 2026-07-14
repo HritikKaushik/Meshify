@@ -25,4 +25,18 @@ export default defineConfig({
 			'/api': { target: bffOrigin, changeOrigin: true },
 		},
 	},
+	build: {
+		rollupOptions: {
+			output: {
+				// Split rarely-changing framework libs into stable vendor chunks so
+				// they stay cached across deploys. App/route code (and route-scoped
+				// deps like framer-motion) keep their own chunks via lazy imports.
+				manualChunks(id) {
+					if (!id.includes('node_modules')) return;
+					if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) return 'vendor-react';
+					if (id.includes('@clerk')) return 'vendor-clerk';
+				},
+			},
+		},
+	},
 });

@@ -109,16 +109,6 @@ export function BeamCard({ children, className }: { children: ReactNode; classNa
 	);
 }
 
-/** Mesh status pill (e.g. "Mesh · online") with a breathing indigo dot. */
-export function MeshPill({ children }: { children: ReactNode }) {
-	return (
-		<div className="relative flex items-center gap-2 overflow-hidden rounded-full border border-mc-purple/25 bg-mc-purple/[.07] px-3 py-1.5">
-			<span className="h-2 w-2 animate-breathe rounded-full bg-mc-purple shadow-[0_0_8px_rgba(99,102,241,.6)]" />
-			<span className="font-medium text-[11.5px] text-[#4F46E5]">{children}</span>
-		</div>
-	);
-}
-
 /** Small monospace section label (uppercase, tracked) — "// PROJECT BRIEFING" etc. */
 export function Kicker({ children, className }: { children: ReactNode; className?: string }) {
 	return <span className={cn('font-mono text-[10px] uppercase tracking-[0.12em] text-mc-muted-2', className)}>{children}</span>;
