@@ -61,9 +61,16 @@ export class PostgresChatRepository implements ChatRepository {
 	}
 
 	async findByProjectId(projectId: string): Promise<ChatSummary[]> {
+		// One pass with a LEFT JOIN + GROUP BY instead of a correlated count(*)
+		// subquery per conversation (idx_messages_chat_id serves the join). Output
+		// is identical: count(m.id) is 0 for a conversation with no messages, and
+		// grouping by the chats PK keeps every c.* column and the pinned/newest order.
 		const { rows } = await this.pool.query<ChatRow & { message_count: string }>(
-			`select c.*, (select count(*) from messages m where m.chat_id = c.id) as message_count
-			 from chats c where c.project_id = $1
+			`select c.*, count(m.id) as message_count
+			 from chats c
+			 left join messages m on m.chat_id = c.id
+			 where c.project_id = $1
+			 group by c.id
 			 order by c.pinned desc, c.created_at desc`,
 			[projectId]
 		);
