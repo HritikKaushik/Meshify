@@ -1,527 +1,628 @@
-# Graph Report - .  (2026-07-13)
+# Graph Report - .  (2026-07-14)
 
 ## Corpus Check
-- Corpus is ~42,734 words - fits in a single context window. You may not need a graph.
+- 323 files · ~74,856 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1418 nodes · 2280 edges · 138 communities (81 shown, 57 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 33 edges (avg confidence: 0.79)
-- Token cost: 132,903 input · 0 output
+- 1996 nodes · 3366 edges · 152 communities (105 shown, 47 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 52 edges (avg confidence: 0.72)
+- Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
-- Pipeline Builder Extension
-- RocketRide VS Code Panels/API
-- Worker App Dependencies
-- Pipeline Runs (DAP Events)
-- Observability App Dependencies
-- Chat Interface/Bootstrap
-- Document Ingestion Entities
-- Repo Document-Ingest Processors
-- Projects Domain
-- RocketRide Gateway Dependencies
-- Pipeline Jobs Domain
-- Connect GitHub Repository Flow
-- Web Console Dependencies
-- Data-Access Package Dependencies
-- Health Check / Infrastructure
-- Repositories Domain
-- Chats Domain (Entities)
-- Search & Embedding Provider
-- Create Project Flow
-- Web Console TS Config
-- Org Existence Checks
-- Turborepo Root Config
-- API Keys Domain
-- Files Domain
-- Object Storage (S3) Config
-- Config Package Dependencies
-- Embeddings Package Dependencies
-- Embedding Provider Implementation
-- GitHub App Auth
-- Queues Package Dependencies (BullMQ)
-- Shared Package Dependencies (Pino)
-- Vector Store Package Dependencies
-- Platform API Dependencies
-- Project Isolation Guard Tests
-- Evaluation Harness
-- Base TS Config
-- Platform API TS Tooling
-- API Key Authentication Flow
-- GitHub Package Dependencies
-- Chat Pipeline Resolver (RocketRide)
-- Docker/CI Image Build
-- Ask Question Use Case
-- K8s Base Manifests
-- Turborepo Task Config
-- Ask Question Use Case (Retry)
-- Chat Not Found Error Handling
-- Platform API TS Config
-- Observability TS Config
-- Redis Rate Limiter
-- Worker TS Config
-- Document Ingest Queue
-- RocketRide Gateway TS Config
-- API Key Generation Scripts
-- Embeddings TS Config
-- Vector Store TS Config
-- Evaluation Harness (Docs)
-- Audit Log Domain
-- Data-Access TS Config
-- RocketRide Standards Checklist
-- Config Package TS Config
-- GitHub Package TS Config
-- Object Storage TS Config
-- Queues Package TS Config
-- Shared Package TS Config
-- Upload Document Use Case
-- Platform API Build Scripts
-- RAG Prompt / Chat Pipeline (Docs)
-- Search Path Bypasses RocketRide (Docs)
-- AI Platform Architecture Decisions
-- Env Schema Validation
-- Pipeline Templates (chat/ingest.pipe)
-- Platform API Package Metadata
-- RocketRide Local Engine / Qdrant Service
-- DB Migration Runner
-- Logger Utility
-- Web Console Dev Entry Point
-- K8s Autoscaling (HPA/KEDA)
-- Kubernetes Deployment Model (Docs)
-- Qdrant Collection Provisioning (Docs)
-- Pipeline Config Dead Code (Docs)
-- Platform API - Config Dependency
-- Platform API - Data-Access Dependency
-- Platform API - Embeddings Dependency
-- Platform API - Queues Dependency
-- Platform API - Shared Dependency
-- Platform API - Multer Dependency
-- Platform API - Postgres Dependency
-- Platform API - Pino Dependency
-- RocketRide Gotchas (Docs)
-- RocketRide Setup Verifier (Docs)
-- RocketRide Pipeline Builder Overview
-- API Key Pepper Rotation (Docs)
-- Queues/Worker Package Refs (Docs)
-- RocketRide Component Reference (Docs)
-- RocketRide Observability Docs
-- RocketRide Pipeline Rules Docs
-- RocketRide Python API Docs
-- RocketRide Quickstart Docs
-- RocketRide TypeScript API Docs
-- Audit Logs Table (Docs)
-- GitHub App Repo Ingestion (Docs)
-- Object Storage S3/MinIO (Docs)
-- Physical Tenant Isolation (Docs)
-- Pipeline-Per-Project Design (Docs)
-- PostgreSQL (Docs)
-- Project Isolation Guard (Docs)
-- Qdrant (Docs)
-- Redis/BullMQ (Docs)
-- Commit Conventions (Docs)
-- PR Guidelines (Docs)
-- Trunk-Based Development (Docs)
-- Daily Dev Loop (Docs)
-- Testing Conventions (Docs)
-- Config Package Reference (Docs)
-- Data-Access Package Reference (Docs)
-- GitHub Package Reference (Docs)
-- Infrastructure Folder Reference (Docs)
-- Object Storage Package Reference (Docs)
-- Observability App Reference (Docs)
-- Shared Packages Overview (Docs)
-- Shared Package Reference (Docs)
-- Web App Reference (Docs)
-- Banned Filenames Convention (Docs)
-- Code Naming Conventions (Docs)
-- RocketRide Common Mistakes (Copilot)
-- RocketRide Component Reference (Copilot)
-- RocketRide Observability (Copilot)
-- RocketRide Pipeline Rules (Copilot)
-- RocketRide Python API (Copilot)
-- RocketRide Quickstart (Copilot)
-- RocketRide README (Copilot)
-- RocketRide TypeScript API (Copilot)
-- CI Workflow
-- Meshify Namespace
-- K8s Overlays (Dev/Prod)
-- Platform API App (README)
-- Worker App - Document Ingest (README)
+- RocketRide Client Pool & Logging
+- BFF: Clerk Session & Proxy
+- Worker Package Dependencies
+- Document Storage & Entity
+- Project Repository (Postgres)
+- Web App Routing & Pages
+- BFF Package Dependencies
+- Chat Use Cases (Ask/Delete)
+- Chat Entity & Repository
+- Repository Connect/Delete Use Cases
+- Root Workspace Tooling
+- Platform-API Dependencies
+- Reference Docs & Glossary
+- API Keys: Entity & Hashing
+- Repository Storage & Repo (Postgres)
+- Web UI Primitives (Card/Table/Input)
+- Worker: Ingest Processors
+- Turbo Build Config
+- Project Create/Delete Use Cases
+- Sidebar, Command Palette & ProjectCard
+- Web Shell Primitives
+- RocketRide Gateway Deps
+- Pipeline Job Entity & Repository
+- MeshifyApi Client
+- Data-Access Package Deps
+- TypeScript Config (web)
+- Web API Types
+- Testing Package Config
+- Documents & Evaluation Controllers
+- Observability: DAP Events
+- Health Checks & Dependency Probes
+- shadcn components.json
+- Chat Message Rendering
+- Audit Log Entity & Repository
+- Semantic Search Use Case
+- Object-Storage Package (S3)
+- Config Package (zod)
+- Repo File Entity & Repository
+- Clerk Org Link Entity & Repository
+- Shared Package Devdeps
+- Embedding Provider & Factory
+- GitHub App Auth & Repo Client
+- Queues Package (BullMQ)
+- Shared Logger Package (pino)
+- Package Devdeps
+- Platform-API Runtime Deps
+- Platform-API Devdeps
+- Web Runtime Deps (React/Radix)
+- Web Build Devdeps (Vite/Tailwind)
+- Shell & Button/Dialog Primitives
+- Pipeline Run Traces & Cost
+- Shared tsconfig.base
+- Health & Document List Controllers
+- RAG Retrieval & Prompt Building
+- CI/CD & Docker Compose Services
+- Community 55
+- Community 56
+- Community 57
+- Community 58
+- Community 59
+- Community 60
+- Community 61
+- Community 62
+- Community 63
+- Community 64
+- Community 65
+- Community 66
+- Community 67
+- Community 68
+- Community 69
+- Community 70
+- Community 71
+- Community 72
+- Community 73
+- Community 74
+- Community 75
+- Community 76
+- Community 77
+- Community 78
+- Community 79
+- Community 80
+- Community 81
+- Community 82
+- Community 83
+- Community 84
+- Community 85
+- Community 86
+- Community 87
+- Community 88
+- Community 89
+- Community 90
+- Community 91
+- Community 92
+- Community 93
+- Community 94
+- Community 95
+- Community 96
+- Community 97
+- Community 98
+- Community 99
+- Community 100
+- Community 101
+- Community 102
+- Community 103
+- Community 104
+- Community 105
+- Community 106
+- Community 107
+- Community 108
+- Community 109
+- Community 111
+- Community 112
+- Community 113
+- Community 114
+- Community 115
+- Community 116
+- Community 117
+- Community 118
+- Community 119
+- Community 120
+- Community 121
+- Community 122
+- Community 123
+- Community 125
+- Community 126
+- Community 129
+- Community 130
+- Community 131
+- Community 132
+- Community 133
+- Community 134
+- Community 135
+- Community 136
+- Community 137
+- Community 138
+- Community 139
+- Community 140
+- Community 141
+- Community 142
+- Community 143
+- Community 144
+- Community 145
+- Community 146
+- Community 147
+- Community 148
+- Community 149
+- Community 150
+- Community 151
 
 ## God Nodes (most connected - your core abstractions)
-1. `MeshifyApi` - 25 edges
-2. `projectIsolationGuard()` - 16 edges
-3. `compilerOptions` - 16 edges
-4. `useAsync()` - 15 edges
-5. `buildIngestPipeline()` - 15 edges
-6. `compilerOptions` - 14 edges
-7. `bootstrap()` - 13 edges
-8. `RocketRideClientPool` - 13 edges
-9. `buildChatPipeline()` - 13 edges
-10. `GetProjectUseCase` - 12 edges
+1. `cn()` - 50 edges
+2. `MeshifyApi` - 28 edges
+3. `useAsync()` - 19 edges
+4. `compilerOptions` - 17 edges
+5. `scripts` - 17 edges
+6. `projectIsolationGuard()` - 16 edges
+7. `buildIngestPipeline()` - 15 edges
+8. `InMemoryChatRepository` - 14 edges
+9. `compilerOptions` - 14 edges
+10. `bootstrap()` - 13 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `RocketRide (AI Pipeline Builder)` --semantically_similar_to--> `RocketRide (AI Pipeline Builder)`  [INFERRED] [semantically similar]
   .github/copilot-instructions.md → .claude/rules/rocketride.md
+- `Project Isolation (per-tenant vector collections)` --semantically_similar_to--> `project_id + ON DELETE CASCADE isolation`  [INFERRED] [semantically similar]
+  README.md → docs/architecture/data-model.md
 - `platform-api service` --conceptually_related_to--> `meshify-platform-api image`  [INFERRED]
   infrastructure/docker/docker-compose.yml → .github/workflows/ci.yml
-- `Meshify — Enterprise Knowledge Platform` --references--> `First-time setup`  [EXTRACTED]
-  README.md → docs/DevelopmentGuide.md
-- `infrastructure/docker/docker-compose.yml (referenced from README)` --references--> `platform-api service`  [EXTRACTED]
-  README.md → infrastructure/docker/docker-compose.yml
-- `docker-compose.yml (referenced from web README)` --references--> `platform-api service`  [EXTRACTED]
-  apps/web/README.md → infrastructure/docker/docker-compose.yml
+- `apps/platform-api (Core HTTP API)` --calls--> `@meshify/vector-store (Qdrant provisioning + search)`  [EXTRACTED]
+  apps/platform-api/README.md → docs/architecture/overview.md
+- `pnpm Workspace Config` --references--> `@meshify/config`  [INFERRED]
+  pnpm-workspace.yaml → packages/config/README.md
 
 ## Import Cycles
 - None detected.
 
 ## Hyperedges (group relationships)
 - **Mandatory RocketRide setup docs read before coding** — claude_rules_rocketride_readme, github_copilot_instructions_readme, docs_deadcodereport_check_ts, docs_developmentguide_rocketride_gateway [INFERRED 0.85]
-- **Search and chat retrieval bypass RocketRide's qdrant/prompt nodes** — docs_architecture_search_path, docs_architecture_chat_retrieval_path, docs_architecture_qdrant, docs_architecture_vector_store_package [INFERRED 0.85]
 - **The three deployable Meshify images built by CI and run via docker-compose** — infrastructure_docker_docker_compose_platform_api, infrastructure_docker_docker_compose_worker, infrastructure_docker_docker_compose_observability, github_workflows_ci_images_job [EXTRACTED 1.00]
 - **Shared meshify-config/meshify-secrets across all core workloads** — infrastructure_kubernetes_base_migrate_job_meshifymigrate, infrastructure_kubernetes_base_platform_api_deployment_platformapi, infrastructure_kubernetes_base_worker_deployment_worker, infrastructure_kubernetes_base_observability_deployment_observability [INFERRED 0.95]
 - **Dev overlay patch set (HPA, Deployment, ScaledObject, PDBs downsized/removed for low-footprint dev)** — infrastructure_kubernetes_overlays_dev_kustomization_dev, infrastructure_kubernetes_base_platform_api_hpa_platformapi, infrastructure_kubernetes_base_platform_api_deployment_platformapi, infrastructure_kubernetes_base_worker_keda_scaledobject_worker, infrastructure_kubernetes_base_pdb_platformapi, infrastructure_kubernetes_base_pdb_worker [EXTRACTED 1.00]
+- **Chat RAG flow (retrieve → prompt → generate)** — docs_ai_rag_and_ingestion_chat_rag, docs_ai_rag_and_ingestion_direct_qdrant_retrieval, docs_ai_rag_and_ingestion_rocketride_gateway, docs_architecture_overview_embeddings [EXTRACTED 1.00]
+- **Request auth chain (Clerk → org key → HMAC → isolation)** — docs_backend_auth_clerk_session, docs_backend_auth_org_api_key, docs_backend_auth_hmac_key_hash, docs_backend_auth_project_isolation_guard [EXTRACTED 1.00]
+- **End-to-end request flow (web → bff → platform-api → worker)** — apps_web_readme_web, apps_bff_readme_bff, apps_platform_api_readme_platform_api, apps_worker_readme_worker [EXTRACTED 1.00]
+- **Queue Producer/Consumer Contract** — packages_queues_readme, docs_reference_glossary_worker, docs_reference_glossary_platform_api, docs_reference_glossary_dlq [INFERRED 0.75]
+- **RAG Retrieval Stack** — packages_embeddings_readme, packages_vector_store_readme, docs_reference_glossary_rag, docs_reference_glossary_collection [INFERRED 0.75]
+- **Shared Testing Infrastructure** — packages_testing_readme, docs_testing_index, tests_readme, packages_testing_src_testcontainers_readme [EXTRACTED 0.85]
 
-## Communities (138 total, 57 thin omitted)
+## Communities (152 total, 47 thin omitted)
 
-### Community 0 - "Pipeline Builder Extension"
+### Community 0 - "RocketRide Client Pool & Logging"
 Cohesion: 0.07
-Nodes (45): consoleLogger, main(), ClientPoolLogger, RocketRideClientPool, main(), OUT_DIR, qdrant(), buildChatPipeline() (+37 more)
+Nodes (46): bootstrap(), consoleLogger, main(), ClientPoolLogger, RocketRideClientPool, main(), OUT_DIR, qdrant() (+38 more)
 
-### Community 1 - "RocketRide VS Code Panels/API"
-Cohesion: 0.08
-Nodes (38): ApiConfig, ApiError, ChatCitation, ChatResponse, EvaluationReport, GoldenCase, HealthReport, Job (+30 more)
+### Community 1 - "BFF: Clerk Session & Proxy"
+Cohesion: 0.06
+Nodes (29): bootstrap(), requireBffEnv(), requireClerkSession(), Express, Request, resolveOrgForClerk(), ResolveOrgForClerkDeps, createHealthProxy() (+21 more)
 
-### Community 2 - "Worker App Dependencies"
+### Community 2 - "Worker Package Dependencies"
 Cohesion: 0.04
 Nodes (48): adm-zip, dependencies, adm-zip, bullmq, ioredis, @meshify/config, @meshify/data-access, @meshify/github (+40 more)
 
-### Community 3 - "Pipeline Runs (DAP Events)"
-Cohesion: 0.10
-Nodes (13): DapEvent, DapEventHandler, Logger, num(), projectId(), noopLogger, unixToDate(), bootstrap() (+5 more)
+### Community 3 - "Document Storage & Entity"
+Cohesion: 0.07
+Nodes (15): DocumentObjectStore, DocumentVectorStore, ALLOWED_MIME_TYPES, Document, DocumentSourceType, DocumentStatus, EXTENSION_TO_SOURCE_TYPE, sourceTypeFromFilename() (+7 more)
 
-### Community 4 - "Observability App Dependencies"
+### Community 4 - "Project Repository (Postgres)"
+Cohesion: 0.08
+Nodes (12): PostgresProjectRepository, ProjectRow, toDomain(), Project, CreateProjectInput, ProjectRepository, QdrantCollectionProvisioner, Call (+4 more)
+
+### Community 5 - "Web App Routing & Pages"
+Cohesion: 0.05
+Nodes (23): App(), ChatPage, DashboardPage, DocumentsPage, EvaluationPage, OrgShell, ProjectHomePage, RepositoriesPage (+15 more)
+
+### Community 6 - "BFF Package Dependencies"
+Cohesion: 0.05
+Nodes (39): dependencies, @clerk/express, express, http-proxy-middleware, @meshify/config, @meshify/data-access, @meshify/shared, pg (+31 more)
+
+### Community 7 - "Chat Use Cases (Ask/Delete)"
+Cohesion: 0.10
+Nodes (22): AskQuestionCommand, AskQuestionResult, AskQuestionUseCase, ChatNotFoundError, chat(), makeRepo(), DeleteConversationCommand, DeleteConversationUseCase (+14 more)
+
+### Community 8 - "Chat Entity & Repository"
+Cohesion: 0.12
+Nodes (14): Chat, ChatSummary, Message, MessageCitation, MessageRole, ChatRepository, CreateChatInput, CreateMessageInput (+6 more)
+
+### Community 9 - "Repository Connect/Delete Use Cases"
+Cohesion: 0.08
+Nodes (16): ConnectGitHubRepositoryCommand, ConnectGitHubRepositoryUseCase, ConnectRepositoryResult, DeleteRepositoryCommand, DeleteRepositoryUseCase, PROJECT, ListRepositoriesUseCase, RepositoryNotFoundError (+8 more)
+
+### Community 10 - "Root Workspace Tooling"
+Cohesion: 0.06
+Nodes (33): devDependencies, @meshify/testing, turbo, vitest, @vitest/coverage-v8, @meshify/testing, turbo, vitest (+25 more)
+
+### Community 11 - "Platform-API Dependencies"
 Cohesion: 0.06
 Nodes (32): dependencies, @meshify/config, @meshify/data-access, @meshify/rocketride-gateway, @meshify/shared, pg, devDependencies, tsx (+24 more)
 
-### Community 5 - "Chat Interface/Bootstrap"
-Cohesion: 0.14
-Nodes (19): bootstrap(), askSchema, createChatController(), createDocumentsController(), upload, goldenCaseSchema, RunEvaluationDto, runEvaluationSchema (+11 more)
+### Community 12 - "Reference Docs & Glossary"
+Cohesion: 0.08
+Nodes (33): Troubleshooting Guide, Readiness Names Down Dependency, Environment Variables Reference, loadEnv Single Source of Truth, Engineering FAQ, BFF Keeps API Key Server-Side, Retrieval Outside RocketRide, Glossary (+25 more)
 
-### Community 6 - "Document Ingestion Entities"
+### Community 13 - "API Keys: Entity & Hashing"
+Cohesion: 0.12
+Nodes (17): ApiKey, AuthContext, generateApiKey(), hashApiKey(), hashesEqual(), looksLikeApiKey(), ActiveApiKey, ApiKeyRepository (+9 more)
+
+### Community 14 - "Repository Storage & Repo (Postgres)"
 Cohesion: 0.11
-Nodes (13): ALLOWED_MIME_TYPES, Document, DocumentSourceType, DocumentStatus, EXTENSION_TO_SOURCE_TYPE, sourceTypeFromFilename(), CreateDocumentInput, DocumentRepository (+5 more)
+Nodes (11): RepositoryObjectStore, RepositoryVectorStore, PostgresRepositoryRepository, RepositoryRow, toDomain(), parseGitHubUrl(), Repository, RepositorySource (+3 more)
 
-### Community 7 - "Repo Document-Ingest Processors"
+### Community 15 - "Web UI Primitives (Card/Table/Input)"
+Cohesion: 0.13
+Nodes (20): Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Table (+12 more)
+
+### Community 16 - "Worker: Ingest Processors"
 Cohesion: 0.15
 Nodes (23): bootstrap(), DocumentIngestProcessorDeps, processDocumentIngestJob(), processRepoIngestJob(), RepoIngestProcessorDeps, toBatches(), toIngestFile(), processRepoSyncJob() (+15 more)
 
-### Community 8 - "Projects Domain"
-Cohesion: 0.15
-Nodes (14): PostgresProjectRepository, ProjectRow, toDomain(), apiKeyEnvVarFor(), EMBEDDING_DIMENSIONS, embeddingDimensionFor(), embeddingProviderFromProfile(), llmProviderFromProfile() (+6 more)
+### Community 17 - "Turbo Build Config"
+Cohesion: 0.08
+Nodes (28): ^build, dist/**, package.json, tests/**, tsconfig.json, vitest.config.*, dependsOn, outputs (+20 more)
 
-### Community 9 - "RocketRide Gateway Dependencies"
+### Community 18 - "Project Create/Delete Use Cases"
+Cohesion: 0.09
+Nodes (14): CreateProjectCommand, CreateProjectUseCase, OrgNotFoundError, COMMAND, ProvisionerCall, DeleteProjectUseCase, ProjectNotFoundError, GetProjectStatsUseCase (+6 more)
+
+### Community 19 - "Sidebar, Command Palette & ProjectCard"
+Cohesion: 0.13
+Nodes (23): CommandPalette(), Item, ConversationRow(), WorkspaceSidebar(), OverlayIcon(), ProjectCard(), Stat(), PALETTE (+15 more)
+
+### Community 20 - "Web Shell Primitives"
+Cohesion: 0.17
+Nodes (20): Repository, DataRow(), RepoStatusBadge(), OrgShell(), BeamCard(), DOT_HEX, DotColor, GlassCard() (+12 more)
+
+### Community 21 - "RocketRide Gateway Deps"
 Cohesion: 0.07
 Nodes (26): dependencies, @meshify/config, rocketride, devDependencies, tsx, @types/node, typescript, vitest (+18 more)
 
-### Community 10 - "Pipeline Jobs Domain"
+### Community 22 - "Pipeline Job Entity & Repository"
 Cohesion: 0.14
 Nodes (8): PipelineJob, PipelineJobStatus, PipelineJobType, CreatePipelineJobInput, PipelineJobRepository, PipelineJobRow, PostgresPipelineJobRepository, toDomain()
 
-### Community 11 - "Connect GitHub Repository Flow"
-Cohesion: 0.11
-Nodes (12): ConnectGitHubRepositoryCommand, ConnectGitHubRepositoryUseCase, ConnectRepositoryResult, ListRepositoriesUseCase, RepositoryNotFoundError, SyncRepositoryUseCase, UploadRepositoryZipCommand, UploadRepositoryZipUseCase (+4 more)
-
-### Community 12 - "Web Console Dependencies"
-Cohesion: 0.08
-Nodes (25): dependencies, react, react-dom, devDependencies, @types/react, @types/react-dom, typescript, vite (+17 more)
-
-### Community 13 - "Data-Access Package Dependencies"
+### Community 24 - "Data-Access Package Deps"
 Cohesion: 0.08
 Nodes (25): dependencies, @meshify/config, pg, devDependencies, tsx, @types/node, @types/pg, typescript (+17 more)
 
-### Community 14 - "Health Check / Infrastructure"
-Cohesion: 0.15
-Nodes (9): CheckHealthUseCase, HealthReport, DependencyChecker, DependencyCheckResult, DependencyStatus, PostgresChecker, QdrantChecker, RedisChecker (+1 more)
+### Community 25 - "TypeScript Config (web)"
+Cohesion: 0.08
+Nodes (24): compilerOptions, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, jsx, lib, module, moduleResolution (+16 more)
 
-### Community 15 - "Repositories Domain"
-Cohesion: 0.16
-Nodes (9): PostgresRepositoryRepository, RepositoryRow, toDomain(), parseGitHubUrl(), Repository, RepositorySource, RepositorySyncStatus, CreateRepositoryInput (+1 more)
-
-### Community 16 - "Chats Domain (Entities)"
-Cohesion: 0.19
-Nodes (12): Chat, Message, MessageCitation, MessageRole, ChatRepository, CreateChatInput, CreateMessageInput, ChatRow (+4 more)
-
-### Community 17 - "Search & Embedding Provider"
-Cohesion: 0.14
-Nodes (12): EmbeddingProviderFactory, SearchCommand, SearchResponse, fakeEmbeddings, PROJECT, hitToItem(), mergeAndRank(), RocketRideMeta (+4 more)
-
-### Community 18 - "Create Project Flow"
+### Community 26 - "Web API Types"
 Cohesion: 0.12
-Nodes (12): CreateProjectCommand, CreateProjectUseCase, OrgNotFoundError, COMMAND, ProvisionerCall, DeleteProjectUseCase, ProjectNotFoundError, CreateProjectDto (+4 more)
+Nodes (19): ApiConfig, ApiError, ChatResponse, Conversation, DocumentSummary, EvaluationReport, GoldenCase, HealthReport (+11 more)
 
-### Community 19 - "Web Console TS Config"
+### Community 27 - "Testing Package Config"
 Cohesion: 0.09
-Nodes (22): compilerOptions, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, jsx, lib, module, moduleResolution (+14 more)
+Nodes (21): dependencies, @meshify/data-access, description, devDependencies, typescript, vitest, exports, ./factories (+13 more)
 
-### Community 20 - "Org Existence Checks"
-Cohesion: 0.15
-Nodes (6): QdrantCollectionProvisioner, Call, buildQdrantFilter(), QdrantSearchClient, QdrantSearchHit, SearchFilters
+### Community 28 - "Documents & Evaluation Controllers"
+Cohesion: 0.17
+Nodes (13): createDocumentsController(), toResponse(), upload, goldenCaseSchema, RunEvaluationDto, runEvaluationSchema, createEvaluationController(), GetProjectUseCase (+5 more)
 
-### Community 21 - "Turborepo Root Config"
-Cohesion: 0.09
-Nodes (21): devDependencies, turbo, vitest, turbo, vitest, name, ioredis, packageManager (+13 more)
+### Community 29 - "Observability: DAP Events"
+Cohesion: 0.18
+Nodes (7): DapEvent, DapEventHandler, Logger, num(), projectId(), noopLogger, unixToDate()
 
-### Community 22 - "API Keys Domain"
-Cohesion: 0.16
-Nodes (7): ApiKey, ActiveApiKey, ApiKeyRepository, CreateApiKeyInput, ApiKeyRow, PostgresApiKeyRepository, toDomain()
+### Community 30 - "Health Checks & Dependency Probes"
+Cohesion: 0.19
+Nodes (7): HealthReport, DependencyChecker, DependencyCheckResult, DependencyStatus, PostgresChecker, QdrantChecker, RedisChecker
 
-### Community 23 - "Files Domain"
-Cohesion: 0.20
-Nodes (7): FileStatus, RepoFile, FileRepository, UpsertFileInput, FileRow, PostgresFileRepository, toDomain()
+### Community 31 - "shadcn components.json"
+Cohesion: 0.11
+Nodes (18): aliases, components, hooks, lib, ui, utils, registries, @aceternity (+10 more)
 
-### Community 24 - "Object Storage (S3) Config"
+### Community 32 - "Chat Message Rendering"
+Cohesion: 0.19
+Nodes (13): ChatCitation, ChatMessage, confidenceLabel(), isCodeSource(), Turn, MeshMessage(), StreamingIndicator(), SuggestionChip() (+5 more)
+
+### Community 33 - "Audit Log Entity & Repository"
+Cohesion: 0.22
+Nodes (11): AuditLogEntry, AuditLogRepository, PostgresAuditLogRepository, apiKeyEnvVarFor(), EMBEDDING_DIMENSIONS, embeddingDimensionFor(), embeddingProviderFromProfile(), llmProviderFromProfile() (+3 more)
+
+### Community 34 - "Semantic Search Use Case"
+Cohesion: 0.18
+Nodes (11): SearchCommand, SearchResponse, SearchUseCase, fakeEmbeddings, PROJECT, hitToItem(), mergeAndRank(), RocketRideMeta (+3 more)
+
+### Community 35 - "Object-Storage Package (S3)"
 Cohesion: 0.11
 Nodes (17): @aws-sdk/client-s3, dependencies, @aws-sdk/client-s3, devDependencies, @types/node, typescript, @types/node, typescript (+9 more)
 
-### Community 25 - "Config Package Dependencies"
+### Community 36 - "Config Package (zod)"
 Cohesion: 0.11
 Nodes (17): dependencies, zod, devDependencies, @types/node, typescript, @types/node, typescript, zod (+9 more)
 
-### Community 26 - "Embeddings Package Dependencies"
+### Community 37 - "Repo File Entity & Repository"
+Cohesion: 0.22
+Nodes (7): FileStatus, RepoFile, FileRepository, UpsertFileInput, FileRow, PostgresFileRepository, toDomain()
+
+### Community 38 - "Clerk Org Link Entity & Repository"
+Cohesion: 0.24
+Nodes (8): ClerkOrgLink, ClerkOrgLinkRepository, CreateClerkOrgLinkInput, ClerkOrgLinkRow, PostgresClerkOrgLinkRepository, decryptSecret(), deriveKey(), encryptSecret()
+
+### Community 39 - "Shared Package Devdeps"
 Cohesion: 0.11
 Nodes (17): devDependencies, @types/node, typescript, vitest, @types/node, typescript, vitest, main (+9 more)
 
-### Community 27 - "Embedding Provider Implementation"
+### Community 40 - "Embedding Provider & Factory"
 Cohesion: 0.27
 Nodes (8): EmbeddingProvider, MissingEmbeddingKeyError, UnsupportedEmbeddingProfileError, createEmbeddingProvider(), EmbeddingKeys, isOpenAiEmbeddingProfile(), OPENAI_EMBEDDING_PROFILES, OpenAiEmbeddingProvider
 
-### Community 28 - "GitHub App Auth"
+### Community 41 - "GitHub App Auth & Repo Client"
 Cohesion: 0.21
 Nodes (6): base64url(), GitHubAppAuth, GitHubAppConfig, ComparedFile, GitHubRepoClient, RepoHead
 
-### Community 29 - "Queues Package Dependencies (BullMQ)"
+### Community 42 - "Queues Package (BullMQ)"
 Cohesion: 0.11
 Nodes (17): dependencies, bullmq, devDependencies, @types/node, typescript, bullmq, @types/node, typescript (+9 more)
 
-### Community 30 - "Shared Package Dependencies (Pino)"
+### Community 43 - "Shared Logger Package (pino)"
 Cohesion: 0.11
 Nodes (17): dependencies, pino, devDependencies, @types/node, typescript, pino, @types/node, typescript (+9 more)
 
-### Community 31 - "Vector Store Package Dependencies"
+### Community 44 - "Package Devdeps"
 Cohesion: 0.11
 Nodes (17): devDependencies, @types/node, typescript, vitest, @types/node, typescript, vitest, main (+9 more)
 
-### Community 32 - "Platform API Dependencies"
+### Community 45 - "Platform-API Runtime Deps"
 Cohesion: 0.12
-Nodes (17): dependencies, bullmq, express, ioredis, @meshify/object-storage, @meshify/rocketride-gateway, @meshify/vector-store, pino-http (+9 more)
+Nodes (17): dependencies, express, ioredis, @meshify/embeddings, @meshify/queues, @meshify/rocketride-gateway, @meshify/shared, pino (+9 more)
 
-### Community 33 - "Project Isolation Guard Tests"
-Cohesion: 0.21
-Nodes (9): req(), auditLogMiddleware(), clientIp(), NON_MUTATING, resourceTypeFrom(), AUTH, mockRequest(), mockResponse() (+1 more)
+### Community 46 - "Platform-API Devdeps"
+Cohesion: 0.12
+Nodes (17): devDependencies, @meshify/testing, tsx, @types/express, @types/multer, @types/node, @types/pg, typescript (+9 more)
 
-### Community 34 - "Evaluation Harness"
-Cohesion: 0.25
-Nodes (8): EvaluationReport, RunEvaluationUseCase, CaseResult, CheckResult, evaluateAnswer(), EvaluatedAnswer, GoldenCase, includesCI()
+### Community 47 - "Web Runtime Deps (React/Radix)"
+Cohesion: 0.12
+Nodes (17): dependencies, @clerk/clerk-react, clsx, @radix-ui/react-dialog, @radix-ui/react-slot, react, sonner, tailwind-merge (+9 more)
 
-### Community 35 - "Base TS Config"
+### Community 48 - "Web Build Devdeps (Vite/Tailwind)"
+Cohesion: 0.12
+Nodes (17): devDependencies, autoprefixer, postcss, tailwindcss, @types/react, @types/react-dom, typescript, vite (+9 more)
+
+### Community 49 - "Shell & Button/Dialog Primitives"
+Cohesion: 0.30
+Nodes (10): MeshLogo(), Button, ButtonProps, buttonVariants, DialogContent, DialogDescription, DialogFooter(), DialogHeader() (+2 more)
+
+### Community 50 - "Pipeline Run Traces & Cost"
+Cohesion: 0.22
+Nodes (5): PipelineRunSnapshot, PipelineRunTraceInput, tokensToUsd(), PipelineRunRepository, PostgresPipelineRunRepository
+
+### Community 51 - "Shared tsconfig.base"
 Cohesion: 0.12
 Nodes (15): compilerOptions, composite, declaration, esModuleInterop, forceConsistentCasingInFileNames, lib, module, moduleResolution (+7 more)
 
-### Community 36 - "Platform API TS Tooling"
-Cohesion: 0.13
-Nodes (15): devDependencies, tsx, @types/express, @types/multer, @types/node, @types/pg, typescript, vitest (+7 more)
+### Community 52 - "Health & Document List Controllers"
+Cohesion: 0.23
+Nodes (6): bootstrap(), ListDocumentsUseCase, CheckHealthUseCase, createHealthController(), GetJobStatusUseCase, createJobsController()
 
-### Community 37 - "API Key Authentication Flow"
-Cohesion: 0.21
-Nodes (6): AuthenticateApiKeyUseCase, AuthenticationError, extractBearer(), authGuard(), Express, Request
+### Community 53 - "RAG Retrieval & Prompt Building"
+Cohesion: 0.20
+Nodes (6): fakeResolver, NO_CONTEXT, PROJECT, buildRagPrompt(), DEFAULT_INSTRUCTIONS, RetrievedChunk
 
-### Community 38 - "GitHub Package Dependencies"
+### Community 54 - "CI/CD & Docker Compose Services"
+Cohesion: 0.17
+Nodes (15): @meshify/web dev console, docker-compose.yml (referenced from web README), RocketRide IDE extension (ships RocketRide server), images job (build & push), meshify-observability image, meshify-platform-api image, verify job (typecheck/build/test), meshify-worker image (+7 more)
+
+### Community 55 - "Community 55"
 Cohesion: 0.13
 Nodes (14): devDependencies, @types/node, typescript, @types/node, typescript, main, name, private (+6 more)
 
-### Community 39 - "Chat Pipeline Resolver (RocketRide)"
-Cohesion: 0.18
-Nodes (5): ChatPipelineResolver, RocketRideChatPipelineResolver, NO_CONTEXT, PROJECT, resolver
+### Community 56 - "Community 56"
+Cohesion: 0.13
+Nodes (14): description, devDependencies, @meshify/testing, vitest, @meshify/testing, vitest, name, private (+6 more)
 
-### Community 40 - "Docker/CI Image Build"
-Cohesion: 0.19
-Nodes (14): docker-compose.override.yml, Local end-to-end topology (host + Docker), images job (build & push), meshify-observability image, meshify-platform-api image, verify job (typecheck/build/test), meshify-worker image, minio service (+6 more)
+### Community 57 - "Community 57"
+Cohesion: 0.20
+Nodes (3): ChatContextRetriever, ChatPipelineResolver, RocketRideChatPipelineResolver
 
-### Community 41 - "Ask Question Use Case"
-Cohesion: 0.31
-Nodes (7): AskQuestionCommand, AskQuestionResult, ChatContextRetriever, buildRagPrompt(), DEFAULT_INSTRUCTIONS, RetrievedChunk, VectorSearchContextRetriever
+### Community 58 - "Community 58"
+Cohesion: 0.25
+Nodes (8): EvaluationReport, RunEvaluationUseCase, CaseResult, CheckResult, evaluateAnswer(), EvaluatedAnswer, GoldenCase, includesCI()
 
-### Community 42 - "K8s Base Manifests"
+### Community 59 - "Community 59"
+Cohesion: 0.21
+Nodes (7): ProjectStats, SectionHeading(), useOrg(), DashboardPage(), greeting(), read(), usePersistent()
+
+### Community 60 - "Community 60"
+Cohesion: 0.35
+Nodes (8): buildChat(), buildChatSummary(), buildDocument(), buildMessage(), buildProject(), buildRepoFile(), buildRepository(), TEST_EPOCH
+
+### Community 61 - "Community 61"
 Cohesion: 0.28
 Nodes (13): Job: meshify-migrate, packages/data-access/dist/migrate.js (schema migration runner), Deployment: observability (DAP event ingester, single replica), PodDisruptionBudget: platform-api, PodDisruptionBudget: worker, Deployment: platform-api, HorizontalPodAutoscaler: platform-api, Ingress: platform-api (+5 more)
 
-### Community 43 - "Turborepo Task Config"
-Cohesion: 0.18
-Nodes (12): ^build, dist/**, dependsOn, outputs, $schema, tasks, build, lint (+4 more)
-
-### Community 44 - "Ask Question Use Case (Retry)"
-Cohesion: 0.23
-Nodes (3): AskQuestionUseCase, CODE_EXTENSIONS, extractReferencedCodeFiles()
-
-### Community 45 - "Chat Not Found Error Handling"
-Cohesion: 0.17
-Nodes (5): ChatNotFoundError, FakeChatRepository, fakeResolver, NO_CONTEXT, PROJECT
-
-### Community 46 - "Platform API TS Config"
+### Community 62 - "Community 62"
 Cohesion: 0.17
 Nodes (11): compilerOptions, outDir, rootDir, exclude, extends, include, src, src/**/*.test.ts (+3 more)
 
-### Community 47 - "Observability TS Config"
+### Community 63 - "Community 63"
+Cohesion: 0.24
+Nodes (11): apps/bff (Backend-for-frontend), apps/web (React + Vite SPA), Route code-splitting (React.lazy + Suspense), mc.* design token system, MeshifyApi client (centralized fetch), OrgShell / WorkspaceShell routing, Clerk Session authentication, HMAC-SHA256 key_hash with pepper (+3 more)
+
+### Community 64 - "Community 64"
 Cohesion: 0.18
 Nodes (10): compilerOptions, outDir, rootDir, exclude, extends, include, src, src/**/*.test.ts (+2 more)
 
-### Community 48 - "Redis Rate Limiter"
-Cohesion: 0.25
-Nodes (4): RateLimitDecision, RedisRateLimiter, RateLimiter, rateLimitGuard()
-
-### Community 49 - "Worker TS Config"
+### Community 65 - "Community 65"
 Cohesion: 0.18
 Nodes (10): compilerOptions, outDir, rootDir, exclude, extends, include, src, src/**/*.test.ts (+2 more)
 
-### Community 50 - "Document Ingest Queue"
+### Community 66 - "Community 66"
 Cohesion: 0.38
 Nodes (7): createDocumentIngestQueue(), DocumentIngestJobPayload, DEFAULT_JOB_OPTS, createRepoIngestQueue(), createRepoSyncQueue(), RepoIngestJobPayload, RepoSyncJobPayload
 
-### Community 51 - "RocketRide Gateway TS Config"
+### Community 67 - "Community 67"
 Cohesion: 0.18
 Nodes (10): compilerOptions, outDir, rootDir, exclude, extends, include, src, src/**/*.test.ts (+2 more)
 
-### Community 52 - "API Key Generation Scripts"
-Cohesion: 0.33
-Nodes (8): AuthContext, generateApiKey(), hashApiKey(), hashesEqual(), looksLikeApiKey(), main(), parseArgs(), resolveOrgId()
+### Community 69 - "Community 69"
+Cohesion: 0.18
+Nodes (10): compilerOptions, composite, declaration, noEmit, rootDir, sourceMap, extends, include (+2 more)
 
-### Community 53 - "Embeddings TS Config"
+### Community 70 - "Community 70"
+Cohesion: 0.20
+Nodes (9): name, private, scripts, build, dev, preview, typecheck, type (+1 more)
+
+### Community 71 - "Community 71"
 Cohesion: 0.20
 Nodes (9): compilerOptions, outDir, rootDir, exclude, extends, include, src, src/**/*.test.ts (+1 more)
 
-### Community 54 - "Vector Store TS Config"
+### Community 72 - "Community 72"
 Cohesion: 0.20
 Nodes (9): compilerOptions, outDir, rootDir, exclude, extends, include, src, src/**/*.test.ts (+1 more)
 
-### Community 55 - "Evaluation Harness (Docs)"
-Cohesion: 0.22
-Nodes (9): Evaluation harness, FakeRagService, RagPort, RunEvaluationUseCase, FakeRagService (kept, test seam), Adding code guidance, RagPort (dev guide reference), @meshify/rocketride-gateway (dev guide reference) (+1 more)
-
-### Community 56 - "Audit Log Domain"
-Cohesion: 0.42
-Nodes (3): AuditLogEntry, AuditLogRepository, PostgresAuditLogRepository
-
-### Community 57 - "Data-Access TS Config"
+### Community 73 - "Community 73"
 Cohesion: 0.22
 Nodes (8): compilerOptions, outDir, rootDir, extends, include, src, ../../tsconfig.base.json, references
 
-### Community 58 - "RocketRide Standards Checklist"
-Cohesion: 0.25
-Nodes (7): @meshify/rocketride-gateway, Standards checklist, apps/ (deployable processes), apps/platform-api, packages/rocketride-gateway, File naming: kebab-case + role suffix, Why not PascalCase filenames
+### Community 74 - "Community 74"
+Cohesion: 0.28
+Nodes (9): apps/platform-api (Core HTTP API), apps/worker (BullMQ ingestion), @meshify/embeddings (provider-agnostic embedding), @meshify/github (GitHub App client), @meshify/object-storage (S3-compatible client), @meshify/queues (BullMQ queue definitions), BullMQ Queues (document-ingest, repo-ingest, repo-sync), Graceful shutdown (drain in-flight jobs) (+1 more)
 
-### Community 59 - "Config Package TS Config"
+### Community 76 - "Community 76"
+Cohesion: 0.28
+Nodes (3): VectorSearchContextRetriever, EmbeddingProviderFactory, ConfiguredEmbeddingProviderFactory
+
+### Community 77 - "Community 77"
+Cohesion: 0.28
+Nodes (4): DeleteDocumentCommand, DeleteDocumentUseCase, DocumentNotFoundError, PROJECT
+
+### Community 78 - "Community 78"
+Cohesion: 0.22
+Nodes (9): Chat (retrieval-augmented generation flow), Direct Qdrant retrieval (bypasses RocketRide), RocketRide SDK only in gateway rule, Pipeline token self-heal retry, @meshify/rocketride-gateway (AI gateway boundary), Raw SQL only in data-access rule, @meshify/config (zod env schema), @meshify/data-access (Postgres repos + migrations) (+1 more)
+
+### Community 79 - "Community 79"
+Cohesion: 0.22
+Nodes (8): compilerOptions, outDir, rootDir, extends, include, src, ../../tsconfig.base.json, references
+
+### Community 82 - "Community 82"
+Cohesion: 0.32
+Nodes (3): api, EvaluationPanel(), SearchPanel()
+
+### Community 83 - "Community 83"
+Cohesion: 0.25
+Nodes (8): Document Ingestion flow, PipelineRegistry (pipeline reuse via useExisting), Repository Ingestion flow, project_id + ON DELETE CASCADE isolation, Per-project Qdrant collections (_documents, _code), @meshify/vector-store (Qdrant provisioning + search), projectIsolationGuard (404 on cross-org), Project Isolation (per-tenant vector collections)
+
+### Community 84 - "Community 84"
 Cohesion: 0.25
 Nodes (7): compilerOptions, outDir, rootDir, extends, include, src, ../../tsconfig.base.json
 
-### Community 60 - "GitHub Package TS Config"
+### Community 85 - "Community 85"
 Cohesion: 0.25
 Nodes (7): compilerOptions, outDir, rootDir, extends, include, src, ../../tsconfig.base.json
 
-### Community 61 - "Object Storage TS Config"
+### Community 86 - "Community 86"
 Cohesion: 0.25
 Nodes (7): compilerOptions, outDir, rootDir, extends, include, src, ../../tsconfig.base.json
 
-### Community 62 - "Queues Package TS Config"
+### Community 87 - "Community 87"
 Cohesion: 0.25
 Nodes (7): compilerOptions, outDir, rootDir, extends, include, src, ../../tsconfig.base.json
 
-### Community 63 - "Shared Package TS Config"
+### Community 88 - "Community 88"
 Cohesion: 0.25
 Nodes (7): compilerOptions, outDir, rootDir, extends, include, src, ../../tsconfig.base.json
 
-### Community 64 - "Upload Document Use Case"
+### Community 89 - "Community 89"
+Cohesion: 0.32
+Nodes (4): Assertion, AsymmetricMatchersContaining, CustomMatchers, vitest
+
+### Community 91 - "Community 91"
+Cohesion: 0.29
+Nodes (7): apps/observability (pipeline traces), Postgres schema (system of record), Job idempotency (jobId pinned to pipeline_jobs id), pipeline_jobs durable DLQ mirror, Retry with exponential backoff (5 attempts), Meshify Platform, pnpm + Turborepo Monorepo
+
+### Community 92 - "Community 92"
 Cohesion: 0.33
 Nodes (3): UploadDocumentCommand, UploadDocumentResult, UploadDocumentUseCase
 
-### Community 65 - "Platform API Build Scripts"
+### Community 93 - "Community 93"
+Cohesion: 0.29
+Nodes (3): NO_CONTEXT, PROJECT, resolver
+
+### Community 94 - "Community 94"
+Cohesion: 0.33
+Nodes (7): Documentation template (_TEMPLATE.md), Clean Architecture (Domain ← Application ← Infrastructure ← Interface), Composition Root (main.ts dependency injection), Repository Port pattern, Use Case (business rules layer), Living Documentation principle, Meshify Engineering Handbook
+
+### Community 95 - "Community 95"
+Cohesion: 0.29
+Nodes (7): Forward-only SQL migrations, Turbo CI/CD pipeline, Colocated unit tests convention, @meshify/testing (shared test infra), @meshify/root-tests (repository-wide suites), Turbo cached + affected-only test orchestration, Vitest single-framework test stack
+
+### Community 97 - "Community 97"
 Cohesion: 0.33
 Nodes (6): scripts, build, dev, start, test, typecheck
 
-### Community 66 - "RAG Prompt / Chat Pipeline (Docs)"
-Cohesion: 0.33
-Nodes (6): AskQuestionUseCase, buildRagPrompt, chat-pipeline.ts, Chat retrieval path (bypasses RocketRide), ChatContextRetriever, VectorSearchContextRetriever
-
-### Community 67 - "Search Path Bypasses RocketRide (Docs)"
-Cohesion: 0.33
-Nodes (6): @meshify/embeddings, Search path (bypasses RocketRide), search-result.ts, @meshify/vector-store, packages/embeddings, packages/vector-store
-
-### Community 68 - "AI Platform Architecture Decisions"
-Cohesion: 0.33
-Nodes (6): Meshify Phase I: AI Backend-as-a-Service, Settled decisions policy, ai-platform-architecture (published design artifact), infrastructure/docker/docker-compose.yml (referenced from README), Meshify — Enterprise Knowledge Platform, RocketRide (linked from README)
-
-### Community 69 - "Env Schema Validation"
+### Community 98 - "Community 98"
 Cohesion: 0.53
 Nodes (4): Env, envSchema, loadEnv(), resetEnvCache()
 
-### Community 70 - "Pipeline Templates (chat/ingest.pipe)"
-Cohesion: 0.47
-Nodes (6): chat.pipe (RAG chat template), ingest.pipe (document/code ingestion template), Multi-tenant pipeline generation (per-project pipeline + Qdrant collections), packages/rocketride-gateway/src/pipeline-builder (runtime pipeline builders), RocketRide VS Code extension (pipeline inspection/debugging workflow), pnpm workspace package globs (apps/*, packages/*)
+### Community 99 - "Community 99"
+Cohesion: 0.53
+Nodes (5): engineListenPorts(), ENV_PATH, main(), probe(), sh()
 
-### Community 71 - "Platform API Package Metadata"
+### Community 100 - "Community 100"
 Cohesion: 0.40
 Nodes (4): name, private, type, version
 
-### Community 72 - "RocketRide Local Engine / Qdrant Service"
-Cohesion: 0.40
-Nodes (5): RocketRide server, RocketRide local engine (VS Code extension), qdrant service, meshify-config ConfigMap, kustomization.yaml resources list
+### Community 101 - "Community 101"
+Cohesion: 0.50
+Nodes (5): Blue-to-Indigo Brand Gradient, Meshify Favicon / Brand Mark, Stylized 'M' Monogram, Mesh Network Node-and-Edge Motif, Rounded-Square App Icon Tile
 
-### Community 73 - "DB Migration Runner"
+### Community 102 - "Community 102"
 Cohesion: 0.60
 Nodes (4): appliedMigrations(), ensureMigrationsTable(), main(), MIGRATIONS_DIR
 
-### Community 74 - "Logger Utility"
+### Community 103 - "Community 103"
 Cohesion: 0.70
 Nodes (3): createLogger(), Logger, LoggerOptions
 
-### Community 75 - "Web Console Dev Entry Point"
-Cohesion: 0.50
-Nodes (4): Meshify Console (dev) entry point, @meshify/web dev console, docker-compose.yml (referenced from web README), RocketRide IDE extension (ships RocketRide server)
+### Community 104 - "Community 104"
+Cohesion: 0.60
+Nodes (5): chat.pipe (RAG chat template), ingest.pipe (document/code ingestion template), Multi-tenant pipeline generation (per-project pipeline + Qdrant collections), packages/rocketride-gateway/src/pipeline-builder (runtime pipeline builders), RocketRide VS Code extension (pipeline inspection/debugging workflow)
 
-### Community 76 - "K8s Autoscaling (HPA/KEDA)"
+### Community 106 - "Community 106"
 Cohesion: 0.50
 Nodes (4): kubernetes/base (namespaced workloads), HPA (platform-api CPU autoscaling), KEDA (worker queue-depth autoscaling), migrate.job.yaml (pre-rollout schema migration)
 
-### Community 77 - "Kubernetes Deployment Model (Docs)"
-Cohesion: 0.67
-Nodes (3): Kubernetes deployment model, platform-api, worker
+### Community 108 - "Community 108"
+Cohesion: 1.00
+Nodes (3): DLQ (Dead-Letter Queue), Worker (BullMQ Consumer), @meshify/queues
 
-### Community 78 - "Qdrant Collection Provisioning (Docs)"
+### Community 109 - "Community 109"
 Cohesion: 0.67
-Nodes (3): QdrantCollectionProvisioner, schema control document (meta.objectId==='schema'), QdrantCollectionProvisioner (local testing reference)
-
-### Community 79 - "Pipeline Config Dead Code (Docs)"
-Cohesion: 0.67
-Nodes (3): ChatPipelineConfig, IngestPipelineConfig, llm field on IngestPipelineConfig (dead code, fixed)
+Nodes (3): qdrant service, meshify-config ConfigMap, kustomization.yaml resources list
 
 ## Knowledge Gaps
-- **478 isolated node(s):** `name`, `version`, `private`, `type`, `dev` (+473 more)
+- **600 isolated node(s):** `name`, `version`, `private`, `type`, `dev` (+595 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **57 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **47 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `bootstrap()` connect `Chat Interface/Bootstrap` to `Project Isolation Guard Tests`, `API Key Authentication Flow`, `Repo Document-Ingest Processors`, `Health Check / Infrastructure`, `Redis Rate Limiter`, `Create Project Flow`?**
-  _High betweenness centrality (0.035) - this node is a cross-community bridge._
-- **Why does `auditLogMiddleware()` connect `Project Isolation Guard Tests` to `Audit Log Domain`, `Pipeline Runs (DAP Events)`, `Chat Interface/Bootstrap`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Why does `bootstrap()` connect `Health & Document List Controllers` to `RocketRide Client Pool & Logging`, `BFF: Clerk Session & Proxy`, `Chat Use Cases (Ask/Delete)`, `Repository Connect/Delete Use Cases`, `Project Create/Delete Use Cases`, `Documents & Evaluation Controllers`?**
+  _High betweenness centrality (0.038) - this node is a cross-community bridge._
+- **Why does `auditLogMiddleware()` connect `BFF: Clerk Session & Proxy` to `Audit Log Entity & Repository`, `Health & Document List Controllers`, `Observability: DAP Events`?**
+  _High betweenness centrality (0.022) - this node is a cross-community bridge._
+- **Why does `bootstrap()` connect `Worker: Ingest Processors` to `RocketRide Client Pool & Logging`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `private` to the rest of the system?**
-  _478 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Pipeline Builder Extension` be split into smaller, more focused modules?**
-  _Cohesion score 0.06772151898734177 - nodes in this community are weakly interconnected._
-- **Should `RocketRide VS Code Panels/API` be split into smaller, more focused modules?**
-  _Cohesion score 0.07645875251509054 - nodes in this community are weakly interconnected._
-- **Should `Worker App Dependencies` be split into smaller, more focused modules?**
+  _600 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `RocketRide Client Pool & Logging` be split into smaller, more focused modules?**
+  _Cohesion score 0.06867088607594937 - nodes in this community are weakly interconnected._
+- **Should `BFF: Clerk Session & Proxy` be split into smaller, more focused modules?**
+  _Cohesion score 0.05786090005844535 - nodes in this community are weakly interconnected._
+- **Should `Worker Package Dependencies` be split into smaller, more focused modules?**
   _Cohesion score 0.04081632653061224 - nodes in this community are weakly interconnected._
-- **Should `Pipeline Runs (DAP Events)` be split into smaller, more focused modules?**
-  _Cohesion score 0.1021021021021021 - nodes in this community are weakly interconnected._
