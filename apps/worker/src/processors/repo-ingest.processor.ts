@@ -4,10 +4,11 @@ import { apiKeyEnvVarFor, embeddingProviderFromProfile, parseGitHubUrl } from '@
 import type { FileRepository, PipelineJobRepository, ProjectRepository, RepositoryRepository } from '@meshify/data-access';
 import type { ObjectStorageClient } from '@meshify/object-storage';
 import type { GitHubRepoClient } from '@meshify/github';
-import type { RepoIngestJobPayload } from '@meshify/queues';
+import type { JobEventPublisher, RepoIngestJobPayload } from '@meshify/queues';
 import type { IngestFile, PipelineRegistry, RagPort } from '@meshify/rocketride-gateway';
 import { scanExtractedRepo, type ScannedFile } from '../repo/repo-scanner.js';
 import { withExtractedArchive } from '../repo/archive-extractor.js';
+import { JobProgress } from './job-progress.js';
 
 export interface RepoIngestProcessorDeps {
 	repositories: RepositoryRepository;
@@ -18,6 +19,7 @@ export interface RepoIngestProcessorDeps {
 	github: GitHubRepoClient;
 	pipelineRegistry: PipelineRegistry;
 	rag: RagPort;
+	jobEvents: JobEventPublisher;
 	/** 256-512 chars for code per RocketRide's chunk-sizing guidance. */
 	codeChunkSize: number;
 	qdrantHost: string;
@@ -37,6 +39,7 @@ const SEND_BATCH_SIZE = 25;
  */
 export async function processRepoIngestJob(job: Job<RepoIngestJobPayload>, deps: RepoIngestProcessorDeps): Promise<void> {
 	const { pipelineJobId, repositoryId, projectId } = job.data;
+	const progress = new JobProgress(deps.pipelineJobs, deps.jobEvents, { jobId: pipelineJobId, projectId, jobType: 'clone_repo', title: 'Repository' });
 
 	await deps.pipelineJobs.markRunning(pipelineJobId);
 
@@ -45,6 +48,8 @@ export async function processRepoIngestJob(job: Job<RepoIngestJobPayload>, deps:
 		if (!repository) throw new Error(`Repository "${repositoryId}" not found`);
 		if (!project) throw new Error(`Project "${projectId}" not found`);
 
+		progress.setTitle(repository.remoteUrl ?? 'Uploaded archive');
+		await progress.running('Downloading repository');
 		await deps.repositories.updateSyncStatus(repositoryId, 'cloning');
 
 		let archive: Buffer;
@@ -52,6 +57,7 @@ export async function processRepoIngestJob(job: Job<RepoIngestJobPayload>, deps:
 		let headSha: string | null = null;
 		let defaultBranch: string | null = null;
 
+		await progress.stage('Downloading repository', 10);
 		if (repository.source === 'github') {
 			if (!repository.remoteUrl) throw new Error('GitHub repository row has no remote_url');
 			const { owner, repo } = parseGitHubUrl(repository.remoteUrl);
@@ -66,9 +72,11 @@ export async function processRepoIngestJob(job: Job<RepoIngestJobPayload>, deps:
 			format = 'zip';
 		}
 
+		await progress.stage('Scanning repository', 30);
 		const scanned = await withExtractedArchive(archive, format, (dir) => scanExtractedRepo(dir));
 		if (scanned.length === 0) throw new Error('Archive contained no ingestable source files after filtering');
 
+		await progress.stage('Preparing batches', 40);
 		for (const file of scanned) {
 			await deps.files.upsert({
 				id: randomUUID(),
@@ -94,14 +102,19 @@ export async function processRepoIngestJob(job: Job<RepoIngestJobPayload>, deps:
 			chunkSize: deps.codeChunkSize,
 		});
 
-		for (const batch of toBatches(scanned, SEND_BATCH_SIZE)) {
-			const result = await deps.rag.ingestFiles(token, batch.map(toIngestFile));
+		// Uploading + embedding is the bulk of the work — report real progress across batches (45% → 95%).
+		const batches = toBatches(scanned, SEND_BATCH_SIZE);
+		for (let i = 0; i < batches.length; i++) {
+			await progress.stage(`Uploading to RocketRide (${i + 1}/${batches.length})`, 45 + Math.round((i / batches.length) * 50));
+			const result = await deps.rag.ingestFiles(token, batches[i]!.map(toIngestFile));
 			if (!result.completed) throw new Error(`Code ingestion reported errors: ${result.errors.join('; ')}`);
 		}
 
+		await progress.stage('Writing vectors', 97);
 		await deps.files.updateStatusByRepository(repositoryId, 'pending', 'embedded');
 		await deps.repositories.markSynced(repositoryId, headSha, defaultBranch);
 		await deps.pipelineJobs.markCompleted(pipelineJobId);
+		await progress.completed();
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		await deps.repositories.updateSyncStatus(repositoryId, 'failed').catch(() => undefined);
@@ -109,6 +122,7 @@ export async function processRepoIngestJob(job: Job<RepoIngestJobPayload>, deps:
 		await deps.pipelineJobs.incrementAttempts(pipelineJobId);
 		const isFinalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
 		await deps.pipelineJobs.markFailed(pipelineJobId, message, isFinalAttempt ? 'dead_letter' : 'failed');
+		await progress.failed(isFinalAttempt, message, job.attemptsMade + 1);
 
 		throw err;
 	}

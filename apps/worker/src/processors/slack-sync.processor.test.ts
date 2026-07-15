@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Job } from 'bullmq';
 import { encryptSecret } from '@meshify/data-access';
-import type { PipelineJobRepository } from '@meshify/data-access';
 import { FakeRagService } from '@meshify/rocketride-gateway';
 import { FakeSlackClient, type FakeSlackSeed, type SlackMessage } from '@meshify/slack';
-import type { SlackIngestJobPayload } from '@meshify/queues';
+import { JobEventPublisher, type SlackIngestJobPayload } from '@meshify/queues';
 import {
 	InMemoryKnowledgeConnectorRepository,
+	InMemoryPipelineJobRepository,
 	InMemoryProjectRepository,
 	InMemorySlackChannelRepository,
 	InMemorySlackConversationRepository,
@@ -22,18 +22,7 @@ import { processSlackSyncJob } from './slack-sync.processor.js';
 import { ingestWorkspace, type SlackIngestionDeps } from '../slack/ingest-workspace.js';
 
 const ENCRYPTION_KEY = 'a-test-encryption-key-at-least-32-chars!';
-
-function fakePipelineJobs(): PipelineJobRepository {
-	return {
-		create: vi.fn(),
-		findById: vi.fn(),
-		findByIdForOrg: vi.fn(),
-		markRunning: vi.fn(async () => {}),
-		markCompleted: vi.fn(async () => {}),
-		markFailed: vi.fn(async () => {}),
-		incrementAttempts: vi.fn(async () => 1),
-	} as unknown as PipelineJobRepository;
-}
+const noopJobEvents = new JobEventPublisher({ publish: async () => 0 });
 
 function makeHarness(seed: FakeSlackSeed) {
 	const slack = new FakeSlackClient(seed);
@@ -44,7 +33,8 @@ function makeHarness(seed: FakeSlackSeed) {
 	const vectors = { deleteBySourcePaths: vi.fn(async () => {}) };
 	const deps: SlackIngestionDeps = {
 		connectors: new InMemoryKnowledgeConnectorRepository([buildKnowledgeConnector({ id: 'conn-slack-1' })]),
-		pipelineJobs: fakePipelineJobs(),
+		pipelineJobs: new InMemoryPipelineJobRepository(),
+		jobEvents: noopJobEvents,
 		slackWorkspaces: new InMemorySlackWorkspaceRepository([
 			buildSlackWorkspace({ id: 'ws-1', connectorId: 'conn-slack-1', teamId: 'T123', encryptedAccessToken: encryptSecret(ENCRYPTION_KEY, 'xoxb-token') }),
 		]),

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Job } from 'bullmq';
 import { encryptSecret } from '@meshify/data-access';
-import type { PipelineJobRepository } from '@meshify/data-access';
 import { FakeRagService } from '@meshify/rocketride-gateway';
 import { FakeSlackClient } from '@meshify/slack';
-import type { SlackIngestJobPayload } from '@meshify/queues';
+import { JobEventPublisher, type SlackIngestJobPayload } from '@meshify/queues';
 import {
 	InMemoryKnowledgeConnectorRepository,
+	InMemoryPipelineJobRepository,
 	InMemoryProjectRepository,
 	InMemorySlackChannelRepository,
 	InMemorySlackConversationRepository,
@@ -22,17 +22,8 @@ import type { SlackIngestProcessorDeps } from './slack-ingest.processor.js';
 
 const ENCRYPTION_KEY = 'a-test-encryption-key-at-least-32-chars!';
 
-function fakePipelineJobs(): PipelineJobRepository {
-	return {
-		create: vi.fn(),
-		findById: vi.fn(),
-		findByIdForOrg: vi.fn(),
-		markRunning: vi.fn(async () => {}),
-		markCompleted: vi.fn(async () => {}),
-		markFailed: vi.fn(async () => {}),
-		incrementAttempts: vi.fn(async () => 1),
-	} as unknown as PipelineJobRepository;
-}
+/** A no-op JobEventPublisher (progress events aren't asserted here). */
+const noopJobEvents = new JobEventPublisher({ publish: async () => 0 });
 
 function makeDeps(slack: FakeSlackClient): { deps: SlackIngestProcessorDeps; rag: FakeRagService; conversations: InMemorySlackConversationRepository; syncState: InMemorySlackSyncStateRepository } {
 	const rag = new FakeRagService();
@@ -40,7 +31,8 @@ function makeDeps(slack: FakeSlackClient): { deps: SlackIngestProcessorDeps; rag
 	const syncState = new InMemorySlackSyncStateRepository();
 	const deps: SlackIngestProcessorDeps = {
 		connectors: new InMemoryKnowledgeConnectorRepository([buildKnowledgeConnector({ id: 'conn-slack-1' })]),
-		pipelineJobs: fakePipelineJobs(),
+		pipelineJobs: new InMemoryPipelineJobRepository(),
+		jobEvents: noopJobEvents,
 		slackWorkspaces: new InMemorySlackWorkspaceRepository([buildSlackWorkspace({ id: 'ws-1', connectorId: 'conn-slack-1', teamId: 'T123', encryptedAccessToken: encryptSecret(ENCRYPTION_KEY, 'xoxb-token') })]),
 		slackChannels: new InMemorySlackChannelRepository([buildSlackChannel({ id: 'chan-1', workspaceId: 'ws-1', channelId: 'C123', name: 'engineering', selected: true })]),
 		slackConversations: conversations,
@@ -107,7 +99,8 @@ describe('processSlackIngestJob', () => {
 		const rag = new FakeRagService();
 		const deps: SlackIngestProcessorDeps = {
 			connectors,
-			pipelineJobs: fakePipelineJobs(),
+			pipelineJobs: new InMemoryPipelineJobRepository(),
+			jobEvents: noopJobEvents,
 			slackWorkspaces: new InMemorySlackWorkspaceRepository([buildSlackWorkspace({ id: 'ws-1', connectorId: 'conn-slack-1', teamId: 'T1', encryptedAccessToken: encryptSecret(ENCRYPTION_KEY, 'xoxb') })]),
 			slackChannels: new InMemorySlackChannelRepository([
 				buildSlackChannel({ id: 'c-ok', workspaceId: 'ws-1', channelId: 'COK', name: 'ok', selected: true }),

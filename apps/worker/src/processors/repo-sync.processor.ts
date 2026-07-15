@@ -3,9 +3,10 @@ import type { Job } from 'bullmq';
 import { apiKeyEnvVarFor, embeddingProviderFromProfile, parseGitHubUrl } from '@meshify/data-access';
 import type { FileRepository, PipelineJobRepository, ProjectRepository, RepositoryRepository } from '@meshify/data-access';
 import type { GitHubRepoClient } from '@meshify/github';
-import type { RepoSyncJobPayload } from '@meshify/queues';
+import type { JobEventPublisher, RepoSyncJobPayload } from '@meshify/queues';
 import type { PipelineRegistry, RagPort } from '@meshify/rocketride-gateway';
 import { detectLanguage, hashContent, isBinaryBuffer, isDeniedPath } from '../repo/repo-scanner.js';
+import { JobProgress } from './job-progress.js';
 
 export interface RepoSyncProcessorDeps {
 	repositories: RepositoryRepository;
@@ -15,6 +16,7 @@ export interface RepoSyncProcessorDeps {
 	github: GitHubRepoClient;
 	pipelineRegistry: PipelineRegistry;
 	rag: RagPort;
+	jobEvents: JobEventPublisher;
 	codeChunkSize: number;
 	qdrantHost: string;
 	qdrantPort: number;
@@ -34,6 +36,7 @@ export interface RepoSyncProcessorDeps {
  */
 export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: RepoSyncProcessorDeps): Promise<void> {
 	const { pipelineJobId, repositoryId, projectId } = job.data;
+	const progress = new JobProgress(deps.pipelineJobs, deps.jobEvents, { jobId: pipelineJobId, projectId, jobType: 'sync_repo', title: 'Repository' });
 
 	await deps.pipelineJobs.markRunning(pipelineJobId);
 
@@ -45,15 +48,20 @@ export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: Rep
 		if (!repository.remoteUrl) throw new Error('GitHub repository row has no remote_url');
 		if (!repository.lastSyncedCommit) throw new Error('Repository has never completed a full ingest; run ingestion first');
 
+		progress.setTitle(repository.remoteUrl);
+		await progress.running('Checking for changes');
+
 		const { owner, repo } = parseGitHubUrl(repository.remoteUrl);
 		const head = await deps.github.getHead(owner, repo);
 
 		if (head.headSha === repository.lastSyncedCommit) {
 			await deps.repositories.markSynced(repositoryId, head.headSha, head.defaultBranch);
 			await deps.pipelineJobs.markCompleted(pipelineJobId);
+			await progress.completed(); // already up to date — a valid, complete outcome
 			return;
 		}
 
+		await progress.stage('Comparing changes', 20);
 		await deps.repositories.updateSyncStatus(repositoryId, 'cloning');
 		const changes = await deps.github.compare(owner, repo, repository.lastSyncedCommit, head.headSha);
 
@@ -77,7 +85,9 @@ export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: Rep
 				chunkSize: deps.codeChunkSize,
 			});
 
-			for (const filePath of changedPaths) {
+			for (let i = 0; i < changedPaths.length; i++) {
+				const filePath = changedPaths[i]!;
+				await progress.stage(`Uploading changed files (${i + 1}/${changedPaths.length})`, 40 + Math.round((i / changedPaths.length) * 55));
 				let buffer: Buffer;
 				try {
 					buffer = await deps.github.getFileContent(owner, repo, filePath, head.headSha);
@@ -102,11 +112,13 @@ export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: Rep
 				if (!result.completed) throw new Error(`Sync ingestion failed for ${filePath}: ${result.errors.join('; ')}`);
 			}
 
+			await progress.stage('Writing vectors', 97);
 			await deps.files.updateStatusByRepository(repositoryId, 'pending', 'embedded');
 		}
 
 		await deps.repositories.markSynced(repositoryId, head.headSha, head.defaultBranch);
 		await deps.pipelineJobs.markCompleted(pipelineJobId);
+		await progress.completed();
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		await deps.repositories.updateSyncStatus(repositoryId, 'failed').catch(() => undefined);
@@ -114,6 +126,7 @@ export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: Rep
 		await deps.pipelineJobs.incrementAttempts(pipelineJobId);
 		const isFinalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
 		await deps.pipelineJobs.markFailed(pipelineJobId, message, isFinalAttempt ? 'dead_letter' : 'failed');
+		await progress.failed(isFinalAttempt, message, job.attemptsMade + 1);
 
 		throw err;
 	}
