@@ -5,6 +5,7 @@ import type { CreateDocumentInput, DocumentRepository } from './document.reposit
 interface DocumentRow {
 	id: string;
 	project_id: string;
+	connector_id: string | null;
 	source_type: string;
 	filename: string;
 	object_storage_key: string;
@@ -18,6 +19,7 @@ function toDomain(row: DocumentRow): Document {
 	return {
 		id: row.id,
 		projectId: row.project_id,
+		connectorId: row.connector_id,
 		sourceType: row.source_type as Document['sourceType'],
 		filename: row.filename,
 		objectStorageKey: row.object_storage_key,
@@ -33,10 +35,10 @@ export class PostgresDocumentRepository implements DocumentRepository {
 
 	async create(input: CreateDocumentInput): Promise<Document> {
 		const { rows } = await this.pool.query<DocumentRow>(
-			`insert into documents (id, project_id, source_type, filename, object_storage_key, content_hash)
-			 values ($1, $2, $3, $4, $5, $6)
+			`insert into documents (id, project_id, connector_id, source_type, filename, object_storage_key, content_hash)
+			 values ($1, $2, $3, $4, $5, $6, $7)
 			 returning *`,
-			[input.id, input.projectId, input.sourceType, input.filename, input.objectStorageKey, input.contentHash]
+			[input.id, input.projectId, input.connectorId, input.sourceType, input.filename, input.objectStorageKey, input.contentHash]
 		);
 		const row = rows[0];
 		if (!row) throw new Error('Insert into documents returned no row');

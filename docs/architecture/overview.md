@@ -30,7 +30,7 @@ isolated down to its own vector collections.
 
 - **Source of truth for structure:** [`pnpm-workspace.yaml`](../../pnpm-workspace.yaml), [`turbo.json`](../../turbo.json)
 - **Applications:** `apps/*` — `web`, `bff`, `platform-api`, `worker`, `observability`
-- **Packages:** `packages/*` — `config`, `shared`, `data-access`, `vector-store`, `embeddings`, `queues`, `object-storage`, `github`, `rocketride-gateway`, `testing`
+- **Packages:** `packages/*` — `config`, `shared`, `data-access`, `vector-store`, `embeddings`, `queues`, `object-storage`, `github`, `slack`, `rocketride-gateway`, `testing`
 
 ## Architecture
 
@@ -103,8 +103,8 @@ See [Authentication & Authorization](../backend/auth.md) and [RAG & Ingestion](.
 | --- | --- | --- | --- |
 | `apps/web` | React SPA (Vite, Clerk, TanStack Router-free React Router) | `apps/web/src/main.tsx` | [Frontend](frontend.md), [README](../../apps/web/README.md) |
 | `apps/bff` | Browser-facing gateway: Clerk session → org API key, 1:1 proxy | `apps/bff/src/main.ts` | [Auth](../backend/auth.md), [README](../../apps/bff/README.md) |
-| `apps/platform-api` | Core API: projects, documents, repositories, chat, search, evaluation | `apps/platform-api/src/main.ts` | [Backend](backend.md), [README](../../apps/platform-api/README.md) |
-| `apps/worker` | BullMQ processors for document + repo ingestion | `apps/worker/src/main.ts` | [Queues & Workers](../backend/queues-and-workers.md), [README](../../apps/worker/README.md) |
+| `apps/platform-api` | Core API: projects, documents, repositories, connectors, Slack, chat, search, evaluation | `apps/platform-api/src/main.ts` | [Backend](backend.md), [README](../../apps/platform-api/README.md) |
+| `apps/worker` | BullMQ processors for document, repo, and Slack ingestion/sync | `apps/worker/src/main.ts` | [Queues & Workers](../backend/queues-and-workers.md), [README](../../apps/worker/README.md) |
 | `apps/observability` | Consumes RocketRide pipeline traces into Postgres | `apps/observability/src/main.ts` | [README](../../apps/observability/README.md) |
 
 ### Package dependency graph
@@ -116,7 +116,7 @@ flowchart TB
   end
   subgraph packages
     config ; shared ; da[data-access] ; vs[vector-store]
-    emb[embeddings] ; q[queues] ; os[object-storage] ; gh[github]
+    emb[embeddings] ; q[queues] ; os[object-storage] ; gh[github] ; slack
     rr[rocketride-gateway] ; testing
   end
 
@@ -126,9 +126,9 @@ flowchart TB
   os -.-> awssdk((aws-sdk))
   rr -.-> rrsdk((rocketride))
 
-  api --> config & shared & da & vs & emb & q & os & rr
+  api --> config & shared & da & vs & emb & q & os & rr & slack
   bff --> config & shared & da
-  worker --> config & shared & da & gh & os & q & rr
+  worker --> config & shared & da & gh & os & q & rr & vs & slack
   obs --> config & shared & da & rr
   testing --> da
 ```

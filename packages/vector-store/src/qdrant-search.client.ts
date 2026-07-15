@@ -11,11 +11,17 @@ export interface SearchFilters {
 	language?: string;
 	/** payload.parent_type exact match ("document" | "file"). */
 	parentType?: 'document' | 'file';
-	/** payload.source_path prefix (e.g. "src/"). */
+	/** payload.meta.parent prefix (e.g. "src/", "slack/") — scopes results TO a source family (needs a full-text index). */
 	sourcePathPrefix?: string;
-	/** payload.source_path exact match (e.g. "refund-runbook.md") — used for targeted deletion. */
+	/** payload.meta.parent prefix to EXCLUDE (e.g. "slack/") — a must_not (needs a full-text index). */
+	sourcePathPrefixNot?: string;
+	/** payload.meta.parent exact match (e.g. "refund-runbook.md") — used for targeted deletion. */
 	sourcePathExact?: string;
 }
+
+// RocketRide stores each chunk's source path at payload.meta.parent (see search-result.ts and the
+// collection provisioner) — NOT a top-level source_path — so every filter/delete keys on `meta.parent`.
+const SOURCE_PATH_KEY = 'meta.parent';
 
 export interface QdrantSearchHit {
 	id: string;
@@ -26,11 +32,14 @@ export interface QdrantSearchHit {
 /** Builds a Qdrant filter object from metadata filters, or undefined when none apply. */
 export function buildQdrantFilter(filters: SearchFilters): Record<string, unknown> | undefined {
 	const must: Array<Record<string, unknown>> = [];
+	const mustNot: Array<Record<string, unknown>> = [];
 	if (filters.language) must.push({ key: 'language', match: { value: filters.language } });
 	if (filters.parentType) must.push({ key: 'parent_type', match: { value: filters.parentType } });
-	if (filters.sourcePathPrefix) must.push({ key: 'source_path', match: { text: filters.sourcePathPrefix } });
-	if (filters.sourcePathExact) must.push({ key: 'source_path', match: { value: filters.sourcePathExact } });
-	return must.length > 0 ? { must } : undefined;
+	if (filters.sourcePathPrefix) must.push({ key: SOURCE_PATH_KEY, match: { text: filters.sourcePathPrefix } });
+	if (filters.sourcePathExact) must.push({ key: SOURCE_PATH_KEY, match: { value: filters.sourcePathExact } });
+	if (filters.sourcePathPrefixNot) mustNot.push({ key: SOURCE_PATH_KEY, match: { text: filters.sourcePathPrefixNot } });
+	if (must.length === 0 && mustNot.length === 0) return undefined;
+	return { ...(must.length > 0 ? { must } : {}), ...(mustNot.length > 0 ? { must_not: mustNot } : {}) };
 }
 
 export class QdrantSearchClient {
@@ -86,16 +95,16 @@ export class QdrantSearchClient {
 	}
 
 	/**
-	 * Deletes every point whose payload.source_path is one of `paths`, batching
+	 * Deletes every point whose payload.meta.parent is one of `paths`, batching
 	 * into OR-filtered delete requests. Used to purge a repository's embedded
-	 * code chunks (keyed by file path) from the project's code collection. A
-	 * missing collection (404) is a no-op; empty input does nothing. Other
-	 * failures throw so the caller can decide.
+	 * code chunks (keyed by file path) or a Slack conversation's chunks from a
+	 * project's collection. A missing collection (404) is a no-op; empty input
+	 * does nothing. Other failures throw so the caller can decide.
 	 */
 	async deleteBySourcePaths(collection: string, paths: string[], batchSize = 256): Promise<void> {
 		for (let i = 0; i < paths.length; i += batchSize) {
 			const batch = paths.slice(i, i + batchSize);
-			const filter = { should: batch.map((p) => ({ key: 'source_path', match: { value: p } })) };
+			const filter = { should: batch.map((p) => ({ key: SOURCE_PATH_KEY, match: { value: p } })) };
 			const res = await fetch(new URL(`/collections/${collection}/points/delete`, this.baseUrl), {
 				method: 'POST',
 				headers: this.headers(),

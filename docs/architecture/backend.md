@@ -27,7 +27,7 @@ split into four layers. HTTP controllers are thin; business rules live in
 [`@meshify/data-access`](../../packages/data-access/README.md).
 
 Modules present today: `health`, `security`, `projects`, `documents`,
-`repositories`, `chat`, `search`, `evaluation`, `jobs`.
+`repositories`, `connectors`, `slack`, `chat`, `search`, `evaluation`, `jobs`.
 
 ## Architecture
 

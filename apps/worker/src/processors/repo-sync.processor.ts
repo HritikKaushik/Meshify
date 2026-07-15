@@ -78,7 +78,14 @@ export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: Rep
 			});
 
 			for (const filePath of changedPaths) {
-				const buffer = await deps.github.getFileContent(owner, repo, filePath, head.headSha);
+				let buffer: Buffer;
+				try {
+					buffer = await deps.github.getFileContent(owner, repo, filePath, head.headSha);
+				} catch {
+					// GitHub's contents API returns encoding:'none' (no inline content) for files >1MB;
+					// skip the file — matching the initial scanner's size cap — instead of failing the whole sync.
+					continue;
+				}
 				if (isBinaryBuffer(buffer)) continue;
 
 				await deps.files.upsert({

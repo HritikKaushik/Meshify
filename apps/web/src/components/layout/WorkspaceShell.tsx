@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { Bell, Menu, LayoutDashboard, SearchCode, FlaskConical, Settings, MoreHorizontal } from 'lucide-react';
+import { Bell, Menu, LayoutDashboard, SearchCode, FlaskConical, Settings, MoreHorizontal, MessagesSquare } from 'lucide-react';
 import { useOrganization, UserButton } from '@clerk/clerk-react';
 import { api } from '@/api-client';
 import type { Conversation, Project } from '@/api';
@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 const PRIMARY_TABS = [
 	{ to: 'chat', label: 'Chat' },
 	{ to: 'repository', label: 'Repository' },
+	{ to: 'slack', label: 'Slack', icon: MessagesSquare },
 	{ to: 'documents', label: 'Documents' },
 ] as const;
 

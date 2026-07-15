@@ -3,6 +3,7 @@ import type { Repository, RepositorySyncStatus } from './repository.entity.js';
 export interface CreateRepositoryInput {
 	id: string;
 	projectId: string;
+	connectorId: string;
 	source: Repository['source'];
 	remoteUrl?: string;
 	archiveObjectKey?: string;
@@ -11,6 +12,8 @@ export interface CreateRepositoryInput {
 export interface RepositoryRepository {
 	create(input: CreateRepositoryInput): Promise<Repository>;
 	findById(id: string): Promise<Repository | undefined>;
+	/** The repository backing a `github` connector (1:1). */
+	findByConnectorId(connectorId: string): Promise<Repository | undefined>;
 	listByProject(projectId: string): Promise<Repository[]>;
 	/** Single-row aggregate for project stats — counts + latest activity without loading rows. */
 	statsByProject(projectId: string): Promise<{ total: number; synced: number; lastUpdatedAt: Date | null }>;

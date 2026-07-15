@@ -17,6 +17,8 @@ const SearchPage = lazy(() => import('./pages/projects/SearchPage').then((m) => 
 const ChatPage = lazy(() => import('./pages/projects/ChatPage').then((m) => ({ default: m.ChatPage })));
 const EvaluationPage = lazy(() => import('./pages/projects/EvaluationPage').then((m) => ({ default: m.EvaluationPage })));
 const RepositoriesPage = lazy(() => import('./pages/projects/RepositoriesPage').then((m) => ({ default: m.RepositoriesPage })));
+const SlackPage = lazy(() => import('./pages/projects/SlackPage').then((m) => ({ default: m.SlackPage })));
+const SlackCallbackPage = lazy(() => import('./pages/oauth/SlackCallbackPage').then((m) => ({ default: m.SlackCallbackPage })));
 const SettingsPage = lazy(() => import('./pages/projects/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 
 /** Gates its children behind a Clerk session; sends anonymous visitors to sign-in. */
@@ -69,12 +71,23 @@ export function App() {
 						<Route path="overview" element={<ProjectHomePage />} />
 						<Route path="repository" element={<RepositoriesPage />} />
 						<Route path="documents" element={<DocumentsPage />} />
+						<Route path="slack" element={<SlackPage />} />
 						<Route path="search" element={<SearchPage />} />
 						<Route path="evaluation" element={<EvaluationPage />} />
 						<Route path="settings" element={<SettingsPage />} />
 					</Route>
 
-				<Route path="*" element={<NotFoundPage />} />
+				{/* Slack OAuth redirect target — static, same-origin, Clerk-gated (projectId travels in the signed state). */}
+					<Route
+						path="/oauth/slack/callback"
+						element={
+							<Protected>
+								<SlackCallbackPage />
+							</Protected>
+						}
+					/>
+
+					<Route path="*" element={<NotFoundPage />} />
 			</Routes>
 		</Suspense>
 	);

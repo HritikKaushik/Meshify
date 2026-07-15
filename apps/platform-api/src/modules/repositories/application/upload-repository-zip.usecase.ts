@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { PipelineJobRepository, RepositoryRepository } from '@meshify/data-access';
+import type { KnowledgeConnectorRepository, PipelineJobRepository, RepositoryRepository } from '@meshify/data-access';
 import type { ObjectStorageClient } from '@meshify/object-storage';
 import type { Queue } from 'bullmq';
 import type { RepoIngestJobPayload } from '@meshify/queues';
@@ -16,6 +16,7 @@ const ZIP_MAGIC = Buffer.from([0x50, 0x4b]); // "PK"
 
 export class UploadRepositoryZipUseCase {
 	constructor(
+		private readonly connectors: KnowledgeConnectorRepository,
 		private readonly repositories: RepositoryRepository,
 		private readonly pipelineJobs: PipelineJobRepository,
 		private readonly storage: ObjectStorageClient,
@@ -31,9 +32,20 @@ export class UploadRepositoryZipUseCase {
 		const archiveObjectKey = `projects/${command.projectId}/repositories/${repositoryId}/source.zip`;
 		await this.storage.putObject(archiveObjectKey, command.buffer, 'application/zip');
 
+		// An uploaded code archive is also a `github`-family connector (source: zip).
+		const connector = await this.connectors.create({
+			id: randomUUID(),
+			projectId: command.projectId,
+			type: 'github',
+			displayName: command.filename || 'Uploaded archive',
+			status: 'connecting',
+			config: { source: 'zip', filename: command.filename },
+		});
+
 		const repository = await this.repositories.create({
 			id: repositoryId,
 			projectId: command.projectId,
+			connectorId: connector.id,
 			source: 'zip',
 			archiveObjectKey,
 		});

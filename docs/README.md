@@ -54,6 +54,7 @@ five applications and eleven shared packages.
 | Doc | What it answers |
 | --- | --- |
 | [Queues & Workers](backend/queues-and-workers.md) | BullMQ queues, worker processors, Redis, retries/DLQ |
+| [Connector Framework](backend/connectors.md) | The generic knowledge-source model (GitHub, Documents, Slack) and how to add a source |
 | [Authentication & Authorization](backend/auth.md) | Clerk → org API key → HMAC auth → project isolation |
 
 ### 4. Development
@@ -94,6 +95,7 @@ dependencies, consumers, and how to extend/test/debug it:
   [`queues`](../packages/queues/README.md) ·
   [`object-storage`](../packages/object-storage/README.md) ·
   [`github`](../packages/github/README.md) ·
+  [`slack`](../packages/slack/README.md) ·
   [`rocketride-gateway`](../packages/rocketride-gateway/README.md) ·
   [`testing`](../packages/testing/README.md)
 

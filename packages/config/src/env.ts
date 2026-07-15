@@ -64,6 +64,17 @@ const envSchema = z.object({
 	GITHUB_APP_ID: z.string().min(1),
 	GITHUB_APP_PRIVATE_KEY: z.string().min(1),
 	GITHUB_APP_WEBHOOK_SECRET: z.string().min(1),
+
+	// Slack connector (conversation ingestion). Optional so non-Slack deployments
+	// still boot; the Slack use cases validate presence at runtime. OAuth `state`
+	// signing + access-token encryption reuse ORG_KEY_ENCRYPTION_KEY.
+	// SLACK_REDIRECT_URI must be a static URL registered on the Slack app that
+	// points at the web app's /oauth/slack/callback route.
+	SLACK_CLIENT_ID: z.string().optional(),
+	SLACK_CLIENT_SECRET: z.string().optional(),
+	SLACK_REDIRECT_URI: z.string().url().optional(),
+	// Reserved for a future Slack Events API receiver (request signature check); unused by history-timestamp sync.
+	SLACK_SIGNING_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -20,13 +20,18 @@ related:
 
 ## Overview
 
-Three queues (`packages/queues/src`):
+Five queues (`packages/queues/src`):
 
 | Queue | Constant | Producer | Worker concurrency |
 | --- | --- | --- | --- |
 | `document-ingest` | `DOCUMENT_INGEST_QUEUE` | `UploadDocumentUseCase` | 5 |
 | `repo-ingest` | `REPO_INGEST_QUEUE` | connect/upload-zip use cases | 2 |
 | `repo-sync` | `REPO_SYNC_QUEUE` | `SyncRepositoryUseCase` | 3 |
+| `slack-ingest` | `SLACK_INGEST_QUEUE` | `SelectSlackChannelsUseCase` | 2 |
+| `slack-sync` | `SLACK_SYNC_QUEUE` | `SyncSlackUseCase` | 2 |
+
+Slack processors reuse the shared `runPipelineJob` lifecycle wrapper (see
+[Connector Framework](connectors.md)).
 
 Concurrency is tuned in `apps/worker/src/main.ts` (repo work is heavier, so lower).
 

@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
-import { sourceTypeFromFilename, type Document, type DocumentRepository, type PipelineJobRepository } from '@meshify/data-access';
+import {
+	sourceTypeFromFilename,
+	type Document,
+	type DocumentRepository,
+	type KnowledgeConnectorRepository,
+	type PipelineJobRepository,
+} from '@meshify/data-access';
 import type { ObjectStorageClient } from '@meshify/object-storage';
 import type { Queue } from 'bullmq';
 import type { DocumentIngestJobPayload } from '@meshify/queues';
@@ -30,11 +36,26 @@ const ALLOWED_MIME_TYPES = new Set([
 
 export class UploadDocumentUseCase {
 	constructor(
+		private readonly connectors: KnowledgeConnectorRepository,
 		private readonly documents: DocumentRepository,
 		private readonly pipelineJobs: PipelineJobRepository,
 		private readonly storage: ObjectStorageClient,
 		private readonly ingestQueue: Queue<DocumentIngestJobPayload>
 	) {}
+
+	/** The project's singleton `documents` connector owns every uploaded file; created lazily on first upload. */
+	private async ensureDocumentsConnector(projectId: string): Promise<string> {
+		const existing = await this.connectors.findByProjectAndType(projectId, 'documents');
+		if (existing) return existing.id;
+		const connector = await this.connectors.create({
+			id: randomUUID(),
+			projectId,
+			type: 'documents',
+			displayName: 'Uploaded documents',
+			status: 'active',
+		});
+		return connector.id;
+	}
 
 	async execute(command: UploadDocumentCommand): Promise<UploadDocumentResult> {
 		if (command.buffer.byteLength === 0) throw new Error('Uploaded file is empty');
@@ -50,6 +71,8 @@ export class UploadDocumentUseCase {
 			return { document: existing, jobId: '', deduped: true };
 		}
 
+		const connectorId = await this.ensureDocumentsConnector(command.projectId);
+
 		const id = randomUUID();
 		const objectStorageKey = `projects/${command.projectId}/documents/${id}/${command.filename}`;
 		await this.storage.putObject(objectStorageKey, command.buffer, command.mimeType);
@@ -57,6 +80,7 @@ export class UploadDocumentUseCase {
 		const document = await this.documents.create({
 			id,
 			projectId: command.projectId,
+			connectorId,
 			sourceType,
 			filename: command.filename,
 			objectStorageKey,
