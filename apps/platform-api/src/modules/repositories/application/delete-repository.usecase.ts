@@ -1,4 +1,4 @@
-import type { FileRepository, RepositoryRepository } from '@meshify/data-access';
+import type { FileRepository, KnowledgeConnectorRepository, RepositoryRepository } from '@meshify/data-access';
 import { RepositoryNotFoundError } from './sync-repository.usecase.js';
 
 /** Narrow port over object storage — deletes an uploaded ZIP archive on teardown. */
@@ -33,6 +33,7 @@ export class DeleteRepositoryUseCase {
 		private readonly files: FileRepository,
 		private readonly storage: RepositoryObjectStore,
 		private readonly vectors: RepositoryVectorStore,
+		private readonly connectors: KnowledgeConnectorRepository,
 		private readonly logError: (context: Record<string, unknown>, message: string) => void = () => {}
 	) {}
 
@@ -58,6 +59,12 @@ export class DeleteRepositoryUseCase {
 				.catch((err) => this.logError({ err, repositoryId: repository.id }, 'failed to delete repository archive'));
 		}
 
-		await this.repositories.delete(repository.id);
+		// Delete the owning connector (cascades the repository + its files); fall
+		// back to a direct row delete for any pre-migration repo without a connector.
+		if (repository.connectorId) {
+			await this.connectors.delete(repository.connectorId);
+		} else {
+			await this.repositories.delete(repository.id);
+		}
 	}
 }
