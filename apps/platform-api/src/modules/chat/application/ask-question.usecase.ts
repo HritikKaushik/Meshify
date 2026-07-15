@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { ChatRepository, Project } from '@meshify/data-access';
+import type { ChatRepository, MessageCitation, Project } from '@meshify/data-access';
 import type { ChatAnswer, ChatHistoryTurn, RagPort } from '@meshify/rocketride-gateway';
 import type { ChatPipelineResolver } from './chat-pipeline.port.js';
 import type { ChatContextRetriever } from './chat-context-retriever.port.js';
+import { noopCitationEnricher, type CitationEnricher } from './citation-enricher.port.js';
 import { extractReferencedCodeFiles } from '../domain/referenced-code-files.js';
 import { buildRagPrompt, type RetrievedChunk } from '../domain/build-rag-prompt.js';
 
@@ -23,7 +24,7 @@ export interface AskQuestionResult {
 	conversationId: string;
 	messageId: string;
 	answer: string;
-	citations: Array<{ sourcePath: string; chunkId?: string; score: number }>;
+	citations: MessageCitation[];
 	confidence: number;
 	retrievedDocuments: Array<{ id: string; sourcePath: string; score: number }>;
 	referencedCodeFiles: string[];
@@ -39,7 +40,8 @@ export class AskQuestionUseCase {
 		private readonly chats: ChatRepository,
 		private readonly rag: RagPort,
 		private readonly chatPipelines: ChatPipelineResolver,
-		private readonly contextRetriever: ChatContextRetriever
+		private readonly contextRetriever: ChatContextRetriever,
+		private readonly citationEnricher: CitationEnricher = noopCitationEnricher
 	) {}
 
 	async execute(command: AskQuestionCommand): Promise<AskQuestionResult> {
@@ -56,7 +58,9 @@ export class AskQuestionUseCase {
 		// pipeline (see chat-pipeline.ts) — citations/confidence come from this
 		// retrieval directly, not parsed back out of RocketRide's response.
 		const context = await this.contextRetriever.retrieve(command.project, command.question);
-		const citations = context.map((chunk) => ({ sourcePath: chunk.sourcePath, chunkId: chunk.chunkId, score: chunk.score }));
+		const rawCitations: MessageCitation[] = context.map((chunk) => ({ sourcePath: chunk.sourcePath, chunkId: chunk.chunkId, score: chunk.score }));
+		// Enrich Slack citations with channel/thread/author/timestamp/permalink from Postgres.
+		const citations = await this.citationEnricher.enrich(command.project.id, rawCitations);
 		const confidence = context[0]?.score ?? 0;
 
 		const answer = await this.askWithRetry(command, history, context);
