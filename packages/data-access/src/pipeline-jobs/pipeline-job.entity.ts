@@ -10,7 +10,14 @@ export interface PipelineJob {
 	attempts: number;
 	lastError: string | null;
 	payload: Record<string, unknown>;
+	/** Current completion percent (0-100) while running, or null when not reported. */
+	progress: number | null;
+	/** Human-readable current stage (e.g. "Scanning repository"), or null. */
+	stage: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 	completedAt: Date | null;
 }
+
+/** The statuses that represent an in-flight job (shown as active in the Job Progress Center). */
+export const ACTIVE_JOB_STATUSES: readonly PipelineJobStatus[] = ['queued', 'running'];
