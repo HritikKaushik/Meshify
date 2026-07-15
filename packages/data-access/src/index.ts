@@ -41,6 +41,7 @@ export type { ChatRepository, CreateChatInput, CreateMessageInput, UpdateChatInp
 export { PostgresChatRepository } from './chats/postgres-chat.repository.js';
 
 export type { PipelineJob, PipelineJobType, PipelineJobStatus } from './pipeline-jobs/pipeline-job.entity.js';
+export { ACTIVE_JOB_STATUSES } from './pipeline-jobs/pipeline-job.entity.js';
 export type { PipelineJobRepository, CreatePipelineJobInput } from './pipeline-jobs/pipeline-job.repository.js';
 export { PostgresPipelineJobRepository } from './pipeline-jobs/postgres-pipeline-job.repository.js';
 

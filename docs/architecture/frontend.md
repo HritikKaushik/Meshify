@@ -74,6 +74,7 @@ are split in `apps/web/vite.config.ts` for long-term caching. Heavy deps
 
 ### State
 - Server state is fetched per-page via `useAsync` (`apps/web/src/ui.tsx`); there is no global store beyond small `usePersistent` UI preferences (`apps/web/src/store.ts`).
+- **Real-time jobs:** `JobsProvider` (`apps/web/src/components/jobs/`) opens one `EventSource` per project and drives the global **Job Progress Center** — background jobs update live with no polling. Pages use `useRefreshOnJobComplete` to refresh their lists when a job finishes. See [Real-Time Job Progress](../backend/realtime-jobs.md).
 
 ## Best Practices
 - Add a new route as a `React.lazy` import in `App.tsx`; keep landing eager.

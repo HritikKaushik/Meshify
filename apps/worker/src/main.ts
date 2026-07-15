@@ -22,6 +22,7 @@ import {
 	REPO_SYNC_QUEUE,
 	SLACK_INGEST_QUEUE,
 	SLACK_SYNC_QUEUE,
+	JobEventPublisher,
 	type DocumentIngestJobPayload,
 	type RepoIngestJobPayload,
 	type RepoSyncJobPayload,
@@ -48,6 +49,8 @@ async function bootstrap(): Promise<void> {
 
 	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
 	const bullRedis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+	// Publishes real-time job progress to Redis Pub/Sub (PUBLISH works on a normal connection, so bullRedis is reused).
+	const jobEvents = new JobEventPublisher(bullRedis);
 
 	const projects = new PostgresProjectRepository(pgPool);
 	const documents = new PostgresDocumentRepository(pgPool);
@@ -92,6 +95,7 @@ async function bootstrap(): Promise<void> {
 		slack: slackClient,
 		rag,
 		vectors: qdrantSearchClient,
+		jobEvents,
 		pipelineRegistry,
 		documentChunkSize: DOCUMENT_CHUNK_SIZE,
 		qdrantHost,
@@ -110,6 +114,7 @@ async function bootstrap(): Promise<void> {
 				storage,
 				pipelineRegistry,
 				rag,
+				jobEvents,
 				documentChunkSize: DOCUMENT_CHUNK_SIZE,
 				qdrantHost,
 				qdrantPort,
@@ -130,6 +135,7 @@ async function bootstrap(): Promise<void> {
 				github,
 				pipelineRegistry,
 				rag,
+				jobEvents,
 				codeChunkSize: CODE_CHUNK_SIZE,
 				qdrantHost,
 				qdrantPort,
@@ -150,6 +156,7 @@ async function bootstrap(): Promise<void> {
 				github,
 				pipelineRegistry,
 				rag,
+				jobEvents,
 				codeChunkSize: CODE_CHUNK_SIZE,
 				qdrantHost,
 				qdrantPort,

@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Indeterminate progress sweep for the Job Progress Center (stages without a percentage). */
+@keyframes mc-indeterminate {
+	0% {
+		transform: translateX(-100%);
+	}
+	100% {
+		transform: translateX(400%);
+	}
+}
+
 /* Meshify light theme — a calm, engineered light surface (canvas #F7F8FB, white
    cards) with Google-Blue actions and an indigo "Mesh" (AI) accent. Matches the
    Meshify Design Doc / Brand v1. `darkMode: 'class'` stays wired for a future

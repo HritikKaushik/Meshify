@@ -33,6 +33,11 @@ Five queues (`packages/queues/src`):
 Slack processors reuse the shared `runPipelineJob` lifecycle wrapper (see
 [Connector Framework](connectors.md)).
 
+Every processor also reports **live progress**: a `JobProgress` helper persists
+the current stage/percent to `pipeline_jobs` and publishes a `JobEvent` over
+Redis Pub/Sub, which platform-api streams to the browser over SSE. See
+[Real-Time Job Progress](realtime-jobs.md).
+
 Concurrency is tuned in `apps/worker/src/main.ts` (repo work is heavier, so lower).
 
 ## Architecture

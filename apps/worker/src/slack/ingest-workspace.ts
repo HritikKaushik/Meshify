@@ -13,8 +13,10 @@ import type {
 	SlackWorkspaceRepository,
 } from '@meshify/data-access';
 import type { SlackClient } from '@meshify/slack';
+import type { JobEventPublisher } from '@meshify/queues';
 import type { RagPort } from '@meshify/rocketride-gateway';
 import { resolveIngestToken, type IngestTokenDeps } from '../processors/resolve-ingest-token.js';
+import type { JobProgress } from '../processors/job-progress.js';
 import { groupConversations } from './conversation-grouper.js';
 
 /** Narrow port over the vector store — purges a conversation's stale points before a re-ingest. */
@@ -33,6 +35,7 @@ export interface SlackIngestionDeps extends IngestTokenDeps {
 	slack: SlackClient;
 	rag: RagPort;
 	vectors: SlackVectorStore;
+	jobEvents: JobEventPublisher;
 	documentChunkSize: number;
 	/** ORG_KEY_ENCRYPTION_KEY — required to decrypt the workspace access token. */
 	encryptionKey?: string;
@@ -53,13 +56,16 @@ export interface SlackIngestionCommand {
  * citations. Unchanged conversations (by content hash) are skipped; changed
  * ones have their stale vectors purged before re-ingesting.
  */
-export async function ingestWorkspace(deps: SlackIngestionDeps, command: SlackIngestionCommand, options: { incremental: boolean }): Promise<void> {
+export async function ingestWorkspace(deps: SlackIngestionDeps, command: SlackIngestionCommand, options: { incremental: boolean }, progress?: JobProgress): Promise<void> {
+	await progress?.stage('Connecting workspace', 5);
 	const [workspace, project] = await Promise.all([deps.slackWorkspaces.findById(command.workspaceId), deps.projects.findById(command.projectId)]);
 	if (!workspace) throw new Error(`Slack workspace "${command.workspaceId}" not found`);
 	if (!project) throw new Error(`Project "${command.projectId}" not found`);
 	if (!deps.encryptionKey) throw new Error('ORG_KEY_ENCRYPTION_KEY is not set — cannot decrypt the Slack access token');
 
+	progress?.setTitle(workspace.teamName ?? 'Slack workspace');
 	const token = decryptSecret(deps.encryptionKey, workspace.encryptedAccessToken);
+	await progress?.stage('Loading channels', 10);
 	const channels = await deps.slackChannels.listSelectedByWorkspace(command.workspaceId);
 	if (channels.length === 0) {
 		await deps.connectors.updateStatus(command.connectorId, 'active', null);
@@ -74,7 +80,9 @@ export async function ingestWorkspace(deps: SlackIngestionDeps, command: SlackIn
 	// take every accessible channel down with it. Only fail the job if EVERY
 	// selected channel failed (so it's retried and surfaced).
 	const skipped: string[] = [];
-	for (const channel of channels) {
+	for (let i = 0; i < channels.length; i++) {
+		const channel = channels[i]!;
+		await progress?.stage(`Processing #${channel.name ?? channel.channelId} (${i + 1}/${channels.length})`, 15 + Math.round((i / channels.length) * 80));
 		try {
 			await ingestChannel(deps, { workspace, project, channel, token, ingestToken, userNames, incremental: options.incremental });
 		} catch (err) {

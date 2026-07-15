@@ -5,6 +5,7 @@ import { api } from '@/api-client';
 import type { DocumentSummary } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { timeAgo } from '@/lib/time';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -74,14 +75,10 @@ export function DocumentsPage() {
 	}, [project.id]);
 
 	const docs = list.state.status === 'success' ? list.state.value : [];
-	const anyInProgress = docs.some((d) => IN_PROGRESS.has(d.status));
 
-	// Poll while anything is still indexing so the badges settle without a manual refresh.
-	useEffect(() => {
-		if (!anyInProgress) return;
-		const id = setInterval(() => void refresh(), 3000);
-		return () => clearInterval(id);
-	}, [anyInProgress, refresh]);
+	// Real-time: refresh the list the moment a document ingest job finishes — no polling.
+	// Live progress itself is shown in the global Job Progress Center.
+	useRefreshOnJobComplete(['ingest_document'], refresh);
 
 	const filtered = useMemo(() => {
 		const q = query.trim().toLowerCase();
@@ -96,7 +93,8 @@ export function DocumentsPage() {
 		if (!file) return;
 		void upload.run(async () => {
 			const res = await api.uploadDocument(project.id, file);
-			toast.success(res.deduped ? 'Already ingested — no new job.' : `Uploading “${file.name}” — indexing started.`);
+			// No background-op toast — indexing progress now lives in the Job Progress Center.
+			if (res.deduped) toast.success('Already ingested — no new job.');
 			await refresh();
 			return res;
 		});
