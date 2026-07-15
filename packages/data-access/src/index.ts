@@ -8,6 +8,25 @@ export { sourceTypeFromFilename } from './documents/document.entity.js';
 export type { DocumentRepository, CreateDocumentInput } from './documents/document.repository.js';
 export { PostgresDocumentRepository } from './documents/postgres-document.repository.js';
 
+export type { KnowledgeConnector, ConnectorType, ConnectorStatus } from './connectors/knowledge-connector.entity.js';
+export { SINGLETON_CONNECTOR_TYPES, defaultConnectorDisplayName } from './connectors/knowledge-connector.entity.js';
+export type { KnowledgeConnectorRepository, CreateConnectorInput } from './connectors/knowledge-connector.repository.js';
+export { PostgresKnowledgeConnectorRepository } from './connectors/postgres-knowledge-connector.repository.js';
+
+export type { SlackWorkspace } from './slack/slack-workspace.entity.js';
+export type { SlackWorkspaceRepository, CreateSlackWorkspaceInput } from './slack/slack-workspace.repository.js';
+export { PostgresSlackWorkspaceRepository } from './slack/postgres-slack-workspace.repository.js';
+export type { SlackChannel } from './slack/slack-channel.entity.js';
+export type { SlackChannelRepository, UpsertSlackChannelInput } from './slack/slack-channel.repository.js';
+export { PostgresSlackChannelRepository } from './slack/postgres-slack-channel.repository.js';
+export type { SlackConversation, SlackConversationStatus, SlackVisibility, SlackParticipant } from './slack/slack-conversation.entity.js';
+export { SLACK_SOURCE_PREFIX, isSlackSourcePath, slackConversationKey, slackSourcePath } from './slack/slack-conversation.entity.js';
+export type { SlackConversationRepository, UpsertSlackConversationInput } from './slack/slack-conversation.repository.js';
+export { PostgresSlackConversationRepository } from './slack/postgres-slack-conversation.repository.js';
+export type { SlackSyncState } from './slack/slack-sync-state.entity.js';
+export type { SlackSyncStateRepository } from './slack/slack-sync-state.repository.js';
+export { PostgresSlackSyncStateRepository } from './slack/postgres-slack-sync-state.repository.js';
+
 export type { Repository, RepositorySource, RepositorySyncStatus } from './repositories/repository.entity.js';
 export { parseGitHubUrl } from './repositories/repository.entity.js';
 export type { RepositoryRepository, CreateRepositoryInput } from './repositories/repository.repository.js';
@@ -17,7 +36,7 @@ export type { RepoFile, FileStatus } from './files/file.entity.js';
 export type { FileRepository, UpsertFileInput } from './files/file.repository.js';
 export { PostgresFileRepository } from './files/postgres-file.repository.js';
 
-export type { Chat, ChatSummary, Message, MessageRole, MessageCitation } from './chats/chat.entity.js';
+export type { Chat, ChatSummary, Message, MessageRole, MessageCitation, SlackCitation } from './chats/chat.entity.js';
 export type { ChatRepository, CreateChatInput, CreateMessageInput, UpdateChatInput } from './chats/chat.repository.js';
 export { PostgresChatRepository } from './chats/postgres-chat.repository.js';
 

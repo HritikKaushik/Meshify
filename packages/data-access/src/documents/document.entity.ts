@@ -4,6 +4,8 @@ export type DocumentStatus = 'pending' | 'parsed' | 'embedded' | 'failed';
 export interface Document {
 	id: string;
 	projectId: string;
+	/** The singleton `documents` KnowledgeConnector this file belongs to. Nullable only for pre-migration rows. */
+	connectorId: string | null;
 	sourceType: DocumentSourceType;
 	filename: string;
 	objectStorageKey: string;

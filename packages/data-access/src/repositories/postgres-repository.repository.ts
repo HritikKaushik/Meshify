@@ -5,6 +5,7 @@ import type { CreateRepositoryInput, RepositoryRepository } from './repository.r
 interface RepositoryRow {
 	id: string;
 	project_id: string;
+	connector_id: string | null;
 	source: string;
 	remote_url: string | null;
 	default_branch: string | null;
@@ -19,6 +20,7 @@ function toDomain(row: RepositoryRow): Repository {
 	return {
 		id: row.id,
 		projectId: row.project_id,
+		connectorId: row.connector_id,
 		source: row.source as Repository['source'],
 		remoteUrl: row.remote_url,
 		defaultBranch: row.default_branch,
@@ -35,9 +37,9 @@ export class PostgresRepositoryRepository implements RepositoryRepository {
 
 	async create(input: CreateRepositoryInput): Promise<Repository> {
 		const { rows } = await this.pool.query<RepositoryRow>(
-			`insert into repositories (id, project_id, source, remote_url, archive_object_key)
-			 values ($1, $2, $3, $4, $5) returning *`,
-			[input.id, input.projectId, input.source, input.remoteUrl ?? null, input.archiveObjectKey ?? null]
+			`insert into repositories (id, project_id, connector_id, source, remote_url, archive_object_key)
+			 values ($1, $2, $3, $4, $5, $6) returning *`,
+			[input.id, input.projectId, input.connectorId, input.source, input.remoteUrl ?? null, input.archiveObjectKey ?? null]
 		);
 		const row = rows[0];
 		if (!row) throw new Error('Insert into repositories returned no row');
@@ -46,6 +48,12 @@ export class PostgresRepositoryRepository implements RepositoryRepository {
 
 	async findById(id: string): Promise<Repository | undefined> {
 		const { rows } = await this.pool.query<RepositoryRow>('select * from repositories where id = $1', [id]);
+		const row = rows[0];
+		return row ? toDomain(row) : undefined;
+	}
+
+	async findByConnectorId(connectorId: string): Promise<Repository | undefined> {
+		const { rows } = await this.pool.query<RepositoryRow>('select * from repositories where connector_id = $1', [connectorId]);
 		const row = rows[0];
 		return row ? toDomain(row) : undefined;
 	}
