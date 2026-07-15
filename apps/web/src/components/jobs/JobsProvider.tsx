@@ -89,3 +89,20 @@ export function useJobs(): JobsContextValue {
 	if (!ctx) return { active: [], history: [], activeCount: 0, lastEvent: null, open: false, setOpen: () => {} };
 	return ctx;
 }
+
+/**
+ * Re-run `refresh` whenever a job of one of `jobTypes` reaches a terminal state.
+ * Lets a page keep its own list authoritative without polling — the SSE stream
+ * is the trigger. `refresh` is read from a ref so callers needn't memoize it.
+ */
+export function useRefreshOnJobComplete(jobTypes: string[], refresh: () => void): void {
+	const { lastEvent } = useJobs();
+	const refreshRef = useRef(refresh);
+	refreshRef.current = refresh;
+	useEffect(() => {
+		if (lastEvent && jobTypes.includes(lastEvent.jobType) && (lastEvent.phase === 'completed' || lastEvent.phase === 'failed')) {
+			refreshRef.current();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [lastEvent]);
+}
