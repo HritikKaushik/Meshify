@@ -2,16 +2,22 @@ import type {
 	Chat,
 	ChatRepository,
 	ChatSummary,
+	ConnectorStatus,
+	ConnectorType,
 	CreateChatInput,
+	CreateConnectorInput,
 	CreateDocumentInput,
 	CreateMessageInput,
 	CreateProjectInput,
 	CreateRepositoryInput,
+	CreateSlackWorkspaceInput,
 	Document,
 	DocumentRepository,
 	DocumentStatus,
 	FileRepository,
 	FileStatus,
+	KnowledgeConnector,
+	KnowledgeConnectorRepository,
 	Message,
 	Project,
 	ProjectRepository,
@@ -19,8 +25,19 @@ import type {
 	Repository,
 	RepositoryRepository,
 	RepositorySyncStatus,
+	SlackChannel,
+	SlackChannelRepository,
+	SlackConversation,
+	SlackConversationRepository,
+	SlackConversationStatus,
+	SlackSyncState,
+	SlackSyncStateRepository,
+	SlackWorkspace,
+	SlackWorkspaceRepository,
 	UpdateChatInput,
 	UpsertFileInput,
+	UpsertSlackChannelInput,
+	UpsertSlackConversationInput,
 } from '@meshify/data-access';
 import { TEST_EPOCH } from '../factories/entities.js';
 
@@ -161,6 +178,7 @@ export class InMemoryRepositoryRepository implements RepositoryRepository {
 		const repo: Repository = {
 			id: input.id,
 			projectId: input.projectId,
+			connectorId: input.connectorId ?? null,
 			source: input.source,
 			remoteUrl: input.remoteUrl ?? null,
 			defaultBranch: null,
@@ -176,6 +194,10 @@ export class InMemoryRepositoryRepository implements RepositoryRepository {
 
 	async findById(id: string): Promise<Repository | undefined> {
 		return this.repos.get(id);
+	}
+
+	async findByConnectorId(connectorId: string): Promise<Repository | undefined> {
+		return [...this.repos.values()].find((r) => r.connectorId === connectorId);
 	}
 
 	async listByProject(projectId: string): Promise<Repository[]> {
@@ -274,5 +296,244 @@ export class InMemoryProjectRepository implements ProjectRepository {
 
 	async delete(id: string): Promise<void> {
 		this.projects.delete(id);
+	}
+}
+
+export class InMemoryKnowledgeConnectorRepository implements KnowledgeConnectorRepository {
+	private readonly connectors = new Map<string, KnowledgeConnector>();
+
+	constructor(seed: KnowledgeConnector[] = []) {
+		for (const c of seed) this.connectors.set(c.id, c);
+	}
+
+	async create(input: CreateConnectorInput): Promise<KnowledgeConnector> {
+		const connector: KnowledgeConnector = {
+			id: input.id,
+			projectId: input.projectId,
+			type: input.type,
+			displayName: input.displayName,
+			status: input.status ?? 'connecting',
+			config: input.config ?? {},
+			lastError: null,
+			createdAt: TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+		};
+		this.connectors.set(connector.id, connector);
+		return connector;
+	}
+
+	async findById(id: string): Promise<KnowledgeConnector | undefined> {
+		return this.connectors.get(id);
+	}
+
+	async listByProject(projectId: string): Promise<KnowledgeConnector[]> {
+		return [...this.connectors.values()].filter((c) => c.projectId === projectId).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+	}
+
+	async findByProjectAndType(projectId: string, type: ConnectorType): Promise<KnowledgeConnector | undefined> {
+		return [...this.connectors.values()].find((c) => c.projectId === projectId && c.type === type);
+	}
+
+	async updateStatus(id: string, status: ConnectorStatus, lastError?: string | null): Promise<void> {
+		const c = this.connectors.get(id);
+		if (c) this.connectors.set(id, { ...c, status, lastError: lastError ?? null });
+	}
+
+	async updateConfig(id: string, config: Record<string, unknown>): Promise<void> {
+		const c = this.connectors.get(id);
+		if (c) this.connectors.set(id, { ...c, config });
+	}
+
+	async delete(id: string): Promise<void> {
+		this.connectors.delete(id);
+	}
+}
+
+export class InMemorySlackWorkspaceRepository implements SlackWorkspaceRepository {
+	private readonly workspaces = new Map<string, SlackWorkspace>();
+
+	constructor(seed: SlackWorkspace[] = []) {
+		for (const w of seed) this.workspaces.set(w.id, w);
+	}
+
+	async create(input: CreateSlackWorkspaceInput): Promise<SlackWorkspace> {
+		const workspace: SlackWorkspace = {
+			id: input.id,
+			connectorId: input.connectorId,
+			projectId: input.projectId,
+			teamId: input.teamId,
+			teamName: input.teamName ?? null,
+			botUserId: input.botUserId ?? null,
+			scope: input.scope ?? null,
+			encryptedAccessToken: input.encryptedAccessToken,
+			createdAt: TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+		};
+		this.workspaces.set(workspace.id, workspace);
+		return workspace;
+	}
+
+	async findById(id: string): Promise<SlackWorkspace | undefined> {
+		return this.workspaces.get(id);
+	}
+
+	async findByConnectorId(connectorId: string): Promise<SlackWorkspace | undefined> {
+		return [...this.workspaces.values()].find((w) => w.connectorId === connectorId);
+	}
+
+	async findByProjectAndTeam(projectId: string, teamId: string): Promise<SlackWorkspace | undefined> {
+		return [...this.workspaces.values()].find((w) => w.projectId === projectId && w.teamId === teamId);
+	}
+
+	async listByProject(projectId: string): Promise<SlackWorkspace[]> {
+		return [...this.workspaces.values()].filter((w) => w.projectId === projectId);
+	}
+
+	async updateAccessToken(id: string, encryptedAccessToken: string, meta?: { scope?: string | null; botUserId?: string | null }): Promise<void> {
+		const w = this.workspaces.get(id);
+		if (w) this.workspaces.set(id, { ...w, encryptedAccessToken, scope: meta?.scope ?? w.scope, botUserId: meta?.botUserId ?? w.botUserId });
+	}
+
+	async delete(id: string): Promise<void> {
+		this.workspaces.delete(id);
+	}
+}
+
+export class InMemorySlackChannelRepository implements SlackChannelRepository {
+	private channels: SlackChannel[] = [];
+
+	constructor(seed: SlackChannel[] = []) {
+		this.channels = [...seed];
+	}
+
+	async upsert(input: UpsertSlackChannelInput): Promise<SlackChannel> {
+		const idx = this.channels.findIndex((c) => c.workspaceId === input.workspaceId && c.channelId === input.channelId);
+		const existing = idx >= 0 ? this.channels[idx] : undefined;
+		const channel: SlackChannel = {
+			id: existing?.id ?? input.id,
+			workspaceId: input.workspaceId,
+			projectId: input.projectId,
+			channelId: input.channelId,
+			name: input.name ?? null,
+			isPrivate: input.isPrivate ?? false,
+			selected: existing?.selected ?? false,
+			createdAt: existing?.createdAt ?? TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+		};
+		if (idx >= 0) this.channels[idx] = channel;
+		else this.channels.push(channel);
+		return channel;
+	}
+
+	async findById(id: string): Promise<SlackChannel | undefined> {
+		return this.channels.find((c) => c.id === id);
+	}
+
+	async listByWorkspace(workspaceId: string): Promise<SlackChannel[]> {
+		return this.channels.filter((c) => c.workspaceId === workspaceId);
+	}
+
+	async listSelectedByWorkspace(workspaceId: string): Promise<SlackChannel[]> {
+		return this.channels.filter((c) => c.workspaceId === workspaceId && c.selected);
+	}
+
+	async setSelected(workspaceId: string, selectedChannelIds: string[]): Promise<void> {
+		const set = new Set(selectedChannelIds);
+		this.channels = this.channels.map((c) => (c.workspaceId === workspaceId ? { ...c, selected: set.has(c.channelId) } : c));
+	}
+}
+
+export class InMemorySlackConversationRepository implements SlackConversationRepository {
+	private conversations: SlackConversation[] = [];
+
+	constructor(seed: SlackConversation[] = []) {
+		this.conversations = [...seed];
+	}
+
+	async upsert(input: UpsertSlackConversationInput): Promise<SlackConversation> {
+		const idx = this.conversations.findIndex((c) => c.projectId === input.projectId && c.conversationKey === input.conversationKey);
+		const conversation: SlackConversation = {
+			id: idx >= 0 ? this.conversations[idx]!.id : input.id,
+			projectId: input.projectId,
+			workspaceId: input.workspaceId,
+			slackChannelId: input.slackChannelId,
+			channelId: input.channelId,
+			channelName: input.channelName ?? null,
+			conversationKey: input.conversationKey,
+			sourcePath: input.sourcePath,
+			threadTs: input.threadTs ?? null,
+			tsStart: input.tsStart ?? null,
+			tsEnd: input.tsEnd ?? null,
+			permalink: input.permalink ?? null,
+			participants: input.participants,
+			messageCount: input.messageCount,
+			reactionCount: input.reactionCount,
+			visibility: input.visibility,
+			contentHash: input.contentHash,
+			status: 'pending',
+			createdAt: idx >= 0 ? this.conversations[idx]!.createdAt : TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+		};
+		if (idx >= 0) this.conversations[idx] = conversation;
+		else this.conversations.push(conversation);
+		return conversation;
+	}
+
+	async findByProjectAndKey(projectId: string, conversationKey: string): Promise<SlackConversation | undefined> {
+		return this.conversations.find((c) => c.projectId === projectId && c.conversationKey === conversationKey);
+	}
+
+	async findByProjectAndSourcePath(projectId: string, sourcePath: string): Promise<SlackConversation | undefined> {
+		return this.conversations.find((c) => c.projectId === projectId && c.sourcePath === sourcePath);
+	}
+
+	async listByWorkspace(workspaceId: string): Promise<SlackConversation[]> {
+		return this.conversations.filter((c) => c.workspaceId === workspaceId);
+	}
+
+	async listByChannel(slackChannelId: string): Promise<SlackConversation[]> {
+		return this.conversations.filter((c) => c.slackChannelId === slackChannelId);
+	}
+
+	async listSourcePathsByWorkspace(workspaceId: string): Promise<string[]> {
+		return this.conversations.filter((c) => c.workspaceId === workspaceId).map((c) => c.sourcePath);
+	}
+
+	async updateStatus(id: string, status: SlackConversationStatus): Promise<void> {
+		this.conversations = this.conversations.map((c) => (c.id === id ? { ...c, status } : c));
+	}
+
+	async statsByWorkspace(workspaceId: string): Promise<{ total: number; embedded: number; lastUpdatedAt: Date | null }> {
+		const rows = this.conversations.filter((c) => c.workspaceId === workspaceId);
+		const embedded = rows.filter((c) => c.status === 'embedded').length;
+		const lastUpdatedAt = rows.reduce<Date | null>((latest, c) => (!latest || c.updatedAt > latest ? c.updatedAt : latest), null);
+		return { total: rows.length, embedded, lastUpdatedAt };
+	}
+}
+
+export class InMemorySlackSyncStateRepository implements SlackSyncStateRepository {
+	private readonly states = new Map<string, SlackSyncState>();
+
+	constructor(seed: SlackSyncState[] = []) {
+		for (const s of seed) this.states.set(s.slackChannelId, s);
+	}
+
+	async findByChannel(slackChannelId: string): Promise<SlackSyncState | undefined> {
+		return this.states.get(slackChannelId);
+	}
+
+	async upsertCursor(input: { id: string; slackChannelId: string; projectId: string; lastSyncedTs: string | null }): Promise<SlackSyncState> {
+		const existing = this.states.get(input.slackChannelId);
+		const state: SlackSyncState = {
+			id: existing?.id ?? input.id,
+			slackChannelId: input.slackChannelId,
+			projectId: input.projectId,
+			lastSyncedTs: input.lastSyncedTs,
+			lastSyncedAt: TEST_EPOCH,
+			createdAt: existing?.createdAt ?? TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+		};
+		this.states.set(input.slackChannelId, state);
+		return state;
 	}
 }

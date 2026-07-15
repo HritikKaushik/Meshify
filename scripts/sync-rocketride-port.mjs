@@ -46,17 +46,17 @@ function engineListenPorts() {
 	return [...ports].sort((a, b) => a - b);
 }
 
-/** Resolves true if an HTTP GET to localhost:port returns any response (server is alive). */
+/** Resolves the HTTP status of a GET to localhost:port, or 0 if it doesn't respond. */
 function probe(port) {
 	return new Promise((resolve) => {
 		const req = get({ host: '127.0.0.1', port, path: '/', timeout: 2000 }, (res) => {
 			res.resume();
-			resolve(res.statusCode !== undefined);
+			resolve(res.statusCode ?? 0);
 		});
-		req.on('error', () => resolve(false));
+		req.on('error', () => resolve(0));
 		req.on('timeout', () => {
 			req.destroy();
-			resolve(false);
+			resolve(0);
 		});
 	});
 }
@@ -68,13 +68,15 @@ async function main() {
 		return;
 	}
 
-	let livePort;
-	for (const port of ports) {
-		if (await probe(port)) {
-			livePort = port;
-			break;
-		}
-	}
+	// The main engine's service port answers GET / with 200; RocketRide's per-task
+	// data/debug ports (spawned when a pipeline runs) answer 401/403. Since ports are
+	// sorted low→high, a running task's low-numbered data_port (e.g. 20001) would
+	// otherwise shadow the real engine port and the client would 403 on
+	// ws://.../task/service. So prefer a 200, and only fall back to any responding
+	// port if none returns 200.
+	const statuses = await Promise.all(ports.map((port) => probe(port)));
+	let livePort = ports.find((_, i) => statuses[i] === 200);
+	if (!livePort) livePort = ports.find((_, i) => statuses[i] > 0);
 	if (!livePort) {
 		console.warn(`[rocketride] engine process found but no port responded to HTTP (checked ${ports.join(', ')}) — leaving ROCKETRIDE_URI as-is.`);
 		return;

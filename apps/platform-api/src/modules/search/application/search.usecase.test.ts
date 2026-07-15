@@ -96,6 +96,23 @@ describe('SearchUseCase', () => {
 		expect(calls.every((c) => c.limit === 6)).toBe(true);
 	});
 
+	it('scope=slack returns only Slack conversations; scope=documents excludes them (both share the _documents collection)', async () => {
+		// Slack conversations live in the docs collection under a slack/ source path.
+		const docs = [hit('slk1', 0.9, 'slack/T1/C1/t100'), hit('doc1', 0.8, 'refund-runbook.md')];
+
+		const slackRun = fakeQdrant({ proj_x_documents: docs });
+		const slackResult = await new SearchUseCase(fakeEmbeddings, slackRun.client).execute({ project: PROJECT, query: 'x', mode: 'semantic', scope: 'slack' });
+		expect(slackResult.results.map((r) => r.id)).toEqual(['slk1']);
+		expect(slackResult.results[0]!.source).toBe('slack');
+		// Only the docs collection is queried, over-fetched harder because slack ⊂ documents.
+		expect(slackRun.calls.map((c) => c.collection)).toEqual(['proj_x_documents']);
+
+		const docsRun = fakeQdrant({ proj_x_documents: docs });
+		const docsResult = await new SearchUseCase(fakeEmbeddings, docsRun.client).execute({ project: PROJECT, query: 'x', mode: 'semantic', scope: 'documents' });
+		expect(docsResult.results.map((r) => r.id)).toEqual(['doc1']);
+		expect(docsResult.results[0]!.source).toBe('documents');
+	});
+
 	it('passes metadata filters through to Qdrant', async () => {
 		const { client, calls } = fakeQdrant({});
 		const usecase = new SearchUseCase(fakeEmbeddings, client);

@@ -45,13 +45,20 @@ root). Keep secrets in the root `.env` (git-ignored); commit only `.env.example`
 | --- | --- | --- |
 | `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | bff | Session verification |
 | `PLATFORM_API_KEY_PEPPER` | api | HMAC pepper for API-key hashing |
-| `ORG_KEY_ENCRYPTION_KEY` | bff | Encrypts org API keys at rest |
+| `ORG_KEY_ENCRYPTION_KEY` | bff, api, worker | Encrypts org API keys at rest; also signs Slack OAuth `state` + encrypts Slack tokens |
 | `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_SEC` | api | Per-key rate limiting |
 
 ### GitHub App (repo ingestion)
 | Variable | Used by | Notes |
 | --- | --- | --- |
 | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET` | worker | Cloning + webhook verification |
+
+### Slack connector (conversation ingestion)
+| Variable | Used by | Notes |
+| --- | --- | --- |
+| `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | api | OAuth app credentials (optional; enables the Slack source) |
+| `SLACK_REDIRECT_URI` | api | Static URL registered on the Slack app → web `/oauth/slack/callback` |
+| `SLACK_SIGNING_SECRET` | api | Reserved for a future Events API receiver (unused by history-timestamp sync) |
 
 ### Process & networking
 | Variable | Used by | Notes |

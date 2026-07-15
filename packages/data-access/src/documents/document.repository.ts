@@ -3,6 +3,7 @@ import type { Document, DocumentStatus } from './document.entity.js';
 export interface CreateDocumentInput {
 	id: string;
 	projectId: string;
+	connectorId: string;
 	sourceType: Document['sourceType'];
 	filename: string;
 	objectStorageKey: string;

@@ -15,9 +15,21 @@ describe('buildQdrantFilter', () => {
 		});
 	});
 
-	it('maps a source path prefix to a text match on source_path', () => {
+	it('maps a source path prefix to a text match on payload.meta.parent (the key RocketRide actually writes)', () => {
 		expect(buildQdrantFilter({ sourcePathPrefix: 'src/' })).toEqual({
-			must: [{ key: 'source_path', match: { text: 'src/' } }],
+			must: [{ key: 'meta.parent', match: { text: 'src/' } }],
+		});
+	});
+
+	it('maps an exact source path (used for deletion) to meta.parent', () => {
+		expect(buildQdrantFilter({ sourcePathExact: 'refund-runbook.md' })).toEqual({
+			must: [{ key: 'meta.parent', match: { value: 'refund-runbook.md' } }],
+		});
+	});
+
+	it('maps a source path exclusion to a must_not on meta.parent', () => {
+		expect(buildQdrantFilter({ sourcePathPrefixNot: 'slack/' })).toEqual({
+			must_not: [{ key: 'meta.parent', match: { text: 'slack/' } }],
 		});
 	});
 });

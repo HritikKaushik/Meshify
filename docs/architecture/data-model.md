@@ -21,7 +21,7 @@ related:
 
 ## Overview
 
-- **Migrations:** `0001_init.sql` … `0008_chats_pinned.sql`, applied by `packages/data-access/src/migrate.ts` (`pnpm migrate`).
+- **Migrations:** `0001_init.sql` … `0009_slack_connectors.sql`, applied by `packages/data-access/src/migrate.ts` (`pnpm migrate`).
 - **Access:** one repository per aggregate (`postgres-*.repository.ts`), all queries parameterized.
 - **Isolation:** almost every table has `project_id` (or `org_id`) with `ON DELETE CASCADE`, so deleting a project/org tears down its data.
 
@@ -50,6 +50,14 @@ erDiagram
   pipeline_runs ||--o{ pipeline_run_traces : has
   api_keys ||--o{ clerk_org_links : backs
   api_keys ||--o{ audit_logs : "acts as"
+
+  projects ||--o{ knowledge_connectors : connects
+  knowledge_connectors ||--o| repositories : "github"
+  knowledge_connectors ||--o{ documents : "documents"
+  knowledge_connectors ||--o| slack_workspaces : "slack"
+  slack_workspaces ||--o{ slack_channels : has
+  slack_workspaces ||--o{ slack_conversations : groups
+  slack_channels ||--o| slack_sync_state : "cursor"
 ```
 
 ### Postgres ↔ Qdrant
@@ -79,6 +87,9 @@ Collection names are stored on the project (`qdrant_collection_docs`,
 | `repositories` / `files` | Connected repos and their scanned files | `postgres-repository.repository.ts`, `postgres-file.repository.ts` |
 | `chats` / `messages` | Conversations and turns | `postgres-chat.repository.ts` |
 | `pipeline_jobs` | Durable record of every queued/failed BullMQ job (DLQ mirror) | `postgres-pipeline-job.repository.ts` |
+| `knowledge_connectors` | Generic connector aggregate (github/documents/slack) every source is modeled as | `postgres-knowledge-connector.repository.ts` |
+| `slack_workspaces` / `slack_channels` | Connected Slack workspace (encrypted token) + its channels | `postgres-slack-workspace.repository.ts`, `postgres-slack-channel.repository.ts` |
+| `slack_conversations` / `slack_sync_state` | Grouped conversation documents (+ citation metadata) and per-channel sync cursor | `postgres-slack-conversation.repository.ts`, `postgres-slack-sync-state.repository.ts` |
 | `api_keys` / `clerk_org_links` | Auth: hashed org keys + Clerk-org mapping | `postgres-api-key.repository.ts`, `postgres-clerk-org-link.repository.ts` |
 | `audit_logs` | Every mutating request | `postgres-audit-log.repository.ts` |
 | `pipeline_runs` / `pipeline_run_traces` | RocketRide observability | `postgres-pipeline-run.repository.ts` |

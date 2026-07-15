@@ -8,7 +8,7 @@ import type { SearchUseCase } from '../application/search.usecase.js';
 const searchSchema = z.object({
 	query: z.string().min(1).max(2000),
 	mode: z.enum(['semantic', 'keyword', 'hybrid']).default('semantic'),
-	scope: z.enum(['all', 'documents', 'code']).default('all'),
+	scope: z.enum(['all', 'documents', 'code', 'slack']).default('all'),
 	limit: z.number().int().positive().max(50).optional(),
 	filters: z
 		.object({

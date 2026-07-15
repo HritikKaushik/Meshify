@@ -4,6 +4,8 @@ export type RepositorySyncStatus = 'pending' | 'cloning' | 'synced' | 'failed';
 export interface Repository {
 	id: string;
 	projectId: string;
+	/** The `github` KnowledgeConnector this repository belongs to. Nullable only for pre-migration rows. */
+	connectorId: string | null;
 	source: RepositorySource;
 	remoteUrl: string | null;
 	defaultBranch: string | null;

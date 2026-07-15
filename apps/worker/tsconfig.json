@@ -28,6 +28,12 @@
 		},
 		{
 			"path": "../../packages/github"
+		},
+		{
+			"path": "../../packages/slack"
+		},
+		{
+			"path": "../../packages/vector-store"
 		}
 	],
 	"exclude": [

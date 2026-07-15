@@ -18,6 +18,8 @@
 		"@meshify/queues": "workspace:*",
 		"@meshify/rocketride-gateway": "workspace:*",
 		"@meshify/shared": "workspace:*",
+		"@meshify/slack": "workspace:*",
+		"@meshify/vector-store": "workspace:*",
 		"adm-zip": "^0.5.16",
 		"bullmq": "^5.28.2",
 		"ioredis": "^5.4.1",
@@ -25,6 +27,7 @@
 		"tar": "^7.4.3"
 	},
 	"devDependencies": {
+		"@meshify/testing": "workspace:*",
 		"@types/adm-zip": "^0.5.7",
 		"@types/node": "^22.9.0",
 		"@types/pg": "^8.11.10",

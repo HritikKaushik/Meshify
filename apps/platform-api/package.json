@@ -18,6 +18,7 @@
 		"@meshify/queues": "workspace:*",
 		"@meshify/rocketride-gateway": "workspace:*",
 		"@meshify/shared": "workspace:*",
+		"@meshify/slack": "workspace:*",
 		"@meshify/vector-store": "workspace:*",
 		"bullmq": "^5.28.2",
 		"express": "^4.21.1",

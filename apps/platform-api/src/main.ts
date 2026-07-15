@@ -34,10 +34,28 @@ import { SyncRepositoryUseCase } from './modules/repositories/application/sync-r
 import { ListRepositoriesUseCase } from './modules/repositories/application/list-repositories.usecase.js';
 import { DeleteRepositoryUseCase } from './modules/repositories/application/delete-repository.usecase.js';
 import { createRepositoriesController } from './modules/repositories/interface/repositories.controller.js';
+import {
+	PostgresKnowledgeConnectorRepository,
+	PostgresSlackWorkspaceRepository,
+	PostgresSlackChannelRepository,
+	PostgresSlackConversationRepository,
+} from '@meshify/data-access';
+import { createSlackIngestQueue, createSlackSyncQueue } from '@meshify/queues';
+import { HttpSlackClient } from '@meshify/slack';
+import { ListConnectorsUseCase } from './modules/connectors/application/list-connectors.usecase.js';
+import { DeleteConnectorUseCase } from './modules/connectors/application/delete-connector.usecase.js';
+import { createConnectorsController } from './modules/connectors/interface/connectors.controller.js';
+import { StartSlackOAuthUseCase } from './modules/slack/application/start-slack-oauth.usecase.js';
+import { CompleteSlackOAuthUseCase } from './modules/slack/application/complete-slack-oauth.usecase.js';
+import { ListSlackChannelsUseCase } from './modules/slack/application/list-slack-channels.usecase.js';
+import { SelectSlackChannelsUseCase } from './modules/slack/application/select-slack-channels.usecase.js';
+import { SyncSlackUseCase } from './modules/slack/application/sync-slack.usecase.js';
+import { createSlackController } from './modules/slack/interface/slack.controller.js';
 import { PostgresChatRepository } from '@meshify/data-access';
 import { PipelineRegistry, RocketRideClientPool, RocketRideRagService } from '@meshify/rocketride-gateway';
 import { RocketRideChatPipelineResolver } from './modules/chat/infrastructure/rocketride-chat-pipeline.resolver.js';
 import { VectorSearchContextRetriever } from './modules/chat/infrastructure/vector-search-context-retriever.js';
+import { SlackCitationEnricher } from './modules/chat/infrastructure/slack-citation-enricher.js';
 import { AskQuestionUseCase } from './modules/chat/application/ask-question.usecase.js';
 import { ListConversationsUseCase } from './modules/chat/application/list-conversations.usecase.js';
 import { UpdateConversationUseCase } from './modules/chat/application/update-conversation.usecase.js';
@@ -81,6 +99,7 @@ async function bootstrap(): Promise<void> {
 	const getProject = new GetProjectUseCase(projectRepository);
 	const listProjects = new ListProjectsUseCase(projectRepository);
 
+	const knowledgeConnectorRepository = new PostgresKnowledgeConnectorRepository(pgPool);
 	const documentRepository = new PostgresDocumentRepository(pgPool);
 	const pipelineJobRepository = new PostgresPipelineJobRepository(pgPool);
 	const objectStorage = new ObjectStorageClient({
@@ -92,7 +111,7 @@ async function bootstrap(): Promise<void> {
 		forcePathStyle: env.S3_FORCE_PATH_STYLE,
 	});
 	const ingestQueue = createDocumentIngestQueue(bullRedis);
-	const uploadDocument = new UploadDocumentUseCase(documentRepository, pipelineJobRepository, objectStorage, ingestQueue);
+	const uploadDocument = new UploadDocumentUseCase(knowledgeConnectorRepository, documentRepository, pipelineJobRepository, objectStorage, ingestQueue);
 	const listDocuments = new ListDocumentsUseCase(documentRepository);
 		const getJobStatus = new GetJobStatusUseCase(pipelineJobRepository);
 
@@ -100,8 +119,8 @@ async function bootstrap(): Promise<void> {
 		const fileRepository = new PostgresFileRepository(pgPool);
 	const repoIngestQueue = createRepoIngestQueue(bullRedis);
 	const repoSyncQueue = createRepoSyncQueue(bullRedis);
-	const connectGitHub = new ConnectGitHubRepositoryUseCase(repositoryRepository, pipelineJobRepository, repoIngestQueue);
-	const uploadZip = new UploadRepositoryZipUseCase(repositoryRepository, pipelineJobRepository, objectStorage, repoIngestQueue);
+	const connectGitHub = new ConnectGitHubRepositoryUseCase(knowledgeConnectorRepository, repositoryRepository, pipelineJobRepository, repoIngestQueue);
+	const uploadZip = new UploadRepositoryZipUseCase(knowledgeConnectorRepository, repositoryRepository, pipelineJobRepository, objectStorage, repoIngestQueue);
 	const syncRepository = new SyncRepositoryUseCase(repositoryRepository, pipelineJobRepository, repoSyncQueue);
 	const listRepositories = new ListRepositoriesUseCase(repositoryRepository);
 
@@ -111,7 +130,48 @@ async function bootstrap(): Promise<void> {
 
 		// Document teardown reuses the same object-storage + Qdrant clients as ingest/search.
 		const deleteDocument = new DeleteDocumentUseCase(documentRepository, objectStorage, qdrantSearchClient, (ctx, msg) => logger.error(ctx, msg));
-		const deleteRepository = new DeleteRepositoryUseCase(repositoryRepository, fileRepository, objectStorage, qdrantSearchClient, (ctx, msg) => logger.error(ctx, msg));
+		const deleteRepository = new DeleteRepositoryUseCase(repositoryRepository, fileRepository, objectStorage, qdrantSearchClient, knowledgeConnectorRepository, (ctx, msg) => logger.error(ctx, msg));
+
+	// --- Generic Connector Framework (unified list + Slack, the first new source) ---
+	const slackWorkspaceRepository = new PostgresSlackWorkspaceRepository(pgPool);
+	const slackChannelRepository = new PostgresSlackChannelRepository(pgPool);
+	const slackConversationRepository = new PostgresSlackConversationRepository(pgPool);
+	const slackIngestQueue = createSlackIngestQueue(bullRedis);
+	const slackSyncQueue = createSlackSyncQueue(bullRedis);
+	const slackClient = new HttpSlackClient();
+	// OAuth `state` signing + access-token encryption reuse ORG_KEY_ENCRYPTION_KEY; the Slack use cases validate presence at runtime.
+	const slackRuntimeConfig = {
+		clientId: env.SLACK_CLIENT_ID,
+		clientSecret: env.SLACK_CLIENT_SECRET,
+		redirectUri: env.SLACK_REDIRECT_URI,
+		secret: env.ORG_KEY_ENCRYPTION_KEY,
+	};
+
+	const listConnectors = new ListConnectorsUseCase(
+		knowledgeConnectorRepository,
+		repositoryRepository,
+		documentRepository,
+		slackWorkspaceRepository,
+		slackChannelRepository,
+		slackConversationRepository
+	);
+	const deleteConnector = new DeleteConnectorUseCase(
+		knowledgeConnectorRepository,
+		repositoryRepository,
+		fileRepository,
+		documentRepository,
+		slackWorkspaceRepository,
+		slackConversationRepository,
+		qdrantSearchClient,
+		objectStorage,
+		(ctx, msg) => logger.error(ctx, msg)
+	);
+
+	const startSlackOAuth = new StartSlackOAuthUseCase(slackRuntimeConfig);
+	const completeSlackOAuth = new CompleteSlackOAuthUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, slackClient, slackRuntimeConfig);
+	const listSlackChannels = new ListSlackChannelsUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository);
+	const selectSlackChannels = new SelectSlackChannelsUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, pipelineJobRepository, slackIngestQueue);
+	const syncSlack = new SyncSlackUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, pipelineJobRepository, slackSyncQueue);
 
 	// Chat is the one synchronous RocketRide path in the API: questions run
 	// against each project's persistent chat pipeline (useExisting semantics
@@ -125,7 +185,8 @@ async function bootstrap(): Promise<void> {
 	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry);
 	const chatContextRetriever = new VectorSearchContextRetriever(embeddingProviderFactory, qdrantSearchClient);
 	const chatRepository = new PostgresChatRepository(pgPool);
-	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver, chatContextRetriever);
+	const slackCitationEnricher = new SlackCitationEnricher(slackConversationRepository);
+	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver, chatContextRetriever, slackCitationEnricher);
 
 		const listConversations = new ListConversationsUseCase(chatRepository);
 		const updateConversation = new UpdateConversationUseCase(chatRepository);
@@ -167,6 +228,8 @@ async function bootstrap(): Promise<void> {
 	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument }));
 	app.use(createJobsController({ getJobStatus }));
 	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories, deleteRepository }));
+	app.use(createConnectorsController({ getProject, listConnectors, deleteConnector }));
+	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
 	app.use(createChatController({ getProject, askQuestion, listConversations, updateConversation, deleteConversation, getConversationMessages }));
 	app.use(createSearchController({ getProject, search }));
 	app.use(createEvaluationController({ getProject, runEvaluation }));
@@ -178,7 +241,7 @@ async function bootstrap(): Promise<void> {
 	const shutdown = async (signal: string) => {
 		logger.info({ signal }, 'shutting down');
 		server.close();
-		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close()]);
+		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close()]);
 		await rocketridePool.shutdown();
 		await redis.quit();
 		await bullRedis.quit();
