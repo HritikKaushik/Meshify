@@ -127,6 +127,9 @@ importers:
       '@meshify/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@meshify/slack':
+        specifier: workspace:*
+        version: link:../../packages/slack
       '@meshify/vector-store':
         specifier: workspace:*
         version: link:../../packages/vector-store
@@ -270,6 +273,12 @@ importers:
       '@meshify/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@meshify/slack':
+        specifier: workspace:*
+        version: link:../../packages/slack
+      '@meshify/vector-store':
+        specifier: workspace:*
+        version: link:../../packages/vector-store
       adm-zip:
         specifier: ^0.5.16
         version: 0.5.18
@@ -286,6 +295,9 @@ importers:
         specifier: ^7.4.3
         version: 7.5.19
     devDependencies:
+      '@meshify/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
       '@types/adm-zip':
         specifier: ^0.5.7
         version: 0.5.8
@@ -422,6 +434,18 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  packages/slack:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/testing:
     dependencies:
       '@meshify/data-access':
@@ -449,9 +473,18 @@ importers:
 
   tests:
     devDependencies:
+      '@meshify/data-access':
+        specifier: workspace:*
+        version: link:../packages/data-access
       '@meshify/testing':
         specifier: workspace:*
         version: link:../packages/testing
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
+      pg:
+        specifier: ^8.13.1
+        version: 8.22.0
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
