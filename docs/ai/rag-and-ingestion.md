@@ -115,6 +115,27 @@ sequenceDiagram
 Key files: `apps/worker/src/processors/repo-ingest.processor.ts`,
 `apps/worker/src/repo/{archive-extractor,repo-scanner}.ts`.
 
+### Slack ingestion (Connector Framework)
+
+Slack is the first source built on the generic [Connector Framework](../backend/connectors.md).
+Channel history is grouped into **conversation documents** (a thread, or a
+time-windowed run of messages — never per-message embeddings) and streamed
+through the project's existing **docs-ingest** pipeline into the `_documents`
+collection under a `slack/<team>/<channel>/<key>` source path. All Slack metadata
+(channel, thread, author, timestamps, permalink, reactions, participants,
+visibility) is preserved in `slack_conversations`. Incremental sync uses a
+per-channel `last_synced_ts` cursor and skips unchanged conversations by content
+hash. Key files: `apps/worker/src/slack/{conversation-grouper,ingest-workspace}.ts`,
+`apps/worker/src/processors/slack-{ingest,sync}.processor.ts`.
+
+### Citations across sources
+
+Chat citations derive `sourcePath` from Qdrant, then are enriched per source: a
+`slack/…` path is resolved back to its `slack_conversations` row
+(`SlackCitationEnricher`) so the citation carries the Slack channel, thread,
+author, timestamp, and permalink. Search results carry a `source` facet
+(github/documents/slack) and support a `slack` scope.
+
 ## Implementation
 
 ### The gateway boundary
