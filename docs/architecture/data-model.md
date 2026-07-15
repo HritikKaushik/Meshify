@@ -21,7 +21,7 @@ related:
 
 ## Overview
 
-- **Migrations:** `0001_init.sql` … `0009_slack_connectors.sql`, applied by `packages/data-access/src/migrate.ts` (`pnpm migrate`).
+- **Migrations:** `0001_init.sql` … `0010_job_progress.sql`, applied by `packages/data-access/src/migrate.ts` (`pnpm migrate`).
 - **Access:** one repository per aggregate (`postgres-*.repository.ts`), all queries parameterized.
 - **Isolation:** almost every table has `project_id` (or `org_id`) with `ON DELETE CASCADE`, so deleting a project/org tears down its data.
 
@@ -86,7 +86,7 @@ Collection names are stored on the project (`qdrant_collection_docs`,
 | `documents` | Uploaded docs + ingestion status | `postgres-document.repository.ts` |
 | `repositories` / `files` | Connected repos and their scanned files | `postgres-repository.repository.ts`, `postgres-file.repository.ts` |
 | `chats` / `messages` | Conversations and turns | `postgres-chat.repository.ts` |
-| `pipeline_jobs` | Durable record of every queued/failed BullMQ job (DLQ mirror) | `postgres-pipeline-job.repository.ts` |
+| `pipeline_jobs` | Durable record of every queued/failed BullMQ job (DLQ mirror) + live `progress`/`stage` for real-time tracking | `postgres-pipeline-job.repository.ts` |
 | `knowledge_connectors` | Generic connector aggregate (github/documents/slack) every source is modeled as | `postgres-knowledge-connector.repository.ts` |
 | `slack_workspaces` / `slack_channels` | Connected Slack workspace (encrypted token) + its channels | `postgres-slack-workspace.repository.ts`, `postgres-slack-channel.repository.ts` |
 | `slack_conversations` / `slack_sync_state` | Grouped conversation documents (+ citation metadata) and per-channel sync cursor | `postgres-slack-conversation.repository.ts`, `postgres-slack-sync-state.repository.ts` |
