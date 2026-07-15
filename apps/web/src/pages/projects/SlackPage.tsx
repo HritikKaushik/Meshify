@@ -5,6 +5,7 @@ import { api } from '@/api-client';
 import type { Connector, SlackChannelSummary } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { GlassCard, BeamCard, MeshAvatar, Kicker } from '@/components/mc/primitives';
 import { DataRow } from '@/components/common/DataRow';
 import { ConnectorStatusBadge } from '@/components/common/ConnectorStatusBadge';
@@ -38,6 +39,9 @@ export function SlackPage() {
 		void refresh();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [project.id]);
+
+	// Real-time: refresh workspace stats when a Slack ingest/sync job finishes (progress shown in the Job Progress Center).
+	useRefreshOnJobComplete(['slack_ingest', 'slack_sync'], refresh);
 
 	const connectors = list.state.status === 'success' ? list.state.value : [];
 	const selected = connectors.find((c) => c.id === selectedConnectorId) ?? connectors[0];
@@ -79,8 +83,8 @@ export function SlackPage() {
 		if (!selected) return;
 		setSaving(true);
 		try {
-			const { selectedCount } = await api.selectSlackChannels(project.id, selected.id, [...checked]);
-			toast.success(`Ingesting ${selectedCount} channel${selectedCount === 1 ? '' : 's'} — this runs in the background`);
+			await api.selectSlackChannels(project.id, selected.id, [...checked]);
+			// Ingestion progress now appears in the Job Progress Center — no background toast.
 			await refresh();
 		} catch (err) {
 			toast.error((err as Error).message);
@@ -92,7 +96,7 @@ export function SlackPage() {
 	const doSync = async (connectorId: string) => {
 		try {
 			await api.syncSlack(project.id, connectorId);
-			toast.success('Sync queued — only changed conversations are reprocessed');
+			// Sync progress now appears in the Job Progress Center — no background toast.
 			await refresh();
 		} catch (err) {
 			toast.error((err as Error).message);

@@ -18,7 +18,10 @@ import type {
 	FileStatus,
 	KnowledgeConnector,
 	KnowledgeConnectorRepository,
+	CreatePipelineJobInput,
 	Message,
+	PipelineJob,
+	PipelineJobRepository,
 	Project,
 	ProjectRepository,
 	RepoFile,
@@ -508,6 +511,82 @@ export class InMemorySlackConversationRepository implements SlackConversationRep
 		const embedded = rows.filter((c) => c.status === 'embedded').length;
 		const lastUpdatedAt = rows.reduce<Date | null>((latest, c) => (!latest || c.updatedAt > latest ? c.updatedAt : latest), null);
 		return { total: rows.length, embedded, lastUpdatedAt };
+	}
+}
+
+export class InMemoryPipelineJobRepository implements PipelineJobRepository {
+	private readonly jobs = new Map<string, PipelineJob>();
+
+	constructor(seed: PipelineJob[] = []) {
+		for (const j of seed) this.jobs.set(j.id, j);
+	}
+
+	async create(input: CreatePipelineJobInput): Promise<PipelineJob> {
+		const job: PipelineJob = {
+			id: input.id,
+			projectId: input.projectId,
+			jobType: input.jobType,
+			status: 'queued',
+			rocketrideToken: null,
+			attempts: 0,
+			lastError: null,
+			payload: input.payload,
+			progress: null,
+			stage: null,
+			createdAt: TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+			completedAt: null,
+		};
+		this.jobs.set(job.id, job);
+		return job;
+	}
+
+	async findById(id: string): Promise<PipelineJob | undefined> {
+		return this.jobs.get(id);
+	}
+
+	// Org isolation is enforced by the isolation guard in tests; the in-memory fake resolves by id.
+	async findByIdForOrg(id: string, _orgId: string): Promise<PipelineJob | undefined> {
+		return this.jobs.get(id);
+	}
+
+	async listActiveByProject(projectId: string): Promise<PipelineJob[]> {
+		return [...this.jobs.values()]
+			.filter((j) => j.projectId === projectId && (j.status === 'queued' || j.status === 'running'))
+			.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+	}
+
+	async listRecentByProject(projectId: string, limit: number): Promise<PipelineJob[]> {
+		return [...this.jobs.values()].filter((j) => j.projectId === projectId).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, limit);
+	}
+
+	async markRunning(id: string): Promise<void> {
+		this.patch(id, { status: 'running', progress: 0 });
+	}
+
+	async updateProgress(id: string, progress: { stage: string; percent: number }): Promise<void> {
+		this.patch(id, { stage: progress.stage, progress: Math.max(0, Math.min(100, Math.round(progress.percent))) });
+	}
+
+	async markCompleted(id: string): Promise<void> {
+		this.patch(id, { status: 'completed', progress: 100, completedAt: TEST_EPOCH });
+	}
+
+	async markFailed(id: string, error: string, nextStatus: 'failed' | 'dead_letter'): Promise<void> {
+		this.patch(id, { status: nextStatus, lastError: error });
+	}
+
+	async incrementAttempts(id: string): Promise<number> {
+		const job = this.jobs.get(id);
+		if (!job) return 0;
+		const attempts = job.attempts + 1;
+		this.patch(id, { attempts });
+		return attempts;
+	}
+
+	private patch(id: string, partial: Partial<PipelineJob>): void {
+		const job = this.jobs.get(id);
+		if (job) this.jobs.set(id, { ...job, ...partial });
 	}
 }
 

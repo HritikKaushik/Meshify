@@ -6,3 +6,5 @@ export { SLACK_INGEST_QUEUE, SLACK_SYNC_QUEUE, createSlackIngestQueue, createSla
 export type { SlackIngestJobPayload, SlackSyncJobPayload } from './slack-queues.js';
 export { DEFAULT_JOB_OPTS } from './job-options.js';
 export type { ConnectionOptions } from 'bullmq';
+export { JOB_EVENTS_CHANNEL, JobEventPublisher, JobEventSubscriber } from './job-events.js';
+export type { JobEvent, JobPhase, RedisPublisherConnection, RedisSubscriberConnection } from './job-events.js';

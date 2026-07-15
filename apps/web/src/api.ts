@@ -43,16 +43,26 @@ export interface UploadResult {
 	deduped: boolean;
 }
 
-export interface Job {
-	id: string;
+export type JobPhase = 'running' | 'progress' | 'completed' | 'failed' | 'retry';
+
+/** A real-time job progress event (from the SSE stream) or a snapshot item (from GET /jobs). */
+export interface JobEvent {
+	jobId: string;
 	projectId: string;
 	jobType: string;
-	status: string;
-	attempts: number;
-	lastError: string | null;
-	createdAt: string;
-	updatedAt: string;
-	completedAt: string | null;
+	title: string;
+	phase: JobPhase;
+	stage?: string;
+	percent?: number;
+	message?: string;
+	attempt?: number;
+	error?: string;
+	at: string;
+}
+
+export interface JobsSnapshot {
+	active: JobEvent[];
+	recent: JobEvent[];
 }
 
 export interface SearchHit {
@@ -290,8 +300,15 @@ export class MeshifyApi {
 		if (!res.ok && res.status !== 204) await this.parse(res);
 	}
 
-	async getJob(jobId: string): Promise<Job> {
-		return this.parse(await fetch(this.url(`/api/v1/jobs/${jobId}`), { credentials: 'include' }));
+	// --- Background jobs (real-time) ---
+	/** Snapshot of a project's active jobs + recent history (first paint / SSE fallback). */
+	async listJobs(projectId: string): Promise<JobsSnapshot> {
+		return this.parse(await fetch(this.url(`/api/v1/projects/${projectId}/jobs`), { credentials: 'include' }));
+	}
+
+	/** The SSE endpoint for live job progress — opened by the Job Progress Center via EventSource. */
+	jobsStreamUrl(projectId: string): string {
+		return this.url(`/api/v1/projects/${projectId}/jobs/stream`);
 	}
 
 	// --- Search ---

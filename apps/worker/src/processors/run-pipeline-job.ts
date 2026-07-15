@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import type { PipelineJobRepository } from '@meshify/data-access';
+import type { JobProgress } from './job-progress.js';
 
 /**
  * The shared BullMQ job lifecycle: mark the pipeline_jobs row running, run the
@@ -18,12 +19,15 @@ export async function runPipelineJob<T>(
 	pipelineJobId: string,
 	pipelineJobs: PipelineJobRepository,
 	work: () => Promise<void>,
-	onError?: (message: string) => Promise<void>
+	onError?: (message: string) => Promise<void>,
+	progress?: JobProgress
 ): Promise<void> {
 	await pipelineJobs.markRunning(pipelineJobId);
+	await progress?.running();
 	try {
 		await work();
 		await pipelineJobs.markCompleted(pipelineJobId);
+		await progress?.completed();
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		if (onError) await onError(message).catch(() => undefined);
@@ -32,6 +36,7 @@ export async function runPipelineJob<T>(
 		// job.attemptsMade is BullMQ's 1-indexed counter for this run — trust it over a separate count.
 		const isFinalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
 		await pipelineJobs.markFailed(pipelineJobId, message, isFinalAttempt ? 'dead_letter' : 'failed');
+		await progress?.failed(isFinalAttempt, message, job.attemptsMade + 1);
 
 		throw err;
 	}

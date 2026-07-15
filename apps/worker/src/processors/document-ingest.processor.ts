@@ -2,8 +2,9 @@ import type { Job } from 'bullmq';
 import { apiKeyEnvVarFor, embeddingProviderFromProfile } from '@meshify/data-access';
 import type { DocumentRepository, PipelineJobRepository, ProjectRepository } from '@meshify/data-access';
 import type { ObjectStorageClient } from '@meshify/object-storage';
-import type { DocumentIngestJobPayload } from '@meshify/queues';
+import type { DocumentIngestJobPayload, JobEventPublisher } from '@meshify/queues';
 import type { PipelineRegistry, RagPort } from '@meshify/rocketride-gateway';
+import { JobProgress } from './job-progress.js';
 
 export interface DocumentIngestProcessorDeps {
 	documents: DocumentRepository;
@@ -12,6 +13,7 @@ export interface DocumentIngestProcessorDeps {
 	storage: ObjectStorageClient;
 	pipelineRegistry: PipelineRegistry;
 	rag: RagPort;
+	jobEvents: JobEventPublisher;
 	/** RecursiveCharacterTextSplitter size for prose documents — see chunk-sizing guidance in ROCKETRIDE_PIPELINE_RULES.md. */
 	documentChunkSize: number;
 	qdrantHost: string;
@@ -28,6 +30,7 @@ export interface DocumentIngestProcessorDeps {
  */
 export async function processDocumentIngestJob(job: Job<DocumentIngestJobPayload>, deps: DocumentIngestProcessorDeps): Promise<void> {
 	const { pipelineJobId, documentId, projectId } = job.data;
+	const progress = new JobProgress(deps.pipelineJobs, deps.jobEvents, { jobId: pipelineJobId, projectId, jobType: 'ingest_document', title: 'Document' });
 
 	await deps.pipelineJobs.markRunning(pipelineJobId);
 
@@ -36,10 +39,15 @@ export async function processDocumentIngestJob(job: Job<DocumentIngestJobPayload
 		if (!document) throw new Error(`Document "${documentId}" not found`);
 		if (!project) throw new Error(`Project "${projectId}" not found`);
 
+		progress.setTitle(document.filename);
+		await progress.running('Uploading');
+
+		await progress.stage('Extracting content', 15);
 		const buffer = await deps.storage.getObject(document.objectStorageKey);
 
 		const embeddingProvider = embeddingProviderFromProfile(project.embeddingProfile);
 
+		await progress.stage('Chunking', 35);
 		const token = await deps.pipelineRegistry.ensureIngestPipeline({
 			pipelineGuid: project.rocketrideDocsIngestPipelineId,
 			target: 'documents',
@@ -52,14 +60,17 @@ export async function processDocumentIngestJob(job: Job<DocumentIngestJobPayload
 			chunkSize: deps.documentChunkSize,
 		});
 
+		await progress.stage('Embedding', 60);
 		const result = await deps.rag.ingestFiles(token, [{ path: document.filename, buffer, mimeType: undefined }]);
 
 		if (!result.completed) {
 			throw new Error(`Ingestion reported errors: ${result.errors.join('; ')}`);
 		}
 
+		await progress.stage('Writing vectors', 95);
 		await deps.documents.updateStatus(documentId, 'embedded');
 		await deps.pipelineJobs.markCompleted(pipelineJobId);
+		await progress.completed();
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		await deps.documents.updateStatus(documentId, 'failed').catch(() => undefined);
@@ -69,6 +80,7 @@ export async function processDocumentIngestJob(job: Job<DocumentIngestJobPayload
 		// separately-maintained count to avoid drift between the two retry bookkeepers.
 		const isFinalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
 		await deps.pipelineJobs.markFailed(pipelineJobId, message, isFinalAttempt ? 'dead_letter' : 'failed');
+		await progress.failed(isFinalAttempt, message, job.attemptsMade + 1);
 
 		throw err; // rethrow so BullMQ applies its own retry/backoff bookkeeping
 	}

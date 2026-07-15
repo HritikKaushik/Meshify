@@ -11,6 +11,8 @@ interface PipelineJobRow {
 	attempts: number;
 	last_error: string | null;
 	payload: Record<string, unknown>;
+	progress: number | null;
+	stage: string | null;
 	created_at: Date;
 	updated_at: Date;
 	completed_at: Date | null;
@@ -26,6 +28,8 @@ function toDomain(row: PipelineJobRow): PipelineJob {
 		attempts: row.attempts,
 		lastError: row.last_error,
 		payload: row.payload,
+		progress: row.progress,
+		stage: row.stage,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		completedAt: row.completed_at,
@@ -62,12 +66,31 @@ export class PostgresPipelineJobRepository implements PipelineJobRepository {
 		return row ? toDomain(row) : undefined;
 	}
 
+	async listActiveByProject(projectId: string): Promise<PipelineJob[]> {
+		const { rows } = await this.pool.query<PipelineJobRow>(
+			"select * from pipeline_jobs where project_id = $1 and status in ('queued', 'running') order by created_at",
+			[projectId]
+		);
+		return rows.map(toDomain);
+	}
+
+	async listRecentByProject(projectId: string, limit: number): Promise<PipelineJob[]> {
+		const { rows } = await this.pool.query<PipelineJobRow>('select * from pipeline_jobs where project_id = $1 order by updated_at desc limit $2', [projectId, limit]);
+		return rows.map(toDomain);
+	}
+
 	async markRunning(id: string): Promise<void> {
-		await this.pool.query("update pipeline_jobs set status = 'running', updated_at = now() where id = $1", [id]);
+		await this.pool.query("update pipeline_jobs set status = 'running', progress = coalesce(progress, 0), updated_at = now() where id = $1", [id]);
+	}
+
+	async updateProgress(id: string, progress: { stage: string; percent: number }): Promise<void> {
+		// Clamp to [0,100]; a running job that reports 100% is still "running" until markCompleted.
+		const percent = Math.max(0, Math.min(100, Math.round(progress.percent)));
+		await this.pool.query('update pipeline_jobs set stage = $2, progress = $3, updated_at = now() where id = $1', [id, progress.stage, percent]);
 	}
 
 	async markCompleted(id: string): Promise<void> {
-		await this.pool.query("update pipeline_jobs set status = 'completed', updated_at = now(), completed_at = now() where id = $1", [id]);
+		await this.pool.query("update pipeline_jobs set status = 'completed', progress = 100, updated_at = now(), completed_at = now() where id = $1", [id]);
 	}
 
 	async markFailed(id: string, error: string, nextStatus: 'failed' | 'dead_letter'): Promise<void> {

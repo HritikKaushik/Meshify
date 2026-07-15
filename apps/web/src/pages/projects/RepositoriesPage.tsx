@@ -5,6 +5,7 @@ import { api } from '@/api-client';
 import type { Repository } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
+import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { GlassCard, BeamCard, MeshAvatar, Kicker } from '@/components/mc/primitives';
 import { DataRow } from '@/components/common/DataRow';
 import { RepoStatusBadge } from '@/components/common/RepoStatusBadge';
@@ -37,6 +38,9 @@ export function RepositoriesPage() {
 		void refresh();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [project.id]);
+
+	// Real-time: refresh sync status when a repo ingest/sync job finishes (live progress in the Job Progress Center).
+	useRefreshOnJobComplete(['clone_repo', 'sync_repo'], refresh);
 
 	const repos = list.state.status === 'success' ? list.state.value : [];
 	const selected = repos.find((r) => r.id === selectedId) ?? repos[0];
