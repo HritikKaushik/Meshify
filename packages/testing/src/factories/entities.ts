@@ -1,4 +1,16 @@
-import type { Chat, ChatSummary, Document, Message, Project, RepoFile, Repository } from '@meshify/data-access';
+import type {
+	Chat,
+	ChatSummary,
+	Document,
+	KnowledgeConnector,
+	Message,
+	Project,
+	RepoFile,
+	Repository,
+	SlackChannel,
+	SlackConversation,
+	SlackWorkspace,
+} from '@meshify/data-access';
 
 /**
  * Deterministic domain factories. Every builder returns a valid entity with
@@ -66,6 +78,7 @@ export function buildDocument(overrides: Partial<Document> = {}): Document {
 	return {
 		id: 'doc-1',
 		projectId: 'proj-1',
+		connectorId: 'conn-docs-1',
 		sourceType: 'md',
 		filename: 'refund-runbook.md',
 		objectStorageKey: 'projects/proj-1/documents/doc-1/refund-runbook.md',
@@ -81,6 +94,7 @@ export function buildRepository(overrides: Partial<Repository> = {}): Repository
 	return {
 		id: 'repo-1',
 		projectId: 'proj-1',
+		connectorId: 'conn-gh-1',
 		source: 'github',
 		remoteUrl: 'https://github.com/acme/payments-core',
 		defaultBranch: 'main',
@@ -104,6 +118,78 @@ export function buildRepoFile(overrides: Partial<RepoFile> = {}): RepoFile {
 		contentHash: 'fh-1',
 		objectStorageKey: null,
 		status: 'pending',
+		createdAt: TEST_EPOCH,
+		updatedAt: TEST_EPOCH,
+		...overrides,
+	};
+}
+
+export function buildKnowledgeConnector(overrides: Partial<KnowledgeConnector> = {}): KnowledgeConnector {
+	return {
+		id: 'conn-slack-1',
+		projectId: 'proj-1',
+		type: 'slack',
+		displayName: 'Acme Workspace',
+		status: 'active',
+		config: {},
+		lastError: null,
+		createdAt: TEST_EPOCH,
+		updatedAt: TEST_EPOCH,
+		...overrides,
+	};
+}
+
+export function buildSlackWorkspace(overrides: Partial<SlackWorkspace> = {}): SlackWorkspace {
+	return {
+		id: 'ws-1',
+		connectorId: 'conn-slack-1',
+		projectId: 'proj-1',
+		teamId: 'T123',
+		teamName: 'Acme Workspace',
+		botUserId: 'U-bot',
+		scope: 'channels:history,channels:read',
+		encryptedAccessToken: 'iv.tag.cipher',
+		createdAt: TEST_EPOCH,
+		updatedAt: TEST_EPOCH,
+		...overrides,
+	};
+}
+
+export function buildSlackChannel(overrides: Partial<SlackChannel> = {}): SlackChannel {
+	return {
+		id: 'chan-1',
+		workspaceId: 'ws-1',
+		projectId: 'proj-1',
+		channelId: 'C123',
+		name: 'engineering',
+		isPrivate: false,
+		selected: true,
+		createdAt: TEST_EPOCH,
+		updatedAt: TEST_EPOCH,
+		...overrides,
+	};
+}
+
+export function buildSlackConversation(overrides: Partial<SlackConversation> = {}): SlackConversation {
+	return {
+		id: 'sconv-1',
+		projectId: 'proj-1',
+		workspaceId: 'ws-1',
+		slackChannelId: 'chan-1',
+		channelId: 'C123',
+		channelName: 'engineering',
+		conversationKey: 'C123/t1700000000.000100',
+		sourcePath: 'slack/T123/C123/t1700000000.000100',
+		threadTs: '1700000000.000100',
+		tsStart: '1700000000.000100',
+		tsEnd: '1700000300.000200',
+		permalink: 'https://acme.slack.com/archives/C123/p1700000000000100',
+		participants: [{ id: 'U1', name: 'Ada' }],
+		messageCount: 3,
+		reactionCount: 1,
+		visibility: 'public',
+		contentHash: 'shash-1',
+		status: 'embedded',
 		createdAt: TEST_EPOCH,
 		updatedAt: TEST_EPOCH,
 		...overrides,

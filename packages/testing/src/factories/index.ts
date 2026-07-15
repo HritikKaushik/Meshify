@@ -7,4 +7,8 @@ export {
 	buildDocument,
 	buildRepository,
 	buildRepoFile,
+	buildKnowledgeConnector,
+	buildSlackWorkspace,
+	buildSlackChannel,
+	buildSlackConversation,
 } from './entities.js';
