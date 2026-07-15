@@ -25,7 +25,10 @@ import { ListDocumentsUseCase } from './modules/documents/application/list-docum
 import { DeleteDocumentUseCase } from './modules/documents/application/delete-document.usecase.js';
 import { createDocumentsController } from './modules/documents/interface/documents.controller.js';
 import { GetJobStatusUseCase } from './modules/jobs/application/get-job-status.usecase.js';
+import { ListProjectJobsUseCase } from './modules/jobs/application/list-project-jobs.usecase.js';
+import { JobEventHub } from './modules/jobs/infrastructure/job-event-hub.js';
 import { createJobsController } from './modules/jobs/interface/jobs.controller.js';
+import { JobEventSubscriber } from '@meshify/queues';
 import { PostgresRepositoryRepository, PostgresFileRepository } from '@meshify/data-access';
 import { createRepoIngestQueue, createRepoSyncQueue } from '@meshify/queues';
 import { ConnectGitHubRepositoryUseCase } from './modules/repositories/application/connect-github-repository.usecase.js';
@@ -114,6 +117,12 @@ async function bootstrap(): Promise<void> {
 	const uploadDocument = new UploadDocumentUseCase(knowledgeConnectorRepository, documentRepository, pipelineJobRepository, objectStorage, ingestQueue);
 	const listDocuments = new ListDocumentsUseCase(documentRepository);
 		const getJobStatus = new GetJobStatusUseCase(pipelineJobRepository);
+	const listProjectJobs = new ListProjectJobsUseCase(pipelineJobRepository);
+	// Real-time job progress: a DEDICATED Redis connection (subscribe mode can't run other commands)
+	// feeds the in-process hub that fans events out to per-project SSE connections.
+	const jobEventsRedis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+	const jobEventHub = new JobEventHub(new JobEventSubscriber(jobEventsRedis));
+	await jobEventHub.start();
 
 	const repositoryRepository = new PostgresRepositoryRepository(pgPool);
 		const fileRepository = new PostgresFileRepository(pgPool);
@@ -226,7 +235,7 @@ async function bootstrap(): Promise<void> {
 
 	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
 	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument }));
-	app.use(createJobsController({ getJobStatus }));
+	app.use(createJobsController({ getProject, getJobStatus, listProjectJobs, jobEventStream: jobEventHub }));
 	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories, deleteRepository }));
 	app.use(createConnectorsController({ getProject, listConnectors, deleteConnector }));
 	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
@@ -245,6 +254,7 @@ async function bootstrap(): Promise<void> {
 		await rocketridePool.shutdown();
 		await redis.quit();
 		await bullRedis.quit();
+		await jobEventsRedis.quit();
 		await pgPool.end();
 		process.exit(0);
 	};
