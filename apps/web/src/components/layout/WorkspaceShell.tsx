@@ -9,6 +9,8 @@ import { useAsync } from '@/ui';
 import { Atmosphere } from '@/components/mc/Atmosphere';
 import { StatusDot } from '@/components/mc/primitives';
 import { WorkspaceSidebar } from '@/components/layout/WorkspaceSidebar';
+import { JobsProvider } from '@/components/jobs/JobsProvider';
+import { JobProgressCenter } from '@/components/jobs/JobProgressCenter';
 import type { WorkspaceContext } from '@/lib/workspace-context';
 import { cn } from '@/lib/utils';
 
@@ -87,6 +89,7 @@ export function WorkspaceShell() {
 	const workspaceContext = { project: p, projectId: p.id, conversations: convList, refreshConversations } satisfies WorkspaceContext;
 
 	return (
+		<JobsProvider projectId={p.id}>
 		<div className="flex h-screen overflow-hidden bg-mc-bg text-mc-text">
 			<WorkspaceSidebar
 				project={p}
@@ -204,5 +207,7 @@ export function WorkspaceShell() {
 				</div>
 			</div>
 		</div>
+		<JobProgressCenter />
+		</JobsProvider>
 	);
 }
