@@ -58,6 +58,8 @@ export interface Job {
 export interface SearchHit {
 	id: string;
 	collection: 'documents' | 'code';
+	/** The knowledge source — distinguishes GitHub, Documents, and Slack. */
+	source?: 'github' | 'documents' | 'slack';
 	sourcePath: string;
 	score: number;
 	content: string | null;
@@ -72,10 +74,22 @@ export interface SearchResponse {
 	results: SearchHit[];
 }
 
+export interface SlackCitationMeta {
+	channel: string | null;
+	channelId: string;
+	threadTs: string | null;
+	author: string | null;
+	participants: string[];
+	timestamp: string | null;
+	permalink: string | null;
+}
+
 export interface ChatCitation {
 	sourcePath: string;
 	chunkId?: string;
 	score: number;
+	source?: 'github' | 'documents' | 'slack';
+	slack?: SlackCitationMeta;
 }
 
 export interface ChatResponse {
@@ -162,6 +176,30 @@ export interface DocumentSummary {
 	status: 'pending' | 'parsed' | 'embedded' | 'failed';
 	createdAt: string;
 	updatedAt: string;
+}
+
+export type ConnectorType = 'github' | 'documents' | 'slack';
+export type ConnectorStatus = 'connecting' | 'active' | 'error' | 'disconnected';
+
+/** A unified knowledge source (GitHub, Documents, or Slack) as returned by the connectors list. */
+export interface Connector {
+	id: string;
+	type: ConnectorType;
+	displayName: string;
+	status: ConnectorStatus;
+	itemCount: number;
+	embeddedCount: number;
+	lastActivityAt: string | null;
+	detail: Record<string, unknown>;
+	createdAt: string;
+}
+
+export interface SlackChannelSummary {
+	id: string;
+	channelId: string;
+	name: string | null;
+	isPrivate: boolean;
+	selected: boolean;
 }
 
 export interface ProjectStats {
@@ -355,6 +393,61 @@ export class MeshifyApi {
 	async deleteRepository(projectId: string, repositoryId: string): Promise<void> {
 		const res = await fetch(this.url(`/api/v1/projects/${projectId}/repositories/${repositoryId}`), { method: 'DELETE', credentials: 'include' });
 		if (!res.ok && res.status !== 204) await this.parse(res);
+	}
+
+	// --- Connectors (unified knowledge sources) ---
+	/** Every connected source for a project (GitHub, Documents, Slack) with per-source stats. */
+	async listConnectors(projectId: string): Promise<Connector[]> {
+		const { connectors } = await this.parse<{ connectors: Connector[] }>(await fetch(this.url(`/api/v1/projects/${projectId}/connectors`), { credentials: 'include' }));
+		return connectors;
+	}
+
+	/** Disconnect any source — purges its vectors and cascades its detail rows. */
+	async deleteConnector(projectId: string, connectorId: string): Promise<void> {
+		const res = await fetch(this.url(`/api/v1/projects/${projectId}/connectors/${connectorId}`), { method: 'DELETE', credentials: 'include' });
+		if (!res.ok && res.status !== 204) await this.parse(res);
+	}
+
+	// --- Slack connector ---
+	/** Begin Slack OAuth — returns the authorize URL the browser navigates to. */
+	async startSlackOAuth(projectId: string): Promise<{ authorizeUrl: string }> {
+		return this.parse(await fetch(this.url(`/api/v1/projects/${projectId}/connectors/slack/oauth/start`), { method: 'POST', credentials: 'include' }));
+	}
+
+	/** Finish Slack OAuth from the same-origin callback route. */
+	async completeSlackOAuth(projectId: string, code: string, state: string): Promise<{ connectorId: string; workspaceId: string; teamName: string | null; channelCount: number }> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/projects/${projectId}/connectors/slack/oauth/complete`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ code, state }),
+			})
+		);
+	}
+
+	async listSlackChannels(projectId: string, connectorId: string): Promise<SlackChannelSummary[]> {
+		const { channels } = await this.parse<{ channels: SlackChannelSummary[] }>(
+			await fetch(this.url(`/api/v1/projects/${projectId}/connectors/slack/${connectorId}/channels`), { credentials: 'include' })
+		);
+		return channels;
+	}
+
+	/** Persist the channels to ingest and queue ingestion. */
+	async selectSlackChannels(projectId: string, connectorId: string, channelIds: string[]): Promise<{ jobId: string; selectedCount: number }> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/projects/${projectId}/connectors/slack/${connectorId}/channels`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ channelIds }),
+			})
+		);
+	}
+
+	/** Queue an incremental Slack sync (only changed conversations are reprocessed). */
+	async syncSlack(projectId: string, connectorId: string): Promise<{ jobId: string }> {
+		return this.parse(await fetch(this.url(`/api/v1/projects/${projectId}/connectors/slack/${connectorId}/sync`), { method: 'POST', credentials: 'include' }));
 	}
 }
 

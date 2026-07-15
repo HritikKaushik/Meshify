@@ -1,7 +1,8 @@
-import { FileCode2, FileText } from 'lucide-react';
+import { FileCode2, FileText, MessagesSquare } from 'lucide-react';
 import { MeshAvatar } from '@/components/mc/primitives';
 import { TypewriterEffect } from '@/components/ui/typewriter-effect';
 import { type Turn, isCodeSource, confidenceLabel } from './chat-util';
+import { cn } from '@/lib/utils';
 
 /**
  * A Mesh (assistant) message: confidence meter (live answers only), the answer
@@ -47,6 +48,26 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 						<span className="font-mono text-[11px] tracking-[0.06em] text-mc-muted-2">{citations.length} SOURCES</span>
 						<div className="flex flex-wrap gap-1.5">
 							{citations.map((c, j) => {
+								// Slack citations: show #channel and (when available) a permalink to the thread, plus author/time on hover.
+								if (c.source === 'slack' && c.slack) {
+									const label = c.slack.channel ? `#${c.slack.channel}` : 'Slack thread';
+									const title = [c.slack.author && `by ${c.slack.author}`, c.slack.timestamp && new Date(c.slack.timestamp).toLocaleString(), `score ${c.score.toFixed(3)}`]
+										.filter(Boolean)
+										.join(' · ');
+									const chipClass =
+										'flex items-center gap-1.5 rounded-full border border-black/[.08] bg-white px-2.5 py-1 font-mono text-[11.5px] text-mc-text-2 shadow-[0_1px_3px_rgba(16,24,40,.04)]';
+									return c.slack.permalink ? (
+										<a key={j} href={c.slack.permalink} target="_blank" rel="noreferrer" title={title} className={cn(chipClass, 'transition-colors hover:text-mc-accent')}>
+											<MessagesSquare className="h-3 w-3 text-mc-accent-lo" />
+											{label}
+										</a>
+									) : (
+										<span key={j} title={title} className={chipClass}>
+											<MessagesSquare className="h-3 w-3 text-mc-accent-lo" />
+											{label}
+										</span>
+									);
+								}
 								const code = isCodeSource(c.sourcePath);
 								return (
 									<span
