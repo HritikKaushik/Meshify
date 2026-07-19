@@ -389,6 +389,28 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  packages/providers:
+    dependencies:
+      '@meshify/data-access':
+        specifier: workspace:*
+        version: link:../data-access
+      '@meshify/github':
+        specifier: workspace:*
+        version: link:../github
+      '@meshify/slack':
+        specifier: workspace:*
+        version: link:../slack
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/queues:
     dependencies:
       bullmq:

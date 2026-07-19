@@ -1,0 +1,267 @@
+import type { Provider } from '../base/provider.js';
+import type { ProviderDescriptor } from '../base/descriptor.js';
+import type { CallbackInput, ConnectInput, ConnectResult, OAuthCapable } from '../base/oauth.js';
+import type { IntegrationContext } from '../base/context.js';
+import type { RawWebhookRequest, WebhookCapable, WebhookDescriptor } from '../base/webhook.js';
+import type { HealthCapable, ProviderHealthReport } from '../base/health.js';
+import type { ResourceBrowsingCapable, ResourcePage } from '../base/resources.js';
+import type { ByoaCapable, ByoaConfigField } from '../base/byoa.js';
+import type { PlatformEvent } from '../events/platform-events.js';
+import { ProviderAuthError, ProviderConfigError, ProviderNotConfiguredError } from '../base/errors.js';
+import { NO_CAPABILITIES } from '../base/descriptor.js';
+import type { GitHubProviderDeps } from './deps.js';
+import { describeGitHubWebhook, verifyGitHubSignature } from './webhooks.js';
+
+const INSTALLATION_TOKEN_KIND = 'installation_token';
+/** Treat an installation token expiring within 5 min as absent — mint a fresh one. */
+const TOKEN_MIN_TTL_MS = 5 * 60 * 1000;
+
+export const GITHUB_DESCRIPTOR: ProviderDescriptor = {
+	id: 'github',
+	displayName: 'GitHub',
+	category: 'code',
+	availability: 'available',
+	summary: 'Index repositories from a GitHub organization or user account.',
+	iconKey: 'github',
+	brandColor: '#24292F',
+	docsUrl: 'https://docs.github.com/en/apps',
+	capabilities: {
+		...NO_CAPABILITIES,
+		oauth: true,
+		webhooks: true,
+		resourcePicker: true,
+		healthCheck: true,
+		byoa: true,
+		// fullSync/incrementalSync/realtimeEvents/manualSync/scheduledSync flip on
+		// as the sync-engine and dispatcher milestones land — capability flags
+		// never advertise what the platform cannot do yet.
+	},
+};
+
+/**
+ * GitHub as a Provider: org-level connect is a GitHub App INSTALLATION (not a
+ * user OAuth grant) — the callback carries a guessable installation_id, so the
+ * platform only ever binds installations through a state-carrying flow and
+ * this provider re-verifies the installation against the App JWT.
+ */
+export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, HealthCapable, ResourceBrowsingCapable, ByoaCapable {
+	readonly descriptor = GITHUB_DESCRIPTOR;
+	private readonly now: () => Date;
+
+	constructor(private readonly deps: GitHubProviderDeps) {
+		this.now = deps.now ?? (() => new Date());
+	}
+
+	isConfigured(): boolean {
+		return this.deps.app !== null && this.deps.transport !== null;
+	}
+
+	private requireApp(): { slug: string; webhookSecret: string } {
+		if (!this.deps.app) throw new ProviderNotConfiguredError('github', 'No managed GitHub App is configured (GITHUB_APP_* env)');
+		return this.deps.app;
+	}
+
+	private requireTransport() {
+		if (!this.deps.transport) throw new ProviderNotConfiguredError('github', 'No managed GitHub App is configured (GITHUB_APP_* env)');
+		return this.deps.transport;
+	}
+
+	// --- OAuthCapable --------------------------------------------------------
+
+	buildConnectUrl(input: ConnectInput): string {
+		const { slug } = this.requireApp();
+		// installations/new also short-circuits for already-installed accounts,
+		// bouncing straight back to the setup URL with state intact — which is
+		// how direct-from-GitHub installs get claimed safely.
+		return `https://github.com/apps/${slug}/installations/new?state=${encodeURIComponent(input.stateToken)}`;
+	}
+
+	async completeConnect(input: CallbackInput): Promise<ConnectResult> {
+		const transport = this.requireTransport();
+		const installationId = input.params.installation_id;
+		if (!installationId || !/^\d+$/.test(installationId)) {
+			throw new ProviderAuthError('GitHub callback is missing a valid installation_id');
+		}
+
+		// Never trust the bare id: confirm this installation exists on OUR app
+		// and read its account identity via the App JWT.
+		let installation;
+		try {
+			installation = await transport.getInstallation(installationId);
+		} catch (err) {
+			throw new ProviderAuthError(`GitHub installation could not be verified: ${(err as Error).message}`);
+		}
+		if (installation.suspendedAt) {
+			throw new ProviderAuthError('This GitHub installation is suspended — unsuspend it on GitHub and reconnect');
+		}
+
+		return {
+			externalAccountId: String(installation.id),
+			externalAccountName: installation.account.login,
+			metadata: {
+				installationId: installation.id,
+				accountId: installation.account.id,
+				accountLogin: installation.account.login,
+				accountType: installation.account.type,
+				avatarUrl: installation.account.avatarUrl,
+				repositorySelection: installation.repositorySelection,
+				setupAction: input.params.setup_action ?? null,
+			},
+			// Installation tokens are short-lived and minted on demand into the
+			// vault — a completed connect stores no long-lived secret at all.
+			credentials: [],
+		};
+	}
+
+	async revokeAccess(_ctx: IntegrationContext): Promise<void> {
+		// Uninstalling the app is a GitHub-side action; there is no token to
+		// revoke (installation tokens expire within the hour on their own).
+	}
+
+	// --- Token orchestration (shared by resources/health/sync) ---------------
+
+	/** DB-cached installation token: every worker/replica shares one token per installation via the vault. */
+	async getInstallationToken(ctx: IntegrationContext): Promise<string> {
+		const cached = await ctx.vault.get(INSTALLATION_TOKEN_KIND, { minTtlMs: TOKEN_MIN_TTL_MS });
+		if (cached) return cached.value;
+		const transport = this.requireTransport();
+		const minted = await transport.createInstallationToken(this.installationIdOf(ctx));
+		await ctx.vault.put(INSTALLATION_TOKEN_KIND, minted.token, minted.expiresAt);
+		return minted.token;
+	}
+
+	private installationIdOf(ctx: IntegrationContext): string {
+		// external_account_id IS the installation id for github integrations.
+		return ctx.integration.externalAccountId;
+	}
+
+	// --- ResourceBrowsingCapable ---------------------------------------------
+
+	async listResources(ctx: IntegrationContext, _cursor?: string): Promise<ResourcePage> {
+		const token = await this.getInstallationToken(ctx);
+		const repos = await this.requireTransport().listInstallationRepos(token);
+		return {
+			resources: repos.map((r) => ({
+				id: String(r.id),
+				name: r.fullName,
+				kind: 'repository',
+				private: r.private,
+				extra: { owner: r.owner, shortName: r.name, defaultBranch: r.defaultBranch, description: r.description },
+			})),
+		};
+	}
+
+	// --- HealthCapable -------------------------------------------------------
+
+	async checkHealth(ctx: IntegrationContext): Promise<ProviderHealthReport> {
+		if (!this.isConfigured()) return { health: 'unknown', detail: { reason: 'provider not configured' } };
+		try {
+			const installation = await this.requireTransport().getInstallation(this.installationIdOf(ctx));
+			if (installation.suspendedAt) {
+				return { health: 'needs_reauthorization', detail: { suspendedAt: installation.suspendedAt } };
+			}
+			return { health: 'healthy', detail: { repositorySelection: installation.repositorySelection } };
+		} catch (err) {
+			const message = (err as Error).message;
+			if (message.includes('404')) return { health: 'disconnected', detail: { reason: 'installation no longer exists' } };
+			return { health: 'unknown', detail: { error: message } };
+		}
+	}
+
+	// --- WebhookCapable ------------------------------------------------------
+
+	verifyWebhook(req: RawWebhookRequest, secret: string, _now?: Date): boolean {
+		return verifyGitHubSignature(req, secret);
+	}
+
+	describeWebhook(req: RawWebhookRequest): WebhookDescriptor {
+		return describeGitHubWebhook(req);
+	}
+
+	async normalizeWebhook(event: { eventType: string; payload: Record<string, unknown> }, ctx: IntegrationContext): Promise<PlatformEvent[]> {
+		const base = { provider: 'github', integrationId: ctx.integration.id, orgId: ctx.integration.orgId } as const;
+		const payload = event.payload;
+
+		if (event.eventType === 'push') {
+			const repository = payload.repository as { id: number; full_name: string; name: string; default_branch: string; owner?: { login?: string } } | undefined;
+			const ref = payload.ref as string | undefined;
+			if (!repository || !ref) return [];
+			// Only default-branch pushes reindex — feature branches are noise for a knowledge graph.
+			if (ref !== `refs/heads/${repository.default_branch}`) return [];
+			return [
+				{
+					...base,
+					kind: 'resource.updated',
+					resourceType: 'repository',
+					externalResourceId: String(repository.id),
+					hint: {
+						afterSha: payload.after,
+						fullName: repository.full_name,
+						owner: repository.owner?.login,
+						name: repository.name,
+						defaultBranch: repository.default_branch,
+					},
+				},
+			];
+		}
+
+		if (event.eventType === 'installation.deleted') return [{ ...base, kind: 'installation.revoked' }];
+		if (event.eventType === 'installation.suspend') return [{ ...base, kind: 'installation.suspended' }];
+		if (event.eventType === 'installation.unsuspend') {
+			return [{ ...base, kind: 'integration.health_changed', health: 'healthy' }];
+		}
+
+		if (event.eventType.startsWith('installation_repositories.')) {
+			const added = ((payload.repositories_added as Array<{ id: number }> | undefined) ?? []).map((r) => String(r.id));
+			const removed = ((payload.repositories_removed as Array<{ id: number }> | undefined) ?? []).map((r) => String(r.id));
+			return [{ ...base, kind: 'grant.changed', added, removed }];
+		}
+
+		if (event.eventType === 'repository.renamed') {
+			const repository = payload.repository as { id: number; full_name: string } | undefined;
+			if (!repository) return [];
+			const changes = payload.changes as { repository?: { name?: { from?: string } } } | undefined;
+			return [
+				{
+					...base,
+					kind: 'resource.renamed',
+					resourceType: 'repository',
+					externalResourceId: String(repository.id),
+					name: repository.full_name,
+					previousName: changes?.repository?.name?.from,
+				},
+			];
+		}
+
+		if (event.eventType === 'repository.deleted') {
+			const repository = payload.repository as { id: number } | undefined;
+			if (!repository) return [];
+			return [{ ...base, kind: 'resource.removed', resourceType: 'repository', externalResourceId: String(repository.id) }];
+		}
+
+		return [];
+	}
+
+	// --- ByoaCapable ---------------------------------------------------------
+
+	describeByoaConfig(): ByoaConfigField[] {
+		return [
+			{ key: 'app_id', label: 'GitHub App ID', secret: false, placeholder: '123456' },
+			{ key: 'app_slug', label: 'GitHub App slug', secret: false, placeholder: 'acme-meshify' },
+			{ key: 'app_private_key', label: 'Private key (PEM)', secret: true, multiline: true },
+			{ key: 'app_webhook_secret', label: 'Webhook secret', secret: true },
+		];
+	}
+
+	validateByoaConfig(values: Record<string, string>): void {
+		for (const field of this.describeByoaConfig()) {
+			if (!values[field.key]?.trim()) throw new ProviderConfigError(`${field.label} is required`);
+		}
+		if (!/^\d+$/.test(values.app_id!.trim())) throw new ProviderConfigError('GitHub App ID must be numeric');
+		if (!values.app_private_key!.includes('PRIVATE KEY')) throw new ProviderConfigError('Private key must be a PEM-encoded RSA key');
+	}
+}
+
+export function createGitHubProvider(deps: GitHubProviderDeps): GitHubProvider {
+	return new GitHubProvider(deps);
+}
