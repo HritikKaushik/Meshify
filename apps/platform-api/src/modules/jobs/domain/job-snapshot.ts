@@ -42,6 +42,7 @@ const TYPE_LABELS: Record<PipelineJobType, string> = {
 	sync_repo: 'Repository sync',
 	slack_ingest: 'Slack ingestion',
 	slack_sync: 'Slack sync',
+	source_sync: 'Source sync',
 	reindex: 'Reindex',
 	cleanup: 'Cleanup',
 };

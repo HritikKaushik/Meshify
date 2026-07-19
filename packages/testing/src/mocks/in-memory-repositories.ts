@@ -188,6 +188,10 @@ export class InMemoryRepositoryRepository implements RepositoryRepository {
 			lastSyncedCommit: null,
 			syncStatus: 'pending',
 			archiveObjectKey: input.archiveObjectKey ?? null,
+			githubRepoId: input.githubRepoId ?? null,
+			owner: input.owner ?? null,
+			name: input.name ?? null,
+			lastSyncedAt: null,
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
 		};
@@ -221,7 +225,28 @@ export class InMemoryRepositoryRepository implements RepositoryRepository {
 
 	async markSynced(id: string, commitSha: string | null, defaultBranch: string | null): Promise<void> {
 		const r = this.repos.get(id);
-		if (r) this.repos.set(id, { ...r, syncStatus: 'synced', lastSyncedCommit: commitSha ?? r.lastSyncedCommit, defaultBranch: defaultBranch ?? r.defaultBranch });
+		if (r) this.repos.set(id, { ...r, syncStatus: 'synced', lastSyncedCommit: commitSha ?? r.lastSyncedCommit, defaultBranch: defaultBranch ?? r.defaultBranch, lastSyncedAt: TEST_EPOCH });
+	}
+
+	async findByGitHubRepoId(githubRepoId: string): Promise<Repository[]> {
+		return [...this.repos.values()].filter((r) => r.githubRepoId === githubRepoId);
+	}
+
+	async findByOwnerAndName(owner: string, name: string): Promise<Repository[]> {
+		return [...this.repos.values()].filter((r) => r.owner?.toLowerCase() === owner.toLowerCase() && r.name?.toLowerCase() === name.toLowerCase());
+	}
+
+	async updateGitHubIdentity(id: string, input: { githubRepoId?: string; owner?: string; name?: string; remoteUrl?: string }): Promise<void> {
+		const r = this.repos.get(id);
+		if (r) {
+			this.repos.set(id, {
+				...r,
+				githubRepoId: input.githubRepoId ?? r.githubRepoId,
+				owner: input.owner ?? r.owner,
+				name: input.name ?? r.name,
+				remoteUrl: input.remoteUrl ?? r.remoteUrl,
+			});
+		}
 	}
 
 	async delete(id: string): Promise<void> {
@@ -317,6 +342,8 @@ export class InMemoryKnowledgeConnectorRepository implements KnowledgeConnectorR
 			displayName: input.displayName,
 			status: input.status ?? 'connecting',
 			config: input.config ?? {},
+			integrationId: input.integrationId ?? null,
+			syncPolicy: input.syncPolicy ?? { trigger: 'event' },
 			lastError: null,
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
@@ -335,6 +362,15 @@ export class InMemoryKnowledgeConnectorRepository implements KnowledgeConnectorR
 
 	async findByProjectAndType(projectId: string, type: ConnectorType): Promise<KnowledgeConnector | undefined> {
 		return [...this.connectors.values()].find((c) => c.projectId === projectId && c.type === type);
+	}
+
+	async listByIntegration(integrationId: string): Promise<KnowledgeConnector[]> {
+		return [...this.connectors.values()].filter((c) => c.integrationId === integrationId);
+	}
+
+	async setIntegration(id: string, integrationId: string | null): Promise<void> {
+		const c = this.connectors.get(id);
+		if (c) this.connectors.set(id, { ...c, integrationId });
 	}
 
 	async updateStatus(id: string, status: ConnectorStatus, lastError?: string | null): Promise<void> {
@@ -364,11 +400,12 @@ export class InMemorySlackWorkspaceRepository implements SlackWorkspaceRepositor
 			id: input.id,
 			connectorId: input.connectorId,
 			projectId: input.projectId,
+			integrationId: input.integrationId ?? null,
 			teamId: input.teamId,
 			teamName: input.teamName ?? null,
 			botUserId: input.botUserId ?? null,
 			scope: input.scope ?? null,
-			encryptedAccessToken: input.encryptedAccessToken,
+			encryptedAccessToken: input.encryptedAccessToken ?? null,
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
 		};
@@ -390,6 +427,10 @@ export class InMemorySlackWorkspaceRepository implements SlackWorkspaceRepositor
 
 	async listByProject(projectId: string): Promise<SlackWorkspace[]> {
 		return [...this.workspaces.values()].filter((w) => w.projectId === projectId);
+	}
+
+	async listByIntegrationId(integrationId: string): Promise<SlackWorkspace[]> {
+		return [...this.workspaces.values()].filter((w) => w.integrationId === integrationId);
 	}
 
 	async updateAccessToken(id: string, encryptedAccessToken: string, meta?: { scope?: string | null; botUserId?: string | null }): Promise<void> {
@@ -531,6 +572,7 @@ export class InMemoryPipelineJobRepository implements PipelineJobRepository {
 			attempts: 0,
 			lastError: null,
 			payload: input.payload,
+			dedupeKey: input.dedupeKey ?? null,
 			progress: null,
 			stage: null,
 			createdAt: TEST_EPOCH,
@@ -539,6 +581,12 @@ export class InMemoryPipelineJobRepository implements PipelineJobRepository {
 		};
 		this.jobs.set(job.id, job);
 		return job;
+	}
+
+	async createDeduped(input: CreatePipelineJobInput & { dedupeKey: string }): Promise<{ job: PipelineJob; created: boolean }> {
+		const existing = [...this.jobs.values()].find((j) => j.dedupeKey === input.dedupeKey && j.status === 'queued');
+		if (existing) return { job: existing, created: false };
+		return { job: await this.create(input), created: true };
 	}
 
 	async findById(id: string): Promise<PipelineJob | undefined> {
