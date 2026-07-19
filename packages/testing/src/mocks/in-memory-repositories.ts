@@ -41,6 +41,14 @@ import type {
 	UpsertFileInput,
 	UpsertSlackChannelInput,
 	UpsertSlackConversationInput,
+	Integration,
+	CreateIntegrationInput,
+	IntegrationStatus,
+	IntegrationHealth,
+	IntegrationRepository,
+	IntegrationResource,
+	IntegrationResourceRepository,
+	UpsertIntegrationResourceInput,
 } from '@meshify/data-access';
 import { TEST_EPOCH } from '../factories/entities.js';
 
@@ -662,5 +670,139 @@ export class InMemorySlackSyncStateRepository implements SlackSyncStateRepositor
 		};
 		this.states.set(input.slackChannelId, state);
 		return state;
+	}
+}
+
+export class InMemoryIntegrationRepository implements IntegrationRepository {
+	private readonly integrations = new Map<string, Integration>();
+	private seq = 0;
+
+	constructor(seed: Integration[] = []) {
+		for (const i of seed) this.integrations.set(i.id, i);
+	}
+
+	async create(input: CreateIntegrationInput): Promise<Integration> {
+		this.seq += 1;
+		const integration: Integration = {
+			id: input.id ?? `int-${this.seq}`,
+			orgId: input.orgId,
+			provider: input.provider,
+			mode: input.mode ?? 'managed',
+			externalAccountId: input.externalAccountId,
+			externalAccountName: input.externalAccountName ?? '',
+			status: input.status ?? 'pending',
+			health: 'unknown',
+			healthDetail: {},
+			healthCheckedAt: null,
+			metadata: input.metadata ?? {},
+			lastError: null,
+			createdAt: TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+		};
+		this.integrations.set(integration.id, integration);
+		return integration;
+	}
+
+	async findById(id: string): Promise<Integration | undefined> {
+		return this.integrations.get(id);
+	}
+
+	async findByIdForOrg(id: string, orgId: string): Promise<Integration | undefined> {
+		const integration = this.integrations.get(id);
+		return integration && integration.orgId === orgId ? integration : undefined;
+	}
+
+	async findByOrgProviderAccount(orgId: string, provider: string, externalAccountId: string): Promise<Integration | undefined> {
+		return [...this.integrations.values()].find((i) => i.orgId === orgId && i.provider === provider && i.externalAccountId === externalAccountId);
+	}
+
+	async findByProviderAccount(provider: string, externalAccountId: string): Promise<Integration[]> {
+		return [...this.integrations.values()].filter((i) => i.provider === provider && i.externalAccountId === externalAccountId);
+	}
+
+	async listByOrg(orgId: string): Promise<Integration[]> {
+		return [...this.integrations.values()].filter((i) => i.orgId === orgId);
+	}
+
+	async listActiveByProvider(provider: string): Promise<Integration[]> {
+		return [...this.integrations.values()].filter((i) => i.provider === provider && i.status === 'active');
+	}
+
+	async updateStatus(id: string, status: IntegrationStatus, lastError?: string | null): Promise<void> {
+		const i = this.integrations.get(id);
+		if (i) this.integrations.set(id, { ...i, status, lastError: lastError ?? null });
+	}
+
+	async updateHealth(id: string, health: IntegrationHealth, detail?: Record<string, unknown>): Promise<void> {
+		const i = this.integrations.get(id);
+		if (i) this.integrations.set(id, { ...i, health, healthDetail: detail ?? i.healthDetail, healthCheckedAt: TEST_EPOCH });
+	}
+
+	async updateAccountInfo(id: string, input: { externalAccountName?: string; metadata?: Record<string, unknown> }): Promise<void> {
+		const i = this.integrations.get(id);
+		if (i) {
+			this.integrations.set(id, {
+				...i,
+				externalAccountName: input.externalAccountName ?? i.externalAccountName,
+				metadata: { ...i.metadata, ...(input.metadata ?? {}) },
+			});
+		}
+	}
+
+	async delete(id: string): Promise<void> {
+		this.integrations.delete(id);
+	}
+}
+
+export class InMemoryIntegrationResourceRepository implements IntegrationResourceRepository {
+	private readonly resources = new Map<string, IntegrationResource>();
+	private seq = 0;
+
+	private key(integrationId: string, resourceId: string): string {
+		return `${integrationId}:${resourceId}`;
+	}
+
+	async upsertMany(inputs: UpsertIntegrationResourceInput[]): Promise<void> {
+		for (const input of inputs) {
+			const existing = this.resources.get(this.key(input.integrationId, input.resourceId));
+			this.seq += 1;
+			this.resources.set(this.key(input.integrationId, input.resourceId), {
+				id: existing?.id ?? `res-${this.seq}`,
+				integrationId: input.integrationId,
+				workspaceId: input.workspaceId ?? null,
+				resourceId: input.resourceId,
+				kind: input.kind,
+				name: input.name,
+				private: input.private ?? false,
+				metadata: input.metadata ?? {},
+				discoveredAt: existing?.discoveredAt ?? TEST_EPOCH,
+				updatedAt: TEST_EPOCH,
+				removedAt: null,
+			});
+		}
+	}
+
+	async listByIntegration(integrationId: string, opts?: { includeRemoved?: boolean }): Promise<IntegrationResource[]> {
+		return [...this.resources.values()].filter((r) => r.integrationId === integrationId && (opts?.includeRemoved || r.removedAt === null));
+	}
+
+	async findByResourceId(integrationId: string, resourceId: string): Promise<IntegrationResource | undefined> {
+		return this.resources.get(this.key(integrationId, resourceId));
+	}
+
+	async markRemoved(integrationId: string, resourceIds: string[]): Promise<void> {
+		for (const resourceId of resourceIds) {
+			const r = this.resources.get(this.key(integrationId, resourceId));
+			if (r) this.resources.set(this.key(integrationId, resourceId), { ...r, removedAt: TEST_EPOCH });
+		}
+	}
+
+	async rename(integrationId: string, resourceId: string, name: string): Promise<void> {
+		const r = this.resources.get(this.key(integrationId, resourceId));
+		if (r) this.resources.set(this.key(integrationId, resourceId), { ...r, name });
+	}
+
+	async deleteAllForIntegration(integrationId: string): Promise<void> {
+		for (const key of [...this.resources.keys()]) if (key.startsWith(`${integrationId}:`)) this.resources.delete(key);
 	}
 }

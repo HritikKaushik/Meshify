@@ -60,10 +60,20 @@ const envSchema = z.object({
 	ROCKETRIDE_OPENAI_KEY: z.string().optional(),
 	ROCKETRIDE_GEMINI_KEY: z.string().optional(),
 
-	// GitHub App (repo ingestion)
-	GITHUB_APP_ID: z.string().min(1),
-	GITHUB_APP_PRIVATE_KEY: z.string().min(1),
-	GITHUB_APP_WEBHOOK_SECRET: z.string().min(1),
+	// Meshify's managed GitHub App (set once per deployment by the operator —
+	// never by customers; orgs connect via the provider platform's install
+	// flow). Optional so non-GitHub deployments still boot; the github provider
+	// reports "not configured" (503) at runtime when unset.
+	GITHUB_APP_ID: z.string().optional(),
+	GITHUB_APP_PRIVATE_KEY: z.string().optional(),
+	GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
+	// App slug (github.com/apps/<slug>) — builds the installation URL for Connect GitHub.
+	GITHUB_APP_SLUG: z.string().optional(),
+
+	// Encrypts integration credentials at rest (the CredentialVault's key).
+	// Falls back to ORG_KEY_ENCRYPTION_KEY so existing deployments need no new
+	// config; set it separately to decouple rotation of the two domains.
+	INTEGRATION_ENCRYPTION_KEY: z.string().min(32).optional(),
 
 	// Slack connector (conversation ingestion). Optional so non-Slack deployments
 	// still boot; the Slack use cases validate presence at runtime. OAuth `state`

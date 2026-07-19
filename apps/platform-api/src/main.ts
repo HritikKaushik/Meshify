@@ -77,6 +77,37 @@ import { rateLimitGuard } from './modules/security/interface/rate-limit.guard.js
 import { auditLogMiddleware } from './modules/security/interface/audit-log.middleware.js';
 import { RunEvaluationUseCase } from './modules/evaluation/application/run-evaluation.usecase.js';
 import { createEvaluationController } from './modules/evaluation/interface/evaluation.controller.js';
+import {
+	PostgresIntegrationRepository,
+	PostgresIntegrationCredentialRepository,
+	PostgresIntegrationResourceRepository,
+	PostgresOAuthStateRepository,
+	encryptSecret,
+	decryptSecret,
+} from '@meshify/data-access';
+import {
+	COMING_SOON_PROVIDERS,
+	CredentialVault,
+	OAuthStateService,
+	ProviderNotConfiguredError,
+	ProviderRegistry,
+	RedisPlatformEventBus,
+	createGitHubProvider,
+	createGitHubTransport,
+	createSlackProvider,
+	createSlackTransport,
+} from '@meshify/providers';
+import { ListProvidersUseCase } from './modules/integrations/application/list-providers.usecase.js';
+import { ListIntegrationsUseCase } from './modules/integrations/application/list-integrations.usecase.js';
+import { ConnectProviderUseCase } from './modules/integrations/application/connect-provider.usecase.js';
+import { CompleteConnectUseCase } from './modules/integrations/application/complete-connect.usecase.js';
+import { ReconnectIntegrationUseCase } from './modules/integrations/application/reconnect-integration.usecase.js';
+import { DisconnectIntegrationUseCase } from './modules/integrations/application/disconnect-integration.usecase.js';
+import { ListIntegrationResourcesUseCase } from './modules/integrations/application/list-integration-resources.usecase.js';
+import { IntegrationEventHub } from './modules/integrations/infrastructure/integration-event-hub.js';
+import { createIntegrationsController } from './modules/integrations/interface/integrations.controller.js';
+import { AttachSlackWorkspaceUseCase } from './modules/slack/application/attach-slack-workspace.usecase.js';
+import { ConnectRepositoryFromIntegrationUseCase } from './modules/repositories/application/connect-repository-from-integration.usecase.js';
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -182,6 +213,64 @@ async function bootstrap(): Promise<void> {
 	const selectSlackChannels = new SelectSlackChannelsUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, pipelineJobRepository, slackIngestQueue);
 	const syncSlack = new SyncSlackUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, pipelineJobRepository, slackSyncQueue);
 
+	// --- Provider Platform: registry, vault, state, events, org-scoped API ---
+	// Managed apps are operator-level config; a missing one registers the
+	// provider as unconfigured (operations 503) instead of failing boot.
+	const githubAppSettings =
+		env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY && env.GITHUB_APP_SLUG && env.GITHUB_APP_WEBHOOK_SECRET
+			? { appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, slug: env.GITHUB_APP_SLUG, webhookSecret: env.GITHUB_APP_WEBHOOK_SECRET }
+			: null;
+	const slackAppSettings =
+		env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET && env.SLACK_REDIRECT_URI && env.SLACK_SIGNING_SECRET
+			? { clientId: env.SLACK_CLIENT_ID, clientSecret: env.SLACK_CLIENT_SECRET, redirectUri: env.SLACK_REDIRECT_URI, signingSecret: env.SLACK_SIGNING_SECRET }
+			: null;
+
+	const providerRegistry = new ProviderRegistry();
+	providerRegistry.register(createGitHubProvider({ app: githubAppSettings, transport: githubAppSettings ? createGitHubTransport(githubAppSettings) : null }));
+	providerRegistry.register(createSlackProvider({ app: slackAppSettings, transport: slackAppSettings ? createSlackTransport(slackAppSettings) : null }));
+	for (const comingSoon of COMING_SOON_PROVIDERS) providerRegistry.register(comingSoon);
+
+	// The vault's cipher: refuses (503) instead of failing boot when no key is set.
+	const integrationKey = env.INTEGRATION_ENCRYPTION_KEY ?? env.ORG_KEY_ENCRYPTION_KEY;
+	const requireIntegrationKey = (): string => {
+		if (!integrationKey) throw new ProviderNotConfiguredError('platform', 'Set INTEGRATION_ENCRYPTION_KEY (or ORG_KEY_ENCRYPTION_KEY) to use integrations');
+		return integrationKey;
+	};
+	const integrationRepository = new PostgresIntegrationRepository(pgPool);
+	const integrationCredentialRepository = new PostgresIntegrationCredentialRepository(pgPool);
+	const integrationResourceRepository = new PostgresIntegrationResourceRepository(pgPool);
+	const credentialVault = new CredentialVault(integrationCredentialRepository, {
+		encrypt: (plaintext) => encryptSecret(requireIntegrationKey(), plaintext),
+		decrypt: (ciphertext) => decryptSecret(requireIntegrationKey(), ciphertext),
+	});
+	const oauthStates = new OAuthStateService(new PostgresOAuthStateRepository(pgPool));
+
+	// Platform events ride Redis Pub/Sub: publish on the shared command
+	// connection, subscribe on a DEDICATED connection (subscribe mode).
+	const platformEventsRedis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+	const platformEventBus = new RedisPlatformEventBus(redis, platformEventsRedis);
+	const integrationEventHub = new IntegrationEventHub(platformEventBus);
+	integrationEventHub.start();
+
+	const listProviders = new ListProvidersUseCase(providerRegistry);
+	const listIntegrations = new ListIntegrationsUseCase(integrationRepository, knowledgeConnectorRepository);
+	const connectProvider = new ConnectProviderUseCase(providerRegistry, oauthStates, projectRepository);
+	const completeConnect = new CompleteConnectUseCase(providerRegistry, oauthStates, integrationRepository, integrationResourceRepository, credentialVault, platformEventBus);
+	const reconnectIntegration = new ReconnectIntegrationUseCase(providerRegistry, oauthStates, integrationRepository);
+	const disconnectIntegration = new DisconnectIntegrationUseCase(providerRegistry, integrationRepository, knowledgeConnectorRepository, credentialVault, platformEventBus);
+	const listIntegrationResources = new ListIntegrationResourcesUseCase(providerRegistry, integrationRepository, integrationResourceRepository, knowledgeConnectorRepository, credentialVault);
+
+	const attachSlackWorkspace = new AttachSlackWorkspaceUseCase(integrationRepository, knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, credentialVault, slackClient);
+	const connectRepositoryFromIntegration = new ConnectRepositoryFromIntegrationUseCase(
+		integrationRepository,
+		integrationResourceRepository,
+		listIntegrationResources,
+		knowledgeConnectorRepository,
+		repositoryRepository,
+		pipelineJobRepository,
+		repoIngestQueue
+	);
+
 	// Chat is the one synchronous RocketRide path in the API: questions run
 	// against each project's persistent chat pipeline (useExisting semantics
 	// in PipelineRegistry), so the process holds one pooled client. Retrieval
@@ -236,9 +325,21 @@ async function bootstrap(): Promise<void> {
 	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
 	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument }));
 	app.use(createJobsController({ getProject, getJobStatus, listProjectJobs, jobEventStream: jobEventHub }));
-	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories, deleteRepository }));
+	app.use(createRepositoriesController({ getProject, connectGitHub, connectFromIntegration: connectRepositoryFromIntegration, uploadZip, syncRepository, listRepositories, deleteRepository }));
 	app.use(createConnectorsController({ getProject, listConnectors, deleteConnector }));
-	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
+	app.use(
+		createIntegrationsController({
+			listProviders,
+			listIntegrations,
+			connectProvider,
+			completeConnect,
+			reconnectIntegration,
+			disconnectIntegration,
+			listIntegrationResources,
+			integrationEvents: integrationEventHub,
+		})
+	);
+	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, attachWorkspace: attachSlackWorkspace, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
 	app.use(createChatController({ getProject, askQuestion, listConversations, updateConversation, deleteConversation, getConversationMessages }));
 	app.use(createSearchController({ getProject, search }));
 	app.use(createEvaluationController({ getProject, runEvaluation }));
@@ -255,6 +356,7 @@ async function bootstrap(): Promise<void> {
 		await redis.quit();
 		await bullRedis.quit();
 		await jobEventsRedis.quit();
+		await platformEventsRedis.quit();
 		await pgPool.end();
 		process.exit(0);
 	};

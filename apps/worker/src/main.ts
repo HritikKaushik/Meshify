@@ -74,7 +74,27 @@ async function bootstrap(): Promise<void> {
 	const clientPool = new RocketRideClientPool(env, logger);
 	const pipelineRegistry = new PipelineRegistry(clientPool);
 	const rag = new RocketRideRagService(clientPool);
-	const github = new GitHubRepoClient(new GitHubAppAuth({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY }));
+	// GITHUB_APP_* is optional (slack/docs-only deployments boot without it);
+	// repo jobs on an unconfigured deployment fail with a clear message instead
+	// of the process refusing to start.
+	class UnconfiguredGitHubAppAuth extends GitHubAppAuth {
+		constructor() {
+			super({ appId: 'unconfigured', privateKey: 'unconfigured' });
+		}
+		override appJwt(): string {
+			throw new Error('GitHub App is not configured — set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY');
+		}
+		override async installationToken(): Promise<string> {
+			throw new Error('GitHub App is not configured — set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY');
+		}
+	}
+	const githubConfigured = Boolean(env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY);
+	if (!githubConfigured) logger.warn('GITHUB_APP_* not set — repository ingestion/sync jobs will fail until configured');
+	const github = new GitHubRepoClient(
+		githubConfigured
+			? new GitHubAppAuth({ appId: env.GITHUB_APP_ID!, privateKey: env.GITHUB_APP_PRIVATE_KEY! })
+			: new UnconfiguredGitHubAppAuth()
+	);
 	const slackClient = new HttpSlackClient();
 	const qdrantSearchClient = new QdrantSearchClient(env.QDRANT_URL, env.QDRANT_API_KEY);
 

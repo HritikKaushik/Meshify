@@ -118,6 +118,9 @@ importers:
       '@meshify/object-storage':
         specifier: workspace:*
         version: link:../../packages/object-storage
+      '@meshify/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@meshify/queues':
         specifier: workspace:*
         version: link:../../packages/queues

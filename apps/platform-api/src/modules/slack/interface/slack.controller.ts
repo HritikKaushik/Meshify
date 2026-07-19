@@ -8,10 +8,13 @@ import type { CompleteSlackOAuthUseCase } from '../application/complete-slack-oa
 import type { ListSlackChannelsUseCase } from '../application/list-slack-channels.usecase.js';
 import type { SelectSlackChannelsUseCase } from '../application/select-slack-channels.usecase.js';
 import type { SyncSlackUseCase } from '../application/sync-slack.usecase.js';
+import type { AttachSlackWorkspaceUseCase } from '../application/attach-slack-workspace.usecase.js';
+import { SlackIntegrationNotFoundError, SlackIntegrationNotUsableError } from '../application/attach-slack-workspace.usecase.js';
 import { SlackConnectorNotFoundError, SlackNotConfiguredError } from '../application/slack-support.js';
 
 const completeSchema = z.object({ code: z.string().min(1), state: z.string().min(1) });
 const selectSchema = z.object({ channelIds: z.array(z.string().min(1)) });
+const attachSchema = z.object({ integrationId: z.string().uuid() });
 
 function toChannel(c: SlackChannel) {
 	return { id: c.id, channelId: c.channelId, name: c.name, isPrivate: c.isPrivate, selected: c.selected };
@@ -23,8 +26,12 @@ function handleSlackError(err: unknown, res: import('express').Response, log?: {
 		res.status(503).json({ error: err.message });
 		return true;
 	}
-	if (err instanceof SlackConnectorNotFoundError) {
+	if (err instanceof SlackConnectorNotFoundError || err instanceof SlackIntegrationNotFoundError) {
 		res.status(404).json({ error: err.message });
+		return true;
+	}
+	if (err instanceof SlackIntegrationNotUsableError) {
+		res.status(409).json({ error: err.message });
 		return true;
 	}
 	log?.error({ err }, 'slack request failed');
@@ -36,12 +43,33 @@ export function createSlackController(deps: {
 	getProject: GetProjectUseCase;
 	startOAuth: StartSlackOAuthUseCase;
 	completeOAuth: CompleteSlackOAuthUseCase;
+	attachWorkspace: AttachSlackWorkspaceUseCase;
 	listChannels: ListSlackChannelsUseCase;
 	selectChannels: SelectSlackChannelsUseCase;
 	syncSlack: SyncSlackUseCase;
 }): Router {
 	const router = Router();
 	const guard = projectIsolationGuard(deps.getProject);
+
+	// Provider-platform attach: bind an org-level Slack integration to this
+	// project (no second OAuth — the workspace was authorized once, org-wide).
+	router.post('/v1/projects/:projectId/connectors/slack', guard, async (req, res) => {
+		const parsed = attachSchema.safeParse(req.body);
+		if (!parsed.success) {
+			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+			return;
+		}
+		try {
+			const result = await deps.attachWorkspace.execute({
+				projectId: req.project!.id,
+				orgId: req.auth!.orgId,
+				integrationId: parsed.data.integrationId,
+			});
+			res.status(result.alreadyAttached ? 200 : 201).json(result);
+		} catch (err) {
+			handleSlackError(err, res, req.log);
+		}
+	});
 
 	// Begin OAuth: returns the Slack authorize URL for the browser to navigate to.
 	router.post('/v1/projects/:projectId/connectors/slack/oauth/start', guard, async (req, res) => {
