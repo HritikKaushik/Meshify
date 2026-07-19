@@ -59,11 +59,11 @@ providerContractTests('github', () => ({
 			expectedExternalAccountId: '12345',
 			normalizeCases: [
 				{ eventType: 'push', payload: pushPayload, expectedKinds: ['resource.updated'] },
-				{ eventType: 'installation.deleted', payload: { installation: { id: 12345 } }, expectedKinds: ['installation.revoked'] },
+				{ eventType: 'installation.deleted', payload: { installation: { id: 12345 } }, expectedKinds: ['connection.revoked'] },
 				{
 					eventType: 'installation_repositories.removed',
 					payload: { repositories_added: [], repositories_removed: [{ id: 42 }] },
-					expectedKinds: ['grant.changed'],
+					expectedKinds: ['permission.changed'],
 				},
 			],
 		},

@@ -24,10 +24,12 @@ export interface SyncSummary {
 
 /**
  * Content synchronization. Providers decide what to fetch and how it maps to
- * KnowledgeItems; the engine executing this owns retries, idempotency
- * (hash-skip + purge-before-reingest), progress, and job lifecycle. A sync
- * MUST be re-run-safe: re-executing after a partial failure converges.
+ * KnowledgeItems; the ConnectorEngine executing this owns idempotency
+ * (hash-skip + purge-before-reingest), batching, the summary, and job
+ * lifecycle. A sync MUST be re-run-safe: re-executing after a partial failure
+ * converges. Report per-scope failures via `sink.scopeFailed` instead of
+ * throwing — throwing fails the whole sync.
  */
 export interface SyncCapable {
-	executeSync(ctx: SyncContext, sink: KnowledgeSink): Promise<SyncSummary>;
+	executeSync(ctx: SyncContext, sink: KnowledgeSink): Promise<void>;
 }

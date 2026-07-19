@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Integration } from '@meshify/data-access';
 import type { Provider } from '../base/provider.js';
-import { supportsByoa, supportsHealthCheck, supportsOAuth, supportsResourceBrowsing, supportsSync, supportsWebhooks } from '../base/provider.js';
+import { supportsByoa, supportsHealthCheck, supportsOAuth, supportsResourceBrowsing, supportsSync, supportsTools, supportsWebhooks } from '../base/provider.js';
+import { validateManifest } from '../base/manifest.js';
 import type { VaultHandle, IntegrationContext } from '../base/context.js';
 import type { CallbackInput, ConnectInput } from '../base/oauth.js';
 import type { RawWebhookRequest } from '../base/webhook.js';
@@ -41,12 +42,13 @@ export interface ProviderContractFixtures {
 }
 
 const CAPABILITY_GUARDS: Array<{ flag: (p: Provider) => boolean; guard: (p: Provider) => boolean; name: string }> = [
-	{ name: 'oauth', flag: (p) => p.descriptor.capabilities.oauth, guard: supportsOAuth },
-	{ name: 'webhooks', flag: (p) => p.descriptor.capabilities.webhooks, guard: supportsWebhooks },
-	{ name: 'sync', flag: (p) => p.descriptor.capabilities.fullSync || p.descriptor.capabilities.incrementalSync, guard: supportsSync },
-	{ name: 'healthCheck', flag: (p) => p.descriptor.capabilities.healthCheck, guard: supportsHealthCheck },
-	{ name: 'resourcePicker', flag: (p) => p.descriptor.capabilities.resourcePicker, guard: supportsResourceBrowsing },
-	{ name: 'byoa', flag: (p) => p.descriptor.capabilities.byoa, guard: supportsByoa },
+	{ name: 'oauth', flag: (p) => p.manifest.capabilities.oauth, guard: supportsOAuth },
+	{ name: 'webhooks', flag: (p) => p.manifest.capabilities.webhooks, guard: supportsWebhooks },
+	{ name: 'sync', flag: (p) => p.manifest.capabilities.fullSync || p.manifest.capabilities.incrementalSync, guard: supportsSync },
+	{ name: 'healthCheck', flag: (p) => p.manifest.capabilities.healthCheck, guard: supportsHealthCheck },
+	{ name: 'resourcePicker', flag: (p) => p.manifest.capabilities.resourcePicker, guard: supportsResourceBrowsing },
+	{ name: 'byoa', flag: (p) => p.manifest.capabilities.byoa, guard: supportsByoa },
+	{ name: 'tools', flag: (p) => p.manifest.capabilities.tools, guard: supportsTools },
 ];
 
 /**
@@ -61,18 +63,26 @@ export function providerContractTests(name: string, setup: () => { provider: Pro
 	describe(`provider contract: ${name}`, () => {
 		function ctx(): { provider: Provider; fixtures: ProviderContractFixtures; ictx: IntegrationContext } {
 			const { provider, fixtures } = setup();
-			const integration = buildIntegration({ provider: provider.descriptor.id, ...fixtures.integration });
+			const integration = buildIntegration({ provider: provider.manifest.id, ...fixtures.integration });
 			return { provider, fixtures, ictx: { integration, vault: fixtures.vault ?? fakeVaultHandle() } };
 		}
 
-		it('has a sane descriptor', () => {
+		it('has a valid manifest', () => {
 			const { provider } = ctx();
-			const d = provider.descriptor;
-			expect(d.id).toMatch(/^[a-z][a-z0-9-]*$/);
-			expect(d.displayName.length).toBeGreaterThan(0);
-			expect(d.summary.length).toBeGreaterThan(0);
-			expect(d.iconKey.length).toBeGreaterThan(0);
-			expect(['available', 'coming_soon']).toContain(d.availability);
+			expect(validateManifest(provider.manifest)).toEqual([]);
+			expect(['available', 'coming_soon']).toContain(provider.manifest.availability);
+		});
+
+		it('tools: every declared tool has a name, description, and object input schema', () => {
+			const { provider } = ctx();
+			if (!supportsTools(provider)) return;
+			const tools = provider.listTools();
+			expect(tools.map((t) => t.name).sort()).toEqual([...(provider.manifest.toolNames ?? [])].sort());
+			for (const tool of tools) {
+				expect(tool.name).toMatch(/^[a-z][a-z0-9_-]*$/);
+				expect(tool.description.length).toBeGreaterThan(0);
+				expect(tool.inputSchema).toMatchObject({ type: 'object' });
+			}
 		});
 
 		it('declares exactly the capabilities it implements', () => {
@@ -86,9 +96,9 @@ export function providerContractTests(name: string, setup: () => { provider: Pro
 
 		it('provides fixtures for every declared capability', () => {
 			const { provider, fixtures } = ctx();
-			if (provider.descriptor.capabilities.oauth) expect(fixtures.oauth, 'oauth fixtures required').toBeDefined();
-			if (provider.descriptor.capabilities.webhooks) expect(fixtures.webhook, 'webhook fixtures required').toBeDefined();
-			if (provider.descriptor.capabilities.resourcePicker) expect(fixtures.resources, 'resource fixtures required').toBeDefined();
+			if (provider.manifest.capabilities.oauth) expect(fixtures.oauth, 'oauth fixtures required').toBeDefined();
+			if (provider.manifest.capabilities.webhooks) expect(fixtures.webhook, 'webhook fixtures required').toBeDefined();
+			if (provider.manifest.capabilities.resourcePicker) expect(fixtures.resources, 'resource fixtures required').toBeDefined();
 		});
 
 		it('oauth: builds an absolute connect URL carrying the state token', () => {
@@ -147,7 +157,7 @@ export function providerContractTests(name: string, setup: () => { provider: Pro
 				const events = await provider.normalizeWebhook({ eventType: testCase.eventType, payload: testCase.payload }, ictx);
 				expect(events.map((e) => e.kind)).toEqual(testCase.expectedKinds);
 				for (const platformEvent of events) {
-					expect(platformEvent.provider).toBe(provider.descriptor.id);
+					expect(platformEvent.provider).toBe(provider.manifest.id);
 					expect(platformEvent.integrationId).toBe(ictx.integration.id);
 					expect(platformEvent.orgId).toBe(ictx.integration.orgId);
 				}

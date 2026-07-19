@@ -28,6 +28,9 @@ export { PostgresWebhookEventRepository } from './integrations/postgres-webhook-
 export type { SyncCursor } from './integrations/sync-cursor.entity.js';
 export type { SyncCursorRepository } from './integrations/sync-cursor.repository.js';
 export { PostgresSyncCursorRepository } from './integrations/postgres-sync-cursor.repository.js';
+export type { IntegrationResource } from './integrations/integration-resource.entity.js';
+export type { IntegrationResourceRepository, UpsertIntegrationResourceInput } from './integrations/integration-resource.repository.js';
+export { PostgresIntegrationResourceRepository } from './integrations/postgres-integration-resource.repository.js';
 
 export type { SlackWorkspace } from './slack/slack-workspace.entity.js';
 export type { SlackWorkspaceRepository, CreateSlackWorkspaceInput } from './slack/slack-workspace.repository.js';

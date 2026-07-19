@@ -21,12 +21,15 @@ export interface KnowledgeItem {
 }
 
 /**
- * The only door into the knowledge layer during a sync. Implemented by the
- * sync engine (worker), which owns batching, hash-skip, purge-before-reingest,
- * embedding, and progress fan-out — providers just push normalized items.
+ * The only door into the knowledge layer during a sync. Handed to providers by
+ * the ConnectorEngine, which owns batching, hash-skip, purge-before-reingest,
+ * embedding, and progress fan-out — providers just push normalized items and
+ * report scope-level failures (a channel the bot left, an unreadable drive).
  */
 export interface KnowledgeSink {
 	upsert(items: KnowledgeItem[]): Promise<void>;
 	remove(sourceRefs: string[]): Promise<void>;
 	progress(stage: string, percent?: number): void;
+	/** Record a non-fatal per-scope failure; the sync continues and the engine aggregates these into the summary. */
+	scopeFailed(scope: string, error: string): void;
 }

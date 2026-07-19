@@ -1,15 +1,22 @@
 import type { Provider } from '../base/provider.js';
-import type { ProviderDescriptor } from '../base/descriptor.js';
-import { NO_CAPABILITIES } from '../base/descriptor.js';
-import { descriptorOnlyProvider } from '../registry/provider-registry.js';
+import type { ProviderManifest } from '../base/manifest.js';
+import { CURRENT_MANIFEST_VERSION, NO_CAPABILITIES } from '../base/manifest.js';
+import { manifestOnlyProvider } from '../registry/provider-registry.js';
 
 /**
  * Marketplace catalog entries for providers on the roadmap. Pure data — no
  * implementation exists until one lands, at which point the entry here is
  * replaced by a real `register(createXProvider(deps))`.
  */
-function comingSoon(descriptor: Omit<ProviderDescriptor, 'availability' | 'capabilities'>): Provider {
-	return descriptorOnlyProvider({ ...descriptor, availability: 'coming_soon', capabilities: NO_CAPABILITIES });
+function comingSoon(entry: Omit<ProviderManifest, 'availability' | 'capabilities' | 'manifestVersion' | 'providerVersion' | 'auth'>): Provider {
+	return manifestOnlyProvider({
+		...entry,
+		manifestVersion: CURRENT_MANIFEST_VERSION,
+		providerVersion: '0.0.0',
+		availability: 'coming_soon',
+		capabilities: NO_CAPABILITIES,
+		auth: { type: 'none' },
+	});
 }
 
 export const COMING_SOON_PROVIDERS: Provider[] = [

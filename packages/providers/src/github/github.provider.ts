@@ -1,5 +1,5 @@
 import type { Provider } from '../base/provider.js';
-import type { ProviderDescriptor } from '../base/descriptor.js';
+import type { ProviderManifest } from '../base/manifest.js';
 import type { CallbackInput, ConnectInput, ConnectResult, OAuthCapable } from '../base/oauth.js';
 import type { IntegrationContext } from '../base/context.js';
 import type { RawWebhookRequest, WebhookCapable, WebhookDescriptor } from '../base/webhook.js';
@@ -8,7 +8,7 @@ import type { ResourceBrowsingCapable, ResourcePage } from '../base/resources.js
 import type { ByoaCapable, ByoaConfigField } from '../base/byoa.js';
 import type { PlatformEvent } from '../events/platform-events.js';
 import { ProviderAuthError, ProviderConfigError, ProviderNotConfiguredError } from '../base/errors.js';
-import { NO_CAPABILITIES } from '../base/descriptor.js';
+import { CURRENT_MANIFEST_VERSION, NO_CAPABILITIES } from '../base/manifest.js';
 import type { GitHubProviderDeps } from './deps.js';
 import { describeGitHubWebhook, verifyGitHubSignature } from './webhooks.js';
 
@@ -16,8 +16,10 @@ const INSTALLATION_TOKEN_KIND = 'installation_token';
 /** Treat an installation token expiring within 5 min as absent — mint a fresh one. */
 const TOKEN_MIN_TTL_MS = 5 * 60 * 1000;
 
-export const GITHUB_DESCRIPTOR: ProviderDescriptor = {
+export const GITHUB_MANIFEST: ProviderManifest = {
 	id: 'github',
+	manifestVersion: CURRENT_MANIFEST_VERSION,
+	providerVersion: '1.0.0',
 	displayName: 'GitHub',
 	category: 'code',
 	availability: 'available',
@@ -25,6 +27,8 @@ export const GITHUB_DESCRIPTOR: ProviderDescriptor = {
 	iconKey: 'github',
 	brandColor: '#24292F',
 	docsUrl: 'https://docs.github.com/en/apps',
+	auth: { type: 'app_install', scopes: ['contents:read', 'metadata:read'] },
+	webhookEvents: ['push', 'installation', 'installation_repositories', 'repository', 'ping'],
 	capabilities: {
 		...NO_CAPABILITIES,
 		oauth: true,
@@ -34,7 +38,8 @@ export const GITHUB_DESCRIPTOR: ProviderDescriptor = {
 		byoa: true,
 		// fullSync/incrementalSync/realtimeEvents/manualSync/scheduledSync flip on
 		// as the sync-engine and dispatcher milestones land — capability flags
-		// never advertise what the platform cannot do yet.
+		// never advertise what the platform cannot do yet. tools stays false
+		// until a tools milestone ships real ones.
 	},
 };
 
@@ -45,7 +50,7 @@ export const GITHUB_DESCRIPTOR: ProviderDescriptor = {
  * this provider re-verifies the installation against the App JWT.
  */
 export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, HealthCapable, ResourceBrowsingCapable, ByoaCapable {
-	readonly descriptor = GITHUB_DESCRIPTOR;
+	readonly manifest = GITHUB_MANIFEST;
 	private readonly now: () => Date;
 
 	constructor(private readonly deps: GitHubProviderDeps) {
@@ -205,16 +210,16 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 			];
 		}
 
-		if (event.eventType === 'installation.deleted') return [{ ...base, kind: 'installation.revoked' }];
-		if (event.eventType === 'installation.suspend') return [{ ...base, kind: 'installation.suspended' }];
+		if (event.eventType === 'installation.deleted') return [{ ...base, kind: 'connection.revoked' }];
+		if (event.eventType === 'installation.suspend') return [{ ...base, kind: 'connection.suspended' }];
 		if (event.eventType === 'installation.unsuspend') {
-			return [{ ...base, kind: 'integration.health_changed', health: 'healthy' }];
+			return [{ ...base, kind: 'health.changed', health: 'healthy' }];
 		}
 
 		if (event.eventType.startsWith('installation_repositories.')) {
 			const added = ((payload.repositories_added as Array<{ id: number }> | undefined) ?? []).map((r) => String(r.id));
 			const removed = ((payload.repositories_removed as Array<{ id: number }> | undefined) ?? []).map((r) => String(r.id));
-			return [{ ...base, kind: 'grant.changed', added, removed }];
+			return [{ ...base, kind: 'permission.changed', added, removed }];
 		}
 
 		if (event.eventType === 'repository.renamed') {

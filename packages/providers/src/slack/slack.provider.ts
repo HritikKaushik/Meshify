@@ -1,5 +1,5 @@
 import type { Provider } from '../base/provider.js';
-import type { ProviderDescriptor } from '../base/descriptor.js';
+import type { ProviderManifest } from '../base/manifest.js';
 import type { CallbackInput, ConnectInput, ConnectResult, CredentialRefresh, OAuthCapable } from '../base/oauth.js';
 import type { IntegrationContext } from '../base/context.js';
 import type { RawWebhookRequest, WebhookCapable, WebhookDescriptor } from '../base/webhook.js';
@@ -8,16 +8,19 @@ import type { ResourceBrowsingCapable, ResourcePage } from '../base/resources.js
 import type { ByoaCapable, ByoaConfigField } from '../base/byoa.js';
 import type { PlatformEvent } from '../events/platform-events.js';
 import { ProviderAuthError, ProviderConfigError, ProviderNotConfiguredError } from '../base/errors.js';
-import { NO_CAPABILITIES } from '../base/descriptor.js';
+import { CURRENT_MANIFEST_VERSION, NO_CAPABILITIES } from '../base/manifest.js';
 import type { SlackProviderDeps } from './deps.js';
 import { describeSlackWebhook, verifySlackSignature } from './webhooks.js';
+import { SLACK_BOT_SCOPES } from '@meshify/slack';
 import type { SlackOAuthResult } from '@meshify/slack';
 
 const ACCESS_TOKEN_KIND = 'access_token';
 const REFRESH_TOKEN_KIND = 'refresh_token';
 
-export const SLACK_DESCRIPTOR: ProviderDescriptor = {
+export const SLACK_MANIFEST: ProviderManifest = {
 	id: 'slack',
+	manifestVersion: CURRENT_MANIFEST_VERSION,
+	providerVersion: '1.0.0',
 	displayName: 'Slack',
 	category: 'chat',
 	availability: 'available',
@@ -25,6 +28,8 @@ export const SLACK_DESCRIPTOR: ProviderDescriptor = {
 	iconKey: 'slack',
 	brandColor: '#4A154B',
 	docsUrl: 'https://api.slack.com/apis/events-api',
+	auth: { type: 'oauth2', scopes: SLACK_BOT_SCOPES },
+	webhookEvents: ['url_verification', 'message', 'member_joined_channel', 'channel_rename', 'app_uninstalled', 'tokens_revoked'],
 	capabilities: {
 		...NO_CAPABILITIES,
 		oauth: true,
@@ -32,7 +37,8 @@ export const SLACK_DESCRIPTOR: ProviderDescriptor = {
 		resourcePicker: true,
 		healthCheck: true,
 		byoa: true,
-		// Sync + realtime flags flip on with the sync-engine/dispatcher milestones.
+		// Sync + realtime flags flip on with the sync-engine/dispatcher
+		// milestones; tools stays false until a tools milestone ships real ones.
 	},
 };
 
@@ -42,7 +48,7 @@ export const SLACK_DESCRIPTOR: ProviderDescriptor = {
  * expiry captured when Slack issues them).
  */
 export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, HealthCapable, ResourceBrowsingCapable, ByoaCapable {
-	readonly descriptor = SLACK_DESCRIPTOR;
+	readonly manifest = SLACK_MANIFEST;
 	private readonly now: () => Date;
 
 	constructor(private readonly deps: SlackProviderDeps) {
@@ -174,13 +180,13 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 				// Every message (threaded or not) just marks the channel active —
 				// the debounced incremental sync re-reads history via cursors, so
 				// message-level dedup/ordering is the sync's problem, not the bus's.
-				return [{ ...base, kind: 'activity.message', channelRef: channel }];
+				return [{ ...base, kind: 'content.changed', scopeRef: channel }];
 			}
 			case 'member_joined_channel': {
 				const botUserId = ctx.integration.metadata.botUserId;
 				if (typeof inner.user === 'string' && typeof botUserId === 'string' && inner.user === botUserId) {
 					const channel = typeof inner.channel === 'string' ? inner.channel : '';
-					return [{ ...base, kind: 'grant.changed', added: channel ? [channel] : [], removed: [] }];
+					return [{ ...base, kind: 'permission.changed', added: channel ? [channel] : [], removed: [] }];
 				}
 				return [];
 			}
@@ -191,7 +197,7 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 			}
 			case 'app_uninstalled':
 			case 'tokens_revoked':
-				return [{ ...base, kind: 'installation.revoked' }];
+				return [{ ...base, kind: 'connection.revoked' }];
 			default:
 				return [];
 		}

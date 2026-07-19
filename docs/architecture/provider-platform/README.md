@@ -209,3 +209,42 @@ descriptor/catalog entry, "UI comes free").
 
 Reporting after every milestone per the agreed template; stop-and-ask on any decision that changes
 this document materially.
+
+## 12. v2.1 addendum — engine, canonical model, event domains, manifests, tools
+
+Five extensions requested after the M2 review, all landing in the platform core before M3 consumes
+its shapes:
+
+1. **Connector Engine** (`src/engine/`) — sits between providers and the knowledge layer. Providers
+   never receive the raw sink anymore: the engine hands them an engine-owned `KnowledgeSink`, and
+   behind it owns content-hash skip (via a `ContentLedger` port), purge-before-reingest ordering,
+   batching, scope-failure aggregation, and the `SyncSummary`. Below the engine sits a
+   `KnowledgeWriter` port (embed/delete) implemented in the worker over RocketRide+Qdrant.
+   Layering: `Provider → engine sink → ConnectorEngine → KnowledgeWriter → vectors`.
+   `SyncCapable.executeSync` now returns `void` — the engine, not the provider, owns the summary.
+2. **Canonical Resource Model** (`src/base/canonical.ts`) — one hierarchy every provider maps into:
+   **Account** (the org-level grant: GitHub org/user, Slack team) → **Workspace** (container tier:
+   Slack workspace, SharePoint site; collapses to the account for flat providers like GitHub) →
+   **Resource** (repository, channel, drive) → **Connector** (a project's binding of a resource) →
+   **Knowledge** (normalized items). Canonical `sourceRef` scheme:
+   `<provider>/<account>/<workspace>/<resource>/<item-path>` (workspace = account when the provider
+   has no workspace tier); legacy GitHub file paths and `slack/...` refs stay grandfathered. The new
+   `integration_resources` table (migration 0013) caches each grant's resource inventory —
+   pickers read it, `permission.changed` events maintain it, connectors validate against it.
+3. **Event domains** — the platform event taxonomy is organized into six domains:
+   **connection.**(established/revoked/suspended/disconnected), **resource.**(updated/removed/renamed/discovered),
+   **content.**(changed — knowledge-bearing activity inside a resource), **permission.**(changed),
+   **health.**(changed), **sync.**(requested/completed/failed). `eventDomain(kind)` gives consumers
+   domain-level subscription granularity.
+4. **Provider Manifest** — `ProviderDescriptor` grew into `ProviderManifest`: `manifestVersion`
+   (the platform contract version; the registry rejects manifests outside its supported range),
+   `providerVersion` (semver of the implementation), `auth` (type + scopes, machine-readable),
+   `webhookEvents` (consumed event types), and `toolNames`. Providers are self-describing: the
+   marketplace, docs, and future remote-provider loading all read the manifest, and a provider can
+   be upgraded independently of the platform as long as its manifestVersion is supported.
+5. **Tools** (`src/base/tools.ts`) — a provider can expose **Tools** alongside Knowledge Sources:
+   `ToolCapable.listTools()` returns JSON-Schema tool definitions and `executeTool(name, args, ctx)`
+   runs one with the integration-scoped vault context. This maps 1:1 onto MCP (`tools/list` ⇒
+   registry×listTools, `tools/call` ⇒ executeTool), so a future Meshify MCP server is a thin
+   adapter over the registry — no provider changes. GitHub/Slack declare `tools: false` until a
+   tools milestone ships real ones (flags stay honest).

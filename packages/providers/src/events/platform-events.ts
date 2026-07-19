@@ -1,8 +1,17 @@
 /**
- * The provider-independent event vocabulary. Webhook payloads are translated
- * into these by each provider's `normalizeWebhook`; every consumer — the sync
- * dispatcher, SSE hubs, health maintenance, and future features (analytics,
- * notifications, AI summaries) — subscribes to events, never to providers.
+ * The provider-independent event vocabulary, organized into six domains:
+ *
+ *   connection.*  — the org-level grant's lifecycle (established/revoked/…)
+ *   resource.*    — a source container changed shape (repo renamed, channel gone)
+ *   content.*     — knowledge-bearing activity inside a resource (push, message)
+ *   permission.*  — the grant's resource/permission set changed
+ *   health.*      — integration health transitions
+ *   sync.*        — synchronization requests and outcomes
+ *
+ * Webhook payloads are translated into these by each provider's
+ * `normalizeWebhook`; every consumer — the sync dispatcher, SSE hubs, health
+ * maintenance, and future features (analytics, notifications, AI summaries) —
+ * subscribes to events, never to providers.
  */
 
 interface BasePlatformEvent {
@@ -13,21 +22,37 @@ interface BasePlatformEvent {
 }
 
 export type PlatformEvent =
-	/** A synced resource changed at the source (push, file edit) — schedule an incremental sync. */
+	// --- connection domain ---------------------------------------------------
+	| (BasePlatformEvent & { kind: 'connection.established' })
+	| (BasePlatformEvent & { kind: 'connection.revoked' })
+	| (BasePlatformEvent & { kind: 'connection.suspended' })
+	| (BasePlatformEvent & { kind: 'connection.disconnected' })
+	// --- resource domain -----------------------------------------------------
 	| (BasePlatformEvent & { kind: 'resource.updated'; resourceType: string; externalResourceId: string; hint?: Record<string, unknown> })
 	| (BasePlatformEvent & { kind: 'resource.removed'; resourceType: string; externalResourceId: string })
 	| (BasePlatformEvent & { kind: 'resource.renamed'; resourceType: string; externalResourceId: string; name: string; previousName?: string })
-	/** Chat-style activity in a followed scope — debounced into an incremental sync. */
-	| (BasePlatformEvent & { kind: 'activity.message'; channelRef: string })
-	/** The grant's resource/permission set changed (repos added/removed, scopes changed). */
-	| (BasePlatformEvent & { kind: 'grant.changed'; added: string[]; removed: string[] })
-	| (BasePlatformEvent & { kind: 'installation.revoked' })
-	| (BasePlatformEvent & { kind: 'installation.suspended' })
-	| (BasePlatformEvent & { kind: 'integration.connected' })
-	| (BasePlatformEvent & { kind: 'integration.disconnected' })
-	| (BasePlatformEvent & { kind: 'integration.health_changed'; health: string; detail?: Record<string, unknown> });
+	| (BasePlatformEvent & { kind: 'resource.discovered'; resourceType: string; externalResourceId: string; name: string })
+	// --- content domain ------------------------------------------------------
+	| (BasePlatformEvent & { kind: 'content.changed'; scopeRef: string; hint?: Record<string, unknown> })
+	// --- permission domain ---------------------------------------------------
+	| (BasePlatformEvent & { kind: 'permission.changed'; added: string[]; removed: string[] })
+	// --- health domain -------------------------------------------------------
+	| (BasePlatformEvent & { kind: 'health.changed'; health: string; detail?: Record<string, unknown> })
+	// --- sync domain ---------------------------------------------------------
+	| (BasePlatformEvent & { kind: 'sync.requested'; connectorId: string; projectId: string; mode: 'full' | 'incremental'; reason: SyncReason })
+	| (BasePlatformEvent & { kind: 'sync.completed'; connectorId: string; projectId: string; itemsUpserted: number; itemsRemoved: number })
+	| (BasePlatformEvent & { kind: 'sync.failed'; connectorId: string; projectId: string; error: string });
+
+export type SyncReason = 'webhook' | 'manual' | 'scheduled' | 'reconcile' | 'initial';
 
 export type PlatformEventKind = PlatformEvent['kind'];
+
+export type PlatformEventDomain = 'connection' | 'resource' | 'content' | 'permission' | 'health' | 'sync';
+
+/** Domain of an event kind — consumers can subscribe at domain granularity. */
+export function eventDomain(kind: PlatformEventKind): PlatformEventDomain {
+	return kind.split('.', 1)[0] as PlatformEventDomain;
+}
 
 /** A published event, stamped by the bus. */
 export type StampedPlatformEvent = PlatformEvent & { at: string };

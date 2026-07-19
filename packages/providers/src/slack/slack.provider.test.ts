@@ -50,8 +50,8 @@ providerContractTests('slack', () => ({
 			expectedEventType: 'message',
 			expectedExternalAccountId: 'T111',
 			normalizeCases: [
-				{ eventType: 'message', payload: messageEnvelope, expectedKinds: ['activity.message'] },
-				{ eventType: 'app_uninstalled', payload: { type: 'event_callback', team_id: 'T111', event: { type: 'app_uninstalled' } }, expectedKinds: ['installation.revoked'] },
+				{ eventType: 'message', payload: messageEnvelope, expectedKinds: ['content.changed'] },
+				{ eventType: 'app_uninstalled', payload: { type: 'event_callback', team_id: 'T111', event: { type: 'app_uninstalled' } }, expectedKinds: ['connection.revoked'] },
 			],
 		},
 		resources: { expectAtLeast: 1 },
@@ -123,7 +123,7 @@ describe('SlackProvider specifics', () => {
 			{ eventType: 'member_joined_channel', payload: { event: { type: 'member_joined_channel', user: 'U-bot', channel: 'C9' } } },
 			ctx
 		);
-		expect(botJoin).toEqual([{ provider: 'slack', integrationId: 'int-1', orgId: 'org-1', kind: 'grant.changed', added: ['C9'], removed: [] }]);
+		expect(botJoin).toEqual([{ provider: 'slack', integrationId: 'int-1', orgId: 'org-1', kind: 'permission.changed', added: ['C9'], removed: [] }]);
 		const humanJoin = await provider.normalizeWebhook(
 			{ eventType: 'member_joined_channel', payload: { event: { type: 'member_joined_channel', user: 'U-human', channel: 'C9' } } },
 			ctx
