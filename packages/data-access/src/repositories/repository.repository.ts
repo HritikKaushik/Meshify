@@ -7,6 +7,9 @@ export interface CreateRepositoryInput {
 	source: Repository['source'];
 	remoteUrl?: string;
 	archiveObjectKey?: string;
+	owner?: string;
+	name?: string;
+	githubRepoId?: string;
 }
 
 export interface RepositoryRepository {
@@ -19,6 +22,12 @@ export interface RepositoryRepository {
 	statsByProject(projectId: string): Promise<{ total: number; synced: number; lastUpdatedAt: Date | null }>;
 	updateSyncStatus(id: string, status: RepositorySyncStatus): Promise<void>;
 	markSynced(id: string, commitSha: string | null, defaultBranch: string | null): Promise<void>;
+	/** Webhook resolution: every connected copy of this GitHub repo, across projects. */
+	findByGitHubRepoId(githubRepoId: string): Promise<Repository[]>;
+	/** Webhook resolution fallback for rows whose githubRepoId is not backfilled yet. */
+	findByOwnerAndName(owner: string, name: string): Promise<Repository[]>;
+	/** Stamp/refresh the stable GitHub identity (id, owner/name, url after renames). */
+	updateGitHubIdentity(id: string, input: { githubRepoId?: string; owner?: string; name?: string; remoteUrl?: string }): Promise<void>;
 	/** Delete a repository row and (via ON DELETE CASCADE) its files. Vector/archive cleanup is the caller's job. */
 	delete(id: string): Promise<void>;
 }

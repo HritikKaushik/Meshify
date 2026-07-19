@@ -8,10 +8,26 @@ export { sourceTypeFromFilename } from './documents/document.entity.js';
 export type { DocumentRepository, CreateDocumentInput } from './documents/document.repository.js';
 export { PostgresDocumentRepository } from './documents/postgres-document.repository.js';
 
-export type { KnowledgeConnector, ConnectorType, ConnectorStatus } from './connectors/knowledge-connector.entity.js';
+export type { KnowledgeConnector, ConnectorType, ConnectorStatus, SyncPolicy } from './connectors/knowledge-connector.entity.js';
 export { SINGLETON_CONNECTOR_TYPES, defaultConnectorDisplayName } from './connectors/knowledge-connector.entity.js';
 export type { KnowledgeConnectorRepository, CreateConnectorInput } from './connectors/knowledge-connector.repository.js';
 export { PostgresKnowledgeConnectorRepository } from './connectors/postgres-knowledge-connector.repository.js';
+
+export type { Integration, IntegrationMode, IntegrationStatus, IntegrationHealth, ProviderId } from './integrations/integration.entity.js';
+export type { IntegrationRepository, CreateIntegrationInput } from './integrations/integration.repository.js';
+export { PostgresIntegrationRepository } from './integrations/postgres-integration.repository.js';
+export type { IntegrationCredential } from './integrations/integration-credential.entity.js';
+export type { IntegrationCredentialRepository, UpsertIntegrationCredentialInput } from './integrations/integration-credential.repository.js';
+export { PostgresIntegrationCredentialRepository } from './integrations/postgres-integration-credential.repository.js';
+export type { OAuthState } from './integrations/oauth-state.entity.js';
+export type { OAuthStateRepository, CreateOAuthStateInput } from './integrations/oauth-state.repository.js';
+export { PostgresOAuthStateRepository } from './integrations/postgres-oauth-state.repository.js';
+export type { WebhookEvent, WebhookEventStatus } from './integrations/webhook-event.entity.js';
+export type { WebhookEventRepository, RecordWebhookEventInput } from './integrations/webhook-event.repository.js';
+export { PostgresWebhookEventRepository } from './integrations/postgres-webhook-event.repository.js';
+export type { SyncCursor } from './integrations/sync-cursor.entity.js';
+export type { SyncCursorRepository } from './integrations/sync-cursor.repository.js';
+export { PostgresSyncCursorRepository } from './integrations/postgres-sync-cursor.repository.js';
 
 export type { SlackWorkspace } from './slack/slack-workspace.entity.js';
 export type { SlackWorkspaceRepository, CreateSlackWorkspaceInput } from './slack/slack-workspace.repository.js';

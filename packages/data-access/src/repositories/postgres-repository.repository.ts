@@ -12,6 +12,10 @@ interface RepositoryRow {
 	last_synced_commit: string | null;
 	sync_status: string;
 	archive_object_key: string | null;
+	github_repo_id: string | null;
+	owner: string | null;
+	name: string | null;
+	last_synced_at: Date | null;
 	created_at: Date;
 	updated_at: Date;
 }
@@ -27,6 +31,10 @@ function toDomain(row: RepositoryRow): Repository {
 		lastSyncedCommit: row.last_synced_commit,
 		syncStatus: row.sync_status as RepositorySyncStatus,
 		archiveObjectKey: row.archive_object_key,
+		githubRepoId: row.github_repo_id,
+		owner: row.owner,
+		name: row.name,
+		lastSyncedAt: row.last_synced_at,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 	};
@@ -37,9 +45,19 @@ export class PostgresRepositoryRepository implements RepositoryRepository {
 
 	async create(input: CreateRepositoryInput): Promise<Repository> {
 		const { rows } = await this.pool.query<RepositoryRow>(
-			`insert into repositories (id, project_id, connector_id, source, remote_url, archive_object_key)
-			 values ($1, $2, $3, $4, $5, $6) returning *`,
-			[input.id, input.projectId, input.connectorId, input.source, input.remoteUrl ?? null, input.archiveObjectKey ?? null]
+			`insert into repositories (id, project_id, connector_id, source, remote_url, archive_object_key, owner, name, github_repo_id)
+			 values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+			[
+				input.id,
+				input.projectId,
+				input.connectorId,
+				input.source,
+				input.remoteUrl ?? null,
+				input.archiveObjectKey ?? null,
+				input.owner ?? null,
+				input.name ?? null,
+				input.githubRepoId ?? null,
+			]
 		);
 		const row = rows[0];
 		if (!row) throw new Error('Insert into repositories returned no row');
@@ -87,8 +105,34 @@ export class PostgresRepositoryRepository implements RepositoryRepository {
 	async markSynced(id: string, commitSha: string | null, defaultBranch: string | null): Promise<void> {
 		await this.pool.query(
 			`update repositories set sync_status = 'synced', last_synced_commit = coalesce($2, last_synced_commit),
-			 default_branch = coalesce($3, default_branch), updated_at = now() where id = $1`,
+			 default_branch = coalesce($3, default_branch), last_synced_at = now(), updated_at = now() where id = $1`,
 			[id, commitSha, defaultBranch]
+		);
+	}
+
+	async findByGitHubRepoId(githubRepoId: string): Promise<Repository[]> {
+		const { rows } = await this.pool.query<RepositoryRow>('select * from repositories where github_repo_id = $1 order by created_at', [githubRepoId]);
+		return rows.map(toDomain);
+	}
+
+	async findByOwnerAndName(owner: string, name: string): Promise<Repository[]> {
+		const { rows } = await this.pool.query<RepositoryRow>(
+			'select * from repositories where lower(owner) = lower($1) and lower(name) = lower($2) order by created_at',
+			[owner, name]
+		);
+		return rows.map(toDomain);
+	}
+
+	async updateGitHubIdentity(id: string, input: { githubRepoId?: string; owner?: string; name?: string; remoteUrl?: string }): Promise<void> {
+		await this.pool.query(
+			`update repositories
+			 set github_repo_id = coalesce($2, github_repo_id),
+			     owner = coalesce($3, owner),
+			     name = coalesce($4, name),
+			     remote_url = coalesce($5, remote_url),
+			     updated_at = now()
+			 where id = $1`,
+			[id, input.githubRepoId ?? null, input.owner ?? null, input.name ?? null, input.remoteUrl ?? null]
 		);
 	}
 }

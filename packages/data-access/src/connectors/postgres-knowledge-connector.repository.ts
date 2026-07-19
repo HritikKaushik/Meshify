@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import type { ConnectorStatus, ConnectorType, KnowledgeConnector } from './knowledge-connector.entity.js';
+import type { ConnectorStatus, ConnectorType, KnowledgeConnector, SyncPolicy } from './knowledge-connector.entity.js';
 import type { CreateConnectorInput, KnowledgeConnectorRepository } from './knowledge-connector.repository.js';
 
 interface ConnectorRow {
@@ -9,6 +9,8 @@ interface ConnectorRow {
 	display_name: string;
 	status: string;
 	config: Record<string, unknown>;
+	integration_id: string | null;
+	sync_policy: SyncPolicy;
 	last_error: string | null;
 	created_at: Date;
 	updated_at: Date;
@@ -22,6 +24,8 @@ function toDomain(row: ConnectorRow): KnowledgeConnector {
 		displayName: row.display_name,
 		status: row.status as ConnectorStatus,
 		config: row.config,
+		integrationId: row.integration_id,
+		syncPolicy: row.sync_policy,
 		lastError: row.last_error,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
@@ -33,9 +37,18 @@ export class PostgresKnowledgeConnectorRepository implements KnowledgeConnectorR
 
 	async create(input: CreateConnectorInput): Promise<KnowledgeConnector> {
 		const { rows } = await this.pool.query<ConnectorRow>(
-			`insert into knowledge_connectors (id, project_id, type, display_name, status, config)
-			 values ($1, $2, $3, $4, coalesce($5, 'connecting'), coalesce($6, '{}'::jsonb)) returning *`,
-			[input.id, input.projectId, input.type, input.displayName, input.status ?? null, input.config ?? null]
+			`insert into knowledge_connectors (id, project_id, type, display_name, status, config, integration_id, sync_policy)
+			 values ($1, $2, $3, $4, coalesce($5, 'connecting'), coalesce($6, '{}'::jsonb), $7, coalesce($8::jsonb, '{"trigger": "event"}'::jsonb)) returning *`,
+			[
+				input.id,
+				input.projectId,
+				input.type,
+				input.displayName,
+				input.status ?? null,
+				input.config ?? null,
+				input.integrationId ?? null,
+				input.syncPolicy ? JSON.stringify(input.syncPolicy) : null,
+			]
 		);
 		const row = rows[0];
 		if (!row) throw new Error('Insert into knowledge_connectors returned no row');
@@ -60,6 +73,15 @@ export class PostgresKnowledgeConnectorRepository implements KnowledgeConnectorR
 		]);
 		const row = rows[0];
 		return row ? toDomain(row) : undefined;
+	}
+
+	async listByIntegration(integrationId: string): Promise<KnowledgeConnector[]> {
+		const { rows } = await this.pool.query<ConnectorRow>('select * from knowledge_connectors where integration_id = $1 order by created_at', [integrationId]);
+		return rows.map(toDomain);
+	}
+
+	async setIntegration(id: string, integrationId: string | null): Promise<void> {
+		await this.pool.query('update knowledge_connectors set integration_id = $2, updated_at = now() where id = $1', [id, integrationId]);
 	}
 
 	async updateStatus(id: string, status: ConnectorStatus, lastError?: string | null): Promise<void> {

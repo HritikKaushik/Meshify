@@ -5,10 +5,17 @@ export interface CreatePipelineJobInput {
 	projectId: string;
 	jobType: PipelineJobType;
 	payload: Record<string, unknown>;
+	dedupeKey?: string;
 }
 
 export interface PipelineJobRepository {
 	create(input: CreatePipelineJobInput): Promise<PipelineJob>;
+	/**
+	 * Create unless a QUEUED job with the same dedupeKey already exists (a
+	 * running job does not block — events arriving mid-run queue exactly one
+	 * follow-up). Returns the surviving job either way.
+	 */
+	createDeduped(input: CreatePipelineJobInput & { dedupeKey: string }): Promise<{ job: PipelineJob; created: boolean }>;
 	findById(id: string): Promise<PipelineJob | undefined>;
 	/** Org-scoped lookup for tenant isolation on read paths (joins projects.org_id). */
 	findByIdForOrg(id: string, orgId: string): Promise<PipelineJob | undefined>;
