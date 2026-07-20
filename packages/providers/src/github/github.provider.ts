@@ -42,8 +42,9 @@ export const GITHUB_MANIFEST: ProviderManifest = {
 		fullSync: true,
 		incrementalSync: true,
 		manualSync: true,
-		// realtimeEvents/scheduledSync flip on with the dispatcher + scheduler
-		// milestones; tools stays false until a tools milestone ships real ones.
+		realtimeEvents: true,
+		// scheduledSync flips on with the scheduler milestone; tools stays false
+		// until a tools milestone ships real ones.
 	},
 };
 

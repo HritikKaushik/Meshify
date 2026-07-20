@@ -49,6 +49,10 @@ import type {
 	IntegrationResource,
 	IntegrationResourceRepository,
 	UpsertIntegrationResourceInput,
+	WebhookEvent,
+	WebhookEventStatus,
+	WebhookEventRepository,
+	RecordWebhookEventInput,
 } from '@meshify/data-access';
 import { TEST_EPOCH } from '../factories/entities.js';
 
@@ -816,5 +820,54 @@ export class InMemoryIntegrationResourceRepository implements IntegrationResourc
 
 	async deleteAllForIntegration(integrationId: string): Promise<void> {
 		for (const key of [...this.resources.keys()]) if (key.startsWith(`${integrationId}:`)) this.resources.delete(key);
+	}
+}
+
+export class InMemoryWebhookEventRepository implements WebhookEventRepository {
+	readonly events = new Map<string, WebhookEvent>();
+	private seq = 0;
+
+	async recordIfNew(input: RecordWebhookEventInput): Promise<WebhookEvent | undefined> {
+		const duplicate = [...this.events.values()].some((e) => e.provider === input.provider && e.deliveryId === input.deliveryId);
+		if (duplicate) return undefined;
+		this.seq += 1;
+		const event: WebhookEvent = {
+			id: `wh-${this.seq}`,
+			provider: input.provider,
+			deliveryId: input.deliveryId,
+			eventType: input.eventType,
+			integrationId: input.integrationId ?? null,
+			payload: input.payload,
+			status: 'received',
+			error: null,
+			receivedAt: TEST_EPOCH,
+			processedAt: null,
+		};
+		this.events.set(event.id, event);
+		return event;
+	}
+
+	async findById(id: string): Promise<WebhookEvent | undefined> {
+		return this.events.get(id);
+	}
+
+	async markStatus(id: string, status: WebhookEventStatus, error?: string | null): Promise<void> {
+		const e = this.events.get(id);
+		if (e) this.events.set(id, { ...e, status, error: error ?? null, processedAt: ['processed', 'skipped', 'failed'].includes(status) ? TEST_EPOCH : e.processedAt });
+	}
+
+	async listRecentByIntegration(integrationId: string, limit: number): Promise<WebhookEvent[]> {
+		return [...this.events.values()].filter((e) => e.integrationId === integrationId).slice(0, limit);
+	}
+
+	async deleteTerminalBefore(_before: Date): Promise<number> {
+		let removed = 0;
+		for (const [id, e] of [...this.events]) {
+			if (['processed', 'skipped', 'failed'].includes(e.status)) {
+				this.events.delete(id);
+				removed += 1;
+			}
+		}
+		return removed;
 	}
 }

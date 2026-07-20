@@ -30,7 +30,7 @@ import { JobEventHub } from './modules/jobs/infrastructure/job-event-hub.js';
 import { createJobsController } from './modules/jobs/interface/jobs.controller.js';
 import { JobEventSubscriber } from '@meshify/queues';
 import { PostgresRepositoryRepository, PostgresFileRepository } from '@meshify/data-access';
-import { createRepoIngestQueue, createRepoSyncQueue, createSourceSyncQueue } from '@meshify/queues';
+import { createRepoIngestQueue, createRepoSyncQueue, createSourceSyncQueue, createWebhookEventsQueue } from '@meshify/queues';
 import { ConnectGitHubRepositoryUseCase } from './modules/repositories/application/connect-github-repository.usecase.js';
 import { UploadRepositoryZipUseCase } from './modules/repositories/application/upload-repository-zip.usecase.js';
 import { SyncRepositoryUseCase } from './modules/repositories/application/sync-repository.usecase.js';
@@ -82,6 +82,7 @@ import {
 	PostgresIntegrationCredentialRepository,
 	PostgresIntegrationResourceRepository,
 	PostgresOAuthStateRepository,
+	PostgresWebhookEventRepository,
 	encryptSecret,
 	decryptSecret,
 } from '@meshify/data-access';
@@ -106,6 +107,7 @@ import { DisconnectIntegrationUseCase } from './modules/integrations/application
 import { ListIntegrationResourcesUseCase } from './modules/integrations/application/list-integration-resources.usecase.js';
 import { IntegrationEventHub } from './modules/integrations/infrastructure/integration-event-hub.js';
 import { createIntegrationsController } from './modules/integrations/interface/integrations.controller.js';
+import { createWebhooksController } from './modules/integrations/interface/webhooks.controller.js';
 import { AttachSlackWorkspaceUseCase } from './modules/slack/application/attach-slack-workspace.usecase.js';
 import { ConnectRepositoryFromIntegrationUseCase } from './modules/repositories/application/connect-repository-from-integration.usecase.js';
 
@@ -261,6 +263,17 @@ async function bootstrap(): Promise<void> {
 	const disconnectIntegration = new DisconnectIntegrationUseCase(providerRegistry, integrationRepository, knowledgeConnectorRepository, credentialVault, platformEventBus);
 	const listIntegrationResources = new ListIntegrationResourcesUseCase(providerRegistry, integrationRepository, integrationResourceRepository, knowledgeConnectorRepository, credentialVault);
 
+	// Webhook receipt: managed-app secrets come from operator env; deliveries
+	// are recorded + enqueued here and processed in the worker.
+	const webhookEventRepository = new PostgresWebhookEventRepository(pgPool);
+	const webhookEventsQueue = createWebhookEventsQueue(bullRedis);
+	const managedWebhookSecrets = new Map<string, string>();
+	if (env.GITHUB_APP_WEBHOOK_SECRET) managedWebhookSecrets.set('github', env.GITHUB_APP_WEBHOOK_SECRET);
+	if (env.SLACK_SIGNING_SECRET) managedWebhookSecrets.set('slack', env.SLACK_SIGNING_SECRET);
+	// Webhooks are pre-auth, so the per-key limiter can't apply — use a
+	// per-provider fixed window generous enough for bursty pushes.
+	const webhookLimiter = new RedisRateLimiter(redis, 600, 60);
+
 	const attachSlackWorkspace = new AttachSlackWorkspaceUseCase(integrationRepository, knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, credentialVault, slackClient);
 	const connectRepositoryFromIntegration = new ConnectRepositoryFromIntegrationUseCase(
 		integrationRepository,
@@ -312,6 +325,22 @@ async function bootstrap(): Promise<void> {
 	// load balancer / ingress). Rate limits key on the API key, not the IP.
 	app.set('trust proxy', true);
 	app.use(pinoHttp({ logger }));
+
+	// Public webhook receiver — MUST precede express.json(): provider
+	// signatures cover the exact raw bytes, so nothing may parse the body first.
+	app.use(
+		createWebhooksController({
+			registry: providerRegistry,
+			integrations: integrationRepository,
+			webhookEvents: webhookEventRepository,
+			webhookQueue: webhookEventsQueue,
+			managedSecrets: managedWebhookSecrets,
+			vault: credentialVault,
+			limiter: webhookLimiter,
+			logger,
+		})
+	);
+
 	app.use(express.json());
 
 	// Public: health/readiness probes must answer without credentials.
@@ -352,7 +381,7 @@ async function bootstrap(): Promise<void> {
 	const shutdown = async (signal: string) => {
 		logger.info({ signal }, 'shutting down');
 		server.close();
-		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close(), sourceSyncQueue.close()]);
+		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close(), sourceSyncQueue.close(), webhookEventsQueue.close()]);
 		await rocketridePool.shutdown();
 		await redis.quit();
 		await bullRedis.quit();

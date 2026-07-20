@@ -10,3 +10,5 @@ export { JOB_EVENTS_CHANNEL, JobEventPublisher, JobEventSubscriber } from './job
 export type { JobEvent, JobPhase, RedisPublisherConnection, RedisSubscriberConnection } from './job-events.js';
 export { SOURCE_SYNC_QUEUE, createSourceSyncQueue } from './source-sync.queue.js';
 export type { SourceSyncJobPayload } from './source-sync.queue.js';
+export { WEBHOOK_EVENTS_QUEUE, createWebhookEventsQueue } from './webhook-events.queue.js';
+export type { WebhookEventJobPayload } from './webhook-events.queue.js';

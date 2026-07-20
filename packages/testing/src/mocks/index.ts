@@ -12,4 +12,5 @@ export {
 	InMemoryPipelineJobRepository,
 	InMemoryIntegrationRepository,
 	InMemoryIntegrationResourceRepository,
+	InMemoryWebhookEventRepository,
 } from './in-memory-repositories.js';

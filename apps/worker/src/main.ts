@@ -17,7 +17,9 @@ import {
 	PostgresSlackWorkspaceRepository,
 	PostgresIntegrationRepository,
 	PostgresIntegrationCredentialRepository,
+	PostgresIntegrationResourceRepository,
 	PostgresSyncCursorRepository,
+	PostgresWebhookEventRepository,
 	encryptSecret,
 	decryptSecret,
 } from '@meshify/data-access';
@@ -29,6 +31,8 @@ import {
 	SLACK_INGEST_QUEUE,
 	SLACK_SYNC_QUEUE,
 	SOURCE_SYNC_QUEUE,
+	WEBHOOK_EVENTS_QUEUE,
+	createSourceSyncQueue,
 	JobEventPublisher,
 	type DocumentIngestJobPayload,
 	type RepoIngestJobPayload,
@@ -36,6 +40,7 @@ import {
 	type SlackIngestJobPayload,
 	type SlackSyncJobPayload,
 	type SourceSyncJobPayload,
+	type WebhookEventJobPayload,
 } from '@meshify/queues';
 import { GitHubAppAuth, GitHubRepoClient } from '@meshify/github';
 import { HttpSlackClient } from '@meshify/slack';
@@ -51,6 +56,7 @@ import {
 	CredentialVault,
 	ProviderNotConfiguredError,
 	ProviderRegistry,
+	RedisPlatformEventBus,
 	createGitHubProvider,
 	createGitHubTransport,
 	createSlackProvider,
@@ -59,6 +65,7 @@ import {
 } from '@meshify/providers';
 import type { KnowledgeConnector } from '@meshify/data-access';
 import { processSourceSyncJob } from './processors/source-sync.processor.js';
+import { processWebhookEventJob } from './processors/webhook-event.processor.js';
 import { ProjectKnowledgeWriter } from './processors/knowledge-writer.js';
 import { createGitHubContentLedger, createSlackContentLedger } from './processors/content-ledgers.js';
 
@@ -225,6 +232,25 @@ async function bootstrap(): Promise<void> {
 		},
 	};
 
+	// Webhook dispatch: normalize recorded deliveries into platform events,
+	// schedule dedupe-keyed syncs (durable, retried), publish for live consumers.
+	const webhookEventRepository = new PostgresWebhookEventRepository(pgPool);
+	const integrationResources = new PostgresIntegrationResourceRepository(pgPool);
+	const sourceSyncQueue = createSourceSyncQueue(bullRedis);
+	const platformEventBus = new RedisPlatformEventBus(bullRedis);
+	const webhookDeps = {
+		registry: providerRegistry,
+		webhookEvents: webhookEventRepository,
+		integrations,
+		connectors,
+		resources: integrationResources,
+		repositories,
+		pipelineJobs,
+		sourceSyncQueue,
+		vault: credentialVault,
+		bus: platformEventBus,
+	};
+
 	const documentWorker = new Worker<DocumentIngestJobPayload>(
 		DOCUMENT_INGEST_QUEUE,
 		(job) =>
@@ -293,8 +319,9 @@ async function bootstrap(): Promise<void> {
 	// The provider platform's generic sync lane; legacy per-provider workers
 	// above remain only to drain in-flight jobs enqueued before the cutover.
 	const sourceSyncWorker = new Worker<SourceSyncJobPayload>(SOURCE_SYNC_QUEUE, (job) => processSourceSyncJob(job, sourceSyncDeps), { connection: bullRedis, concurrency: 3 });
+	const webhookEventsWorker = new Worker<WebhookEventJobPayload>(WEBHOOK_EVENTS_QUEUE, (job) => processWebhookEventJob(job, webhookDeps), { connection: bullRedis, concurrency: 5 });
 
-	const workers = [documentWorker, repoIngestWorker, repoSyncWorker, slackIngestWorker, slackSyncWorker, sourceSyncWorker];
+	const workers = [documentWorker, repoIngestWorker, repoSyncWorker, slackIngestWorker, slackSyncWorker, sourceSyncWorker, webhookEventsWorker];
 	for (const worker of workers) {
 		worker.on('completed', (job) => logger.info({ queue: worker.name, jobId: job.id }, 'job completed'));
 		worker.on('failed', (job, err) => logger.error({ queue: worker.name, jobId: job?.id, err: err.message }, 'job failed'));
@@ -305,6 +332,7 @@ async function bootstrap(): Promise<void> {
 	const shutdown = async (signal: string) => {
 		logger.info({ signal }, 'shutting down');
 		await Promise.all(workers.map((w) => w.close()));
+		await sourceSyncQueue.close();
 		await clientPool.shutdown();
 		await bullRedis.quit();
 		await pgPool.end();
