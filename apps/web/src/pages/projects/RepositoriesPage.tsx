@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { FolderGit2, Link2, RefreshCw, Sparkles, GitBranch, TriangleAlert, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { FolderGit2, Link2, RefreshCw, Sparkles, GitBranch, TriangleAlert, Trash2, Search, Lock, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
 import { api } from '@/api-client';
-import type { Repository } from '@/api';
+import type { Repository, Integration, IntegrationResource } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
@@ -25,10 +26,15 @@ import { cn } from '@/lib/utils';
 export function RepositoriesPage() {
 	const { project } = useWorkspace();
 	const [remoteUrl, setRemoteUrl] = useState('');
+	const [manualMode, setManualMode] = useState(false);
+	const [search, setSearch] = useState('');
+	const [attachingId, setAttachingId] = useState<string | null>(null);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const list = useAsync<Repository[]>();
 	const connect = useAsync<unknown>();
 	const sync = useAsync<unknown>();
+	const integrations = useAsync<Integration[]>();
+	const resources = useAsync<{ resources: IntegrationResource[]; nextCursor?: string }>();
 	const [pendingDelete, setPendingDelete] = useState<Repository | null>(null);
 	const [deleting, setDeleting] = useState(false);
 
@@ -36,8 +42,23 @@ export function RepositoriesPage() {
 
 	useEffect(() => {
 		void refresh();
+		integrations.run(() => api.listIntegrations());
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [project.id]);
+
+	// The org's active GitHub app grant, if any — enables browsing its repositories instead of pasting URLs.
+	const githubIntegration = useMemo(
+		() => (integrations.state.status === 'success' ? integrations.state.value.find((i) => i.provider === 'github' && i.status === 'active') : undefined),
+		[integrations.state]
+	);
+
+	const loadResources = () => {
+		if (githubIntegration) resources.run(() => api.listIntegrationResources(githubIntegration.id));
+	};
+	useEffect(() => {
+		loadResources();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [githubIntegration?.id]);
 
 	// Real-time: refresh sync status when a repo ingest/sync job finishes (live progress in the Job Progress Center).
 	useRefreshOnJobComplete(['clone_repo', 'sync_repo'], refresh);
@@ -45,11 +66,34 @@ export function RepositoriesPage() {
 	const repos = list.state.status === 'success' ? list.state.value : [];
 	const selected = repos.find((r) => r.id === selectedId) ?? repos[0];
 
+	const browsable = resources.state.status === 'success' ? resources.state.value.resources : [];
+	const filtered = useMemo(() => {
+		const q = search.trim().toLowerCase();
+		const matches = q ? browsable.filter((r) => r.name.toLowerCase().includes(q)) : browsable;
+		return [...matches].sort((a, b) => Number(a.connected) - Number(b.connected) || a.name.localeCompare(b.name)).slice(0, 60);
+	}, [browsable, search]);
+
 	const doConnect = async () => {
 		if (!remoteUrl.trim()) return;
 		await connect.run(() => api.connectGitHub(project.id, remoteUrl));
 		setRemoteUrl('');
 		await refresh();
+	};
+
+	const attachRepo = async (repo: IntegrationResource) => {
+		if (!githubIntegration || repo.connected) return;
+		setAttachingId(repo.id);
+		try {
+			await api.connectRepoFromIntegration(project.id, githubIntegration.id, repo.id);
+			toast.success(`Connecting ${repo.name} — ingestion started`);
+			setSearch('');
+			await refresh();
+			loadResources();
+		} catch (err) {
+			toast.error((err as Error).message);
+		} finally {
+			setAttachingId(null);
+		}
 	};
 
 	const doSync = async (id: string) => {
@@ -75,26 +119,94 @@ export function RepositoriesPage() {
 
 	return (
 		<div className="flex flex-col gap-5">
-			{/* Connect bar */}
-			<GlassCard className="flex flex-wrap items-center gap-3 p-4">
-				<Link2 className="h-4 w-4 text-mc-text-2" />
-				<input
-					value={remoteUrl}
-					onChange={(e) => setRemoteUrl(e.target.value)}
-					placeholder="https://github.com/owner/repo"
-					className="h-9 min-w-[240px] flex-1 rounded-lg border border-black/[.1] bg-mc-surface px-3 font-mono text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-accent/50"
-				/>
-				<button
-					onClick={doConnect}
-					disabled={!remoteUrl.trim() || connect.state.status === 'pending'}
-					className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
-				>
-					{connect.state.status === 'pending' ? 'Connecting…' : 'Connect'}
-				</button>
-			</GlassCard>
-			{connect.state.status === 'error' && (
-				<p className="text-sm text-mc-danger">{(connect.state.error as Error).message}</p>
+			{/* Connect: browse the connected GitHub app's repositories (search), or paste a URL. */}
+			{githubIntegration && !manualMode ? (
+				<GlassCard className="flex flex-col gap-0 overflow-hidden p-0">
+					<div className="flex items-center gap-2.5 border-b border-black/[.06] px-4 py-3">
+						<Search className="h-4 w-4 flex-none text-mc-text-2" />
+						<input
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
+							placeholder={`Search ${githubIntegration.externalAccountName ?? 'your GitHub app'}'s repositories…`}
+							className="h-6 flex-1 bg-transparent text-sm text-mc-text placeholder:text-mc-muted focus:outline-none"
+						/>
+						<button onClick={loadResources} title="Refresh list" className="text-mc-text-3 hover:text-mc-text">
+							<RefreshCw className="h-3.5 w-3.5" />
+						</button>
+						<button onClick={() => setManualMode(true)} className="text-[11.5px] text-mc-text-3 hover:text-mc-text">
+							Paste a URL
+						</button>
+					</div>
+					<div className="max-h-[280px] overflow-y-auto">
+						{resources.state.status === 'pending' && <div className="px-4 py-4 text-sm text-mc-text-3">Loading repositories from GitHub…</div>}
+						{resources.state.status === 'error' && <div className="px-4 py-4 text-sm text-mc-danger">{(resources.state.error as Error).message}</div>}
+						{resources.state.status === 'success' && filtered.length === 0 && (
+							<div className="px-4 py-6 text-center text-[13px] text-mc-text-3">
+								{browsable.length === 0 ? 'This installation exposes no repositories. Grant repos to the app on GitHub, then refresh.' : 'No repositories match your search.'}
+							</div>
+						)}
+						{filtered.map((repo, i) => (
+							<button
+								key={repo.id}
+								disabled={repo.connected || attachingId === repo.id}
+								onClick={() => void attachRepo(repo)}
+								className={cn(
+									'flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors',
+									i > 0 && 'border-t border-black/[.05]',
+									repo.connected ? 'cursor-default opacity-60' : 'hover:bg-mc-accent/[.06]'
+								)}
+							>
+								<FolderGit2 className="h-4 w-4 flex-none text-mc-accent" />
+								<span className="truncate font-mono text-[13px] text-mc-text">{repo.name}</span>
+								{repo.private && <Lock className="h-3 w-3 flex-none text-mc-muted" />}
+								<span className="ml-auto flex-none text-[11.5px] font-medium">
+									{repo.connected ? (
+										<span className="flex items-center gap-1 text-mc-text-3">
+											<Check className="h-3.5 w-3.5" /> Connected
+										</span>
+									) : attachingId === repo.id ? (
+										<span className="text-mc-text-3">Connecting…</span>
+									) : (
+										<span className="text-mc-accent">Connect</span>
+									)}
+								</span>
+							</button>
+						))}
+					</div>
+				</GlassCard>
+			) : (
+				<GlassCard className="flex flex-col gap-2 p-4">
+					<div className="flex flex-wrap items-center gap-3">
+						<Link2 className="h-4 w-4 text-mc-text-2" />
+						<input
+							value={remoteUrl}
+							onChange={(e) => setRemoteUrl(e.target.value)}
+							placeholder="https://github.com/owner/repo"
+							className="h-9 min-w-[240px] flex-1 rounded-lg border border-black/[.1] bg-mc-surface px-3 font-mono text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-accent/50"
+						/>
+						<button
+							onClick={doConnect}
+							disabled={!remoteUrl.trim() || connect.state.status === 'pending'}
+							className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
+						>
+							{connect.state.status === 'pending' ? 'Connecting…' : 'Connect'}
+						</button>
+					</div>
+					<p className="text-[11.5px] text-mc-text-3">
+						{githubIntegration ? (
+							<button onClick={() => setManualMode(false)} className="text-mc-accent hover:underline">
+								← Browse your GitHub app's repositories instead
+							</button>
+						) : (
+							<>
+								Tip: <Link to={`/projects/${project.id}/integrations`} className="text-mc-accent hover:underline">connect your GitHub app</Link> to browse and search
+								its repositories instead of pasting URLs.
+							</>
+						)}
+					</p>
+				</GlassCard>
 			)}
+			{connect.state.status === 'error' && <p className="text-sm text-mc-danger">{(connect.state.error as Error).message}</p>}
 
 			<div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
 				{/* Repository list */}
