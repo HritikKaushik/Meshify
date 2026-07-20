@@ -190,7 +190,7 @@ export function IntegrationsPage() {
 									<div className="flex flex-wrap items-center gap-2 pt-0.5">
 										{connected && provider.capabilities.resourcePicker && provider.category === 'code' && (
 											<Button variant="mesh" size="sm" asChild>
-												<Link to={`/projects/${project.id}/repositories`}>
+												<Link to={`/projects/${project.id}/repository`}>
 													<FolderGit2 size={14} className="mr-1.5" /> Manage repositories
 												</Link>
 											</Button>
