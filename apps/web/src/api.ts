@@ -337,6 +337,13 @@ export class MeshifyApi {
 		if (!res.ok && res.status !== 204) await this.parse(res);
 	}
 
+	/** A document's raw bytes — used to render PDF thumbnails in the Documents grid. */
+	async getDocumentContent(projectId: string, documentId: string): Promise<ArrayBuffer> {
+		const res = await fetch(this.url(`/api/v1/projects/${projectId}/documents/${documentId}/content`), { credentials: 'include' });
+		if (!res.ok) throw new ApiError(res.status, `Failed to fetch document content (${res.status})`);
+		return res.arrayBuffer();
+	}
+
 	// --- Background jobs (real-time) ---
 	/** Snapshot of a project's active jobs + recent history (first paint / SSE fallback). */
 	async listJobs(projectId: string): Promise<JobsSnapshot> {

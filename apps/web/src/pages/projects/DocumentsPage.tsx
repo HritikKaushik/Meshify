@@ -5,6 +5,7 @@ import { api } from '@/api-client';
 import type { DocumentSummary } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
+import { PdfThumbnail } from '@/components/documents/PdfThumbnail';
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { timeAgo } from '@/lib/time';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -212,7 +213,7 @@ export function DocumentsPage() {
 			) : view === 'grid' ? (
 				<div className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{filtered.map((doc) => (
-						<DocumentCard key={doc.id} doc={doc} onDelete={() => setPendingDelete(doc)} />
+						<DocumentCard key={doc.id} doc={doc} projectId={project.id} onDelete={() => setPendingDelete(doc)} />
 					))}
 					<button
 						onClick={() => inputRef.current?.click()}
@@ -277,18 +278,19 @@ function StatusBadge({ status }: { status: DocumentSummary['status'] }) {
 	);
 }
 
-function DocumentCard({ doc, onDelete }: { doc: DocumentSummary; onDelete: () => void }) {
+function DocumentCard({ doc, projectId, onDelete }: { doc: DocumentSummary; projectId: string; onDelete: () => void }) {
 	const { grad, icon: Icon, tint, color } = previewStyle(doc.sourceType);
+	// Real PDF thumbnails once fetchable; the faux preview covers other file types
+	// and PDFs that failed to ingest (nothing to render).
+	const showThumb = doc.sourceType === 'pdf' && doc.status !== 'failed';
+	const faux = <FauxPreview grad={grad} />;
 	return (
 		<div className="group relative flex flex-col overflow-hidden rounded-2xl border border-mc-border bg-mc-card shadow-e2 transition-all hover:-translate-y-0.5 hover:shadow-e3">
-			{/* faux preview */}
-			<div className="relative h-[132px] overflow-hidden px-[18px] pt-[18px]" style={{ background: grad }}>
-				<div className="h-[6px] w-[60%] rounded-sm bg-mc-text/[.14]" />
-				<div className="mt-2.5 h-[5px] w-[88%] rounded-sm bg-mc-text/[.08]" />
-				<div className="mt-1.5 h-[5px] w-[80%] rounded-sm bg-mc-text/[.08]" />
-				<div className="mt-1.5 h-[5px] w-[90%] rounded-sm bg-mc-text/[.08]" />
-				<div className="mt-1.5 h-[5px] w-[52%] rounded-sm bg-mc-text/[.08]" />
-				<div className="absolute right-3.5 top-3.5 flex h-[26px] w-[26px] items-center justify-center rounded-lg" style={{ background: tint, color }}>
+			<div className="relative h-[132px] overflow-hidden">
+				{showThumb ? <PdfThumbnail projectId={projectId} documentId={doc.id} fallback={faux} /> : faux}
+				{/* soften the bottom edge so a bright page blends into the card */}
+				<div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-mc-card/80 to-transparent" />
+				<div className="absolute right-3.5 top-3.5 flex h-[26px] w-[26px] items-center justify-center rounded-lg shadow-e1" style={{ background: tint, color }}>
 					<Icon className="h-3.5 w-3.5" />
 				</div>
 				{/* hover remove */}
@@ -307,6 +309,18 @@ function DocumentCard({ doc, onDelete }: { doc: DocumentSummary; onDelete: () =>
 					<span className="text-[10.5px] text-mc-muted-2">Updated {timeAgo(doc.updatedAt)}</span>
 				</div>
 			</div>
+		</div>
+	);
+}
+
+function FauxPreview({ grad }: { grad: string }) {
+	return (
+		<div className="h-full w-full px-[18px] pt-[18px]" style={{ background: grad }}>
+			<div className="h-[6px] w-[60%] rounded-sm bg-mc-text/[.14]" />
+			<div className="mt-2.5 h-[5px] w-[88%] rounded-sm bg-mc-text/[.08]" />
+			<div className="mt-1.5 h-[5px] w-[80%] rounded-sm bg-mc-text/[.08]" />
+			<div className="mt-1.5 h-[5px] w-[90%] rounded-sm bg-mc-text/[.08]" />
+			<div className="mt-1.5 h-[5px] w-[52%] rounded-sm bg-mc-text/[.08]" />
 		</div>
 	);
 }

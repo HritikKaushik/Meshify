@@ -20,6 +20,7 @@
 		"clsx": "^2.1.1",
 		"lucide-react": "^1.24.0",
 		"motion": "^12.42.2",
+		"pdfjs-dist": "^6.1.200",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
 		"react-router-dom": "^7.18.1",

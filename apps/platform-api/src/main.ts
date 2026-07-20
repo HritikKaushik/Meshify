@@ -23,6 +23,7 @@ import { createDocumentIngestQueue } from '@meshify/queues';
 import { UploadDocumentUseCase } from './modules/documents/application/upload-document.usecase.js';
 import { ListDocumentsUseCase } from './modules/documents/application/list-documents.usecase.js';
 import { DeleteDocumentUseCase } from './modules/documents/application/delete-document.usecase.js';
+import { GetDocumentContentUseCase } from './modules/documents/application/get-document-content.usecase.js';
 import { createDocumentsController } from './modules/documents/interface/documents.controller.js';
 import { GetJobStatusUseCase } from './modules/jobs/application/get-job-status.usecase.js';
 import { ListProjectJobsUseCase } from './modules/jobs/application/list-project-jobs.usecase.js';
@@ -152,6 +153,7 @@ async function bootstrap(): Promise<void> {
 	const ingestQueue = createDocumentIngestQueue(bullRedis);
 	const uploadDocument = new UploadDocumentUseCase(knowledgeConnectorRepository, documentRepository, pipelineJobRepository, objectStorage, ingestQueue);
 	const listDocuments = new ListDocumentsUseCase(documentRepository);
+	const getDocumentContent = new GetDocumentContentUseCase(documentRepository, objectStorage);
 		const getJobStatus = new GetJobStatusUseCase(pipelineJobRepository);
 	const listProjectJobs = new ListProjectJobsUseCase(pipelineJobRepository);
 	// Real-time job progress: a DEDICATED Redis connection (subscribe mode can't run other commands)
@@ -349,7 +351,7 @@ async function bootstrap(): Promise<void> {
 	app.use(auditLogMiddleware(auditLogRepository));
 
 	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
-	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument }));
+	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument, getDocumentContent }));
 	app.use(createJobsController({ getProject, getJobStatus, listProjectJobs, jobEventStream: jobEventHub }));
 	app.use(createRepositoriesController({ getProject, connectGitHub, connectFromIntegration: connectRepositoryFromIntegration, uploadZip, syncRepository, listRepositories, deleteRepository }));
 	app.use(createConnectorsController({ getProject, listConnectors, deleteConnector }));
