@@ -305,6 +305,17 @@ export interface CompleteConnectResponse {
 	intent: 'connect' | 'reconnect';
 }
 
+/** One field of a provider's bring-your-own-app config form; secrets are write-only. */
+export interface ByoaFieldView {
+	key: string;
+	label: string;
+	secret: boolean;
+	multiline: boolean;
+	placeholder?: string;
+	/** Whether a value is already stored (secrets are never echoed back). */
+	configured: boolean;
+}
+
 export class MeshifyApi {
 	constructor(private cfg: ApiConfig) {}
 
@@ -625,6 +636,23 @@ export class MeshifyApi {
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ integrationId, githubRepoId }),
+			})
+		);
+	}
+
+	/** The provider's BYOA config form for this integration — secrets report only whether they're set. */
+	async describeByoaConfig(integrationId: string): Promise<{ mode: string; fields: ByoaFieldView[] }> {
+		return this.parse(await fetch(this.url(`/api/v1/integrations/${integrationId}/config`), { credentials: 'include' }));
+	}
+
+	/** Store an org's own provider-app credentials (write-only) and switch the integration to BYOA. */
+	async configureByoa(integrationId: string, values: Record<string, string>): Promise<{ webhookPath: string }> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/integrations/${integrationId}/config`), {
+				method: 'PUT',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ values }),
 			})
 		);
 	}

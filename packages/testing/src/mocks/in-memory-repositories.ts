@@ -766,6 +766,11 @@ export class InMemoryIntegrationRepository implements IntegrationRepository {
 		if (i) this.integrations.set(id, { ...i, status, lastError: lastError ?? null });
 	}
 
+	async updateMode(id: string, mode: 'managed' | 'byoa'): Promise<void> {
+		const i = this.integrations.get(id);
+		if (i) this.integrations.set(id, { ...i, mode });
+	}
+
 	async updateHealth(id: string, health: IntegrationHealth, detail?: Record<string, unknown>): Promise<void> {
 		const i = this.integrations.get(id);
 		if (i) this.integrations.set(id, { ...i, health, healthDetail: detail ?? i.healthDetail, healthCheckedAt: TEST_EPOCH });

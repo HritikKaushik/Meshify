@@ -10,6 +10,8 @@ import { GlassCard, Kicker, StatusDot, type DotColor } from '@/components/mc/pri
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
+import { ByoaConfigDialog } from './ByoaConfigDialog';
+import { Building2 } from 'lucide-react';
 
 // lucide dropped brand marks — map providers onto the workspace's existing
 // category iconography (repo/chat/docs/…) with a generic fallback.
@@ -51,6 +53,7 @@ export function IntegrationsPage() {
 	const [busyProvider, setBusyProvider] = useState<string | null>(null);
 	const [picker, setPicker] = useState<{ integration: Integration; provider: ProviderCatalogEntry } | null>(null);
 	const [disconnecting, setDisconnecting] = useState<Integration | null>(null);
+	const [byoaFor, setByoaFor] = useState<Integration | null>(null);
 
 	const refresh = useCallback(() => {
 		catalog.run(() => api.listProviders());
@@ -203,6 +206,11 @@ export function IntegrationsPage() {
 												<RefreshCw size={14} className="mr-1.5" /> Reconnect
 											</Button>
 										)}
+										{provider.capabilities.byoa && (
+											<Button variant="glass" size="sm" onClick={() => setByoaFor(integration)}>
+												<Building2 size={14} className="mr-1.5" /> {integration.mode === 'byoa' ? 'Enterprise app' : 'Use own app'}
+											</Button>
+										)}
 										<Button variant="glass" size="sm" className="text-mc-danger" onClick={() => setDisconnecting(integration)}>
 											<Unplug size={14} className="mr-1.5" /> Disconnect
 										</Button>
@@ -230,6 +238,8 @@ export function IntegrationsPage() {
 					);
 				})}
 			</div>
+
+			{byoaFor && <ByoaConfigDialog integration={byoaFor} onClose={() => setByoaFor(null)} onSaved={refresh} />}
 
 			{picker && (
 				<ResourcePickerDialog

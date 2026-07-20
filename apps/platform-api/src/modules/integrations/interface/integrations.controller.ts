@@ -11,8 +11,10 @@ import type { CompleteConnectUseCase } from '../application/complete-connect.use
 import type { ReconnectIntegrationUseCase } from '../application/reconnect-integration.usecase.js';
 import type { DisconnectIntegrationUseCase } from '../application/disconnect-integration.usecase.js';
 import type { ListIntegrationResourcesUseCase } from '../application/list-integration-resources.usecase.js';
+import type { ConfigureByoaUseCase, DescribeByoaConfigUseCase } from '../application/configure-byoa.usecase.js';
 import type { IntegrationEventHub } from '../infrastructure/integration-event-hub.js';
 import { IntegrationNotFoundError, InvalidOAuthStateError, UnsupportedProviderOperationError } from '../application/integration-support.js';
+import { ProviderConfigError } from '@meshify/providers';
 
 const SSE_HEARTBEAT_MS = 15_000;
 
@@ -56,7 +58,7 @@ function mapError(err: unknown, res: import('express').Response, log?: { error: 
 		res.status(404).json({ error: err.message });
 	} else if (err instanceof ProviderNotConfiguredError) {
 		res.status(503).json({ error: err.message });
-	} else if (err instanceof InvalidOAuthStateError || err instanceof ProviderAuthError || err instanceof UnsupportedProviderOperationError) {
+	} else if (err instanceof InvalidOAuthStateError || err instanceof ProviderAuthError || err instanceof UnsupportedProviderOperationError || err instanceof ProviderConfigError) {
 		res.status(400).json({ error: err.message });
 	} else if (err instanceof ProjectNotInOrgError) {
 		res.status(404).json({ error: err.message });
@@ -74,9 +76,12 @@ export function createIntegrationsController(deps: {
 	reconnectIntegration: ReconnectIntegrationUseCase;
 	disconnectIntegration: DisconnectIntegrationUseCase;
 	listIntegrationResources: ListIntegrationResourcesUseCase;
+	describeByoaConfig: DescribeByoaConfigUseCase;
+	configureByoa: ConfigureByoaUseCase;
 	integrationEvents: IntegrationEventHub;
 }): Router {
 	const router = Router();
+	const configSchema = z.object({ values: z.record(z.string(), z.string()) });
 
 	// The marketplace catalog: manifests only, no tenant data.
 	router.get('/v1/providers', (_req, res) => {
@@ -170,6 +175,31 @@ export function createIntegrationsController(deps: {
 				integrationId: req.params.integrationId!,
 				cursor,
 			});
+			res.status(200).json(result);
+		} catch (err) {
+			mapError(err, res, req.log);
+		}
+	});
+
+	// Enterprise BYOA config: describe the provider's form (secrets never
+	// echoed — only whether they're set) and store submitted app credentials.
+	router.get('/v1/integrations/:integrationId/config', async (req, res) => {
+		try {
+			const result = await deps.describeByoaConfig.execute({ orgId: req.auth!.orgId, integrationId: req.params.integrationId! });
+			res.status(200).json(result);
+		} catch (err) {
+			mapError(err, res, req.log);
+		}
+	});
+
+	router.put('/v1/integrations/:integrationId/config', async (req, res) => {
+		const parsed = configSchema.safeParse(req.body ?? {});
+		if (!parsed.success) {
+			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+			return;
+		}
+		try {
+			const result = await deps.configureByoa.execute({ orgId: req.auth!.orgId, integrationId: req.params.integrationId!, values: parsed.data.values });
 			res.status(200).json(result);
 		} catch (err) {
 			mapError(err, res, req.log);

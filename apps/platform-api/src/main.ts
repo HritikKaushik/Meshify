@@ -105,6 +105,7 @@ import { CompleteConnectUseCase } from './modules/integrations/application/compl
 import { ReconnectIntegrationUseCase } from './modules/integrations/application/reconnect-integration.usecase.js';
 import { DisconnectIntegrationUseCase } from './modules/integrations/application/disconnect-integration.usecase.js';
 import { ListIntegrationResourcesUseCase } from './modules/integrations/application/list-integration-resources.usecase.js';
+import { ConfigureByoaUseCase, DescribeByoaConfigUseCase } from './modules/integrations/application/configure-byoa.usecase.js';
 import { IntegrationEventHub } from './modules/integrations/infrastructure/integration-event-hub.js';
 import { createIntegrationsController } from './modules/integrations/interface/integrations.controller.js';
 import { createWebhooksController } from './modules/integrations/interface/webhooks.controller.js';
@@ -262,6 +263,8 @@ async function bootstrap(): Promise<void> {
 	const reconnectIntegration = new ReconnectIntegrationUseCase(providerRegistry, oauthStates, integrationRepository);
 	const disconnectIntegration = new DisconnectIntegrationUseCase(providerRegistry, integrationRepository, knowledgeConnectorRepository, credentialVault, platformEventBus);
 	const listIntegrationResources = new ListIntegrationResourcesUseCase(providerRegistry, integrationRepository, integrationResourceRepository, knowledgeConnectorRepository, credentialVault);
+	const describeByoaConfig = new DescribeByoaConfigUseCase(providerRegistry, integrationRepository, credentialVault);
+	const configureByoa = new ConfigureByoaUseCase(providerRegistry, integrationRepository, credentialVault);
 
 	// Webhook receipt: managed-app secrets come from operator env; deliveries
 	// are recorded + enqueued here and processed in the worker.
@@ -366,6 +369,8 @@ async function bootstrap(): Promise<void> {
 			reconnectIntegration,
 			disconnectIntegration,
 			listIntegrationResources,
+			describeByoaConfig,
+			configureByoa,
 			integrationEvents: integrationEventHub,
 		})
 	);

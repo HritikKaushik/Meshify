@@ -110,6 +110,10 @@ export class PostgresIntegrationRepository implements IntegrationRepository {
 		);
 	}
 
+	async updateMode(id: string, mode: IntegrationMode): Promise<void> {
+		await this.pool.query('update integrations set mode = $2, updated_at = now() where id = $1', [id, mode]);
+	}
+
 	async updateHealth(id: string, health: IntegrationHealth, detail?: Record<string, unknown>): Promise<void> {
 		await this.pool.query(
 			`update integrations

@@ -22,6 +22,8 @@ export interface IntegrationRepository {
 	listByOrg(orgId: string): Promise<Integration[]>;
 	listActiveByProvider(provider: string): Promise<Integration[]>;
 	updateStatus(id: string, status: IntegrationStatus, lastError?: string | null): Promise<void>;
+	/** Flip managed ⇄ byoa (enterprise bring-your-own-app). */
+	updateMode(id: string, mode: IntegrationMode): Promise<void>;
 	updateHealth(id: string, health: IntegrationHealth, detail?: Record<string, unknown>): Promise<void>;
 	/** Refresh display name + merge provider metadata after (re)connect or account rename. */
 	updateAccountInfo(id: string, input: { externalAccountName?: string; metadata?: Record<string, unknown> }): Promise<void>;
