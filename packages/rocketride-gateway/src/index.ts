@@ -10,9 +10,12 @@ export type { RagPort, ChatAnswer, ChatTurnRequest, ChatHistoryTurn, ChatCitatio
 export { buildIngestPipeline, buildChatPipeline } from './pipeline-builder/index.js';
 export type {
 	LlmProvider,
+	LlmComponent,
 	EmbeddingProvider,
 	IngestTarget,
 	LlmProviderConfig,
+	ManagedLlmConfig,
+	ResolvedLlmConfig,
 	EmbeddingProviderConfig,
 	QdrantTargetConfig,
 	ProjectPipelineConfig,

@@ -9,6 +9,9 @@
 	],
 	"references": [
 		{
+			"path": "../../packages/ai"
+		},
+		{
 			"path": "../../packages/config"
 		},
 		{
