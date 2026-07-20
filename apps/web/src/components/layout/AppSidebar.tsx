@@ -3,13 +3,10 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
 import {
 	MessageSquare,
-	Search as SearchIcon,
 	FolderGit2,
 	FileText,
 	MessagesSquare,
 	Blocks,
-	FlaskConical,
-	LayoutDashboard,
 	Settings,
 	Plus,
 	Star,
@@ -46,13 +43,10 @@ import { cn } from '@/lib/utils';
 type Section = { to: string; label: string; icon: LucideIcon };
 export const SECTIONS: Section[] = [
 	{ to: 'chat', label: 'Chat', icon: MessageSquare },
-	{ to: 'search', label: 'Search', icon: SearchIcon },
 	{ to: 'repository', label: 'Repositories', icon: FolderGit2 },
 	{ to: 'documents', label: 'Documents', icon: FileText },
 	{ to: 'slack', label: 'Slack', icon: MessagesSquare },
 	{ to: 'integrations', label: 'Integrations', icon: Blocks },
-	{ to: 'evaluation', label: 'Evaluation', icon: FlaskConical },
-	{ to: 'overview', label: 'Overview', icon: LayoutDashboard },
 ];
 export const SECTION_LABEL: Record<string, string> = {
 	...Object.fromEntries(SECTIONS.map((s) => [s.to, s.label])),

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { ArrowUp } from 'lucide-react';
 import { api } from '@/api-client';
 import type { ChatMessage } from '@/api';
@@ -29,7 +29,6 @@ function toTurn(m: ChatMessage): Turn {
  */
 export function ChatPage() {
 	const { project, conversations, refreshConversations } = useWorkspace();
-	const location = useLocation();
 	const [params, setParams] = useSearchParams();
 	const convParam = params.get('c');
 
@@ -40,8 +39,6 @@ export function ChatPage() {
 	const history = useAsync<unknown>();
 	const threadRef = useRef<HTMLDivElement>(null);
 	const convRef = useRef<string | undefined>(undefined); // mirrors conversationId without re-triggering the load effect
-	const kickoff = (location.state as { initialQuestion?: string } | null)?.initialQuestion;
-	const kickedOff = useRef(false);
 
 	const ask = (q: string) => {
 		if (!q.trim() || chat.state.status === 'pending') return;
@@ -83,15 +80,6 @@ export function ChatPage() {
 		});
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [convParam, project.id]);
-
-	// Auto-send a question handed over from the Overview "Ask Mesh" composer.
-	useEffect(() => {
-		if (kickoff && !kickedOff.current) {
-			kickedOff.current = true;
-			ask(kickoff);
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [kickoff]);
 
 	useEffect(() => {
 		threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' });

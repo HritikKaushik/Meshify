@@ -66,17 +66,13 @@ import { DeleteConversationUseCase } from './modules/chat/application/delete-con
 import { GetConversationMessagesUseCase } from './modules/chat/application/get-conversation-messages.usecase.js';
 import { createChatController } from './modules/chat/interface/chat.controller.js';
 import { QdrantSearchClient } from '@meshify/vector-store';
-import { SearchUseCase } from './modules/search/application/search.usecase.js';
 import { ConfiguredEmbeddingProviderFactory } from './modules/search/infrastructure/embedding-provider.factory.js';
-import { createSearchController } from './modules/search/interface/search.controller.js';
 import { PostgresApiKeyRepository, PostgresAuditLogRepository } from '@meshify/data-access';
 import { AuthenticateApiKeyUseCase } from './modules/security/application/authenticate.usecase.js';
 import { authGuard } from './modules/security/interface/auth.guard.js';
 import { RedisRateLimiter } from './modules/security/infrastructure/redis-rate-limiter.js';
 import { rateLimitGuard } from './modules/security/interface/rate-limit.guard.js';
 import { auditLogMiddleware } from './modules/security/interface/audit-log.middleware.js';
-import { RunEvaluationUseCase } from './modules/evaluation/application/run-evaluation.usecase.js';
-import { createEvaluationController } from './modules/evaluation/interface/evaluation.controller.js';
 import {
 	PostgresIntegrationRepository,
 	PostgresIntegrationCredentialRepository,
@@ -176,7 +172,6 @@ async function bootstrap(): Promise<void> {
 
 	const qdrantSearchClient = new QdrantSearchClient(env.QDRANT_URL, env.QDRANT_API_KEY);
 	const embeddingProviderFactory = new ConfiguredEmbeddingProviderFactory(env.ROCKETRIDE_OPENAI_KEY);
-	const search = new SearchUseCase(embeddingProviderFactory, qdrantSearchClient);
 
 		// Document teardown reuses the same object-storage + Qdrant clients as ingest/search.
 		const deleteDocument = new DeleteDocumentUseCase(documentRepository, objectStorage, qdrantSearchClient, (ctx, msg) => logger.error(ctx, msg));
@@ -315,11 +310,6 @@ async function bootstrap(): Promise<void> {
 		// Project Home aggregate stats — real counts composed from existing repositories.
 		const getProjectStats = new GetProjectStatsUseCase(documentRepository, repositoryRepository, chatRepository);
 
-	// Evaluation reuses the same RAG seam + chat-pipeline resolver + context
-	// retriever as live chat, so a golden-set run exercises the exact path
-	// production queries take.
-	const runEvaluation = new RunEvaluationUseCase(ragService, chatPipelineResolver, chatContextRetriever);
-
 	// Security (Step 9): API-key auth → per-key rate limit → audit. Constructed
 	// before routing so the guards can be mounted around the data controllers.
 	const apiKeyRepository = new PostgresApiKeyRepository(pgPool);
@@ -380,8 +370,6 @@ async function bootstrap(): Promise<void> {
 	);
 	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, attachWorkspace: attachSlackWorkspace, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
 	app.use(createChatController({ getProject, askQuestion, listConversations, updateConversation, deleteConversation, getConversationMessages }));
-	app.use(createSearchController({ getProject, search }));
-	app.use(createEvaluationController({ getProject, runEvaluation }));
 
 	const server = app.listen(env.PLATFORM_PORT, () => {
 		logger.info({ port: env.PLATFORM_PORT }, 'platform-api listening');

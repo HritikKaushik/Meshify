@@ -31,7 +31,6 @@ export function LandingPage() {
 					<Features />
 					<Stats />
 					<FlightPlan />
-					<CtaBand />
 					<Footer />
 				</div>
 			</SignedOut>
@@ -45,7 +44,6 @@ const NAV_ITEMS = [
 	{ name: 'Platform', href: '#features' },
 	{ name: 'How it works', href: '#flight' },
 	{ name: 'Metrics', href: '#stats' },
-	{ name: 'Pricing', href: '#cta' },
 ];
 
 function HeroHeader() {
@@ -457,43 +455,6 @@ function FlightPlan() {
 						<p className="text-sm2 leading-relaxed text-mc-text-3">{s.body}</p>
 					</Reveal>
 				))}
-			</div>
-		</section>
-	);
-}
-
-/* -------------------------------------------------------------------- cta */
-
-function CtaBand() {
-	return (
-		<section id="cta" className="px-6 pb-16 sm:px-10">
-			<div
-				className="relative mx-auto max-w-6xl overflow-hidden rounded-[28px] px-6 py-20 text-center"
-				style={{ background: 'linear-gradient(135deg, hsl(var(--mc-accent)), hsl(258 70% 52%) 55%, hsl(var(--mc-purple)))', boxShadow: 'var(--glow-accent-lg)' }}
-			>
-				<div
-					className="pointer-events-none absolute inset-0"
-					style={{
-						backgroundImage: 'linear-gradient(rgba(255,255,255,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.09) 1px,transparent 1px)',
-						backgroundSize: '40px 40px',
-						maskImage: 'radial-gradient(90% 120% at 50% 0%,#000,transparent)',
-						WebkitMaskImage: 'radial-gradient(90% 120% at 50% 0%,#000,transparent)',
-					}}
-				/>
-				<h2 className="relative mx-auto max-w-[22ch] text-balance text-3xl font-semibold leading-[1.08] tracking-[-.03em] text-white sm:text-[44px]">
-					Where AI understands your entire engineering org
-				</h2>
-				<p className="relative mx-auto mt-5 max-w-[48ch] text-lg text-white/85">Launch Mission Control and watch your codebase become answerable.</p>
-				<div className="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-					<SignUpButton mode="modal">
-						<button className="rounded-full bg-white px-8 py-3.5 text-base font-semibold text-mc-accent-lo shadow-e3 transition-transform duration-200 ease-out-expo hover:-translate-y-0.5">
-							Launch Mission Control
-						</button>
-					</SignUpButton>
-					<SignInButton mode="modal">
-						<button className="rounded-full border border-white/35 bg-white/[.14] px-6 py-3.5 text-base font-semibold text-white transition-colors hover:bg-white/25">Explore Demo</button>
-					</SignInButton>
-				</div>
 			</div>
 		</section>
 	);
