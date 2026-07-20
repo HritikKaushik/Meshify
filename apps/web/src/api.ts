@@ -344,6 +344,11 @@ export class MeshifyApi {
 		return res.arrayBuffer();
 	}
 
+	/** The URL of a document's raw content — open in a new tab to view it inline. */
+	documentContentUrl(projectId: string, documentId: string): string {
+		return this.url(`/api/v1/projects/${projectId}/documents/${documentId}/content`);
+	}
+
 	// --- Background jobs (real-time) ---
 	/** Snapshot of a project's active jobs + recent history (first paint / SSE fallback). */
 	async listJobs(projectId: string): Promise<JobsSnapshot> {

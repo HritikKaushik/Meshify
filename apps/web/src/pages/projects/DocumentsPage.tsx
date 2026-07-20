@@ -226,7 +226,7 @@ export function DocumentsPage() {
 			) : (
 				<div className="overflow-hidden rounded-2xl border border-mc-border bg-mc-card shadow-e2">
 					{filtered.map((doc, i) => (
-						<DocumentRow key={doc.id} doc={doc} divider={i > 0} onDelete={() => setPendingDelete(doc)} />
+						<DocumentRow key={doc.id} doc={doc} projectId={project.id} divider={i > 0} onDelete={() => setPendingDelete(doc)} />
 					))}
 				</div>
 			)}
@@ -284,8 +284,21 @@ function DocumentCard({ doc, projectId, onDelete }: { doc: DocumentSummary; proj
 	// and PDFs that failed to ingest (nothing to render).
 	const showThumb = doc.sourceType === 'pdf' && doc.status !== 'failed';
 	const faux = <FauxPreview grad={grad} />;
+	const openDoc = () => window.open(api.documentContentUrl(projectId, doc.id), '_blank', 'noopener,noreferrer');
 	return (
-		<div className="group relative flex flex-col overflow-hidden rounded-2xl border border-mc-border bg-mc-card shadow-e2 transition-all hover:-translate-y-0.5 hover:shadow-e3">
+		<div
+			role="button"
+			tabIndex={0}
+			onClick={openDoc}
+			onKeyDown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					openDoc();
+				}
+			}}
+			title="Open document in a new tab"
+			className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-mc-border bg-mc-card shadow-e2 transition-all hover:-translate-y-0.5 hover:shadow-e3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mc-accent/50"
+		>
 			<div className="relative h-[132px] overflow-hidden">
 				{showThumb ? <PdfThumbnail projectId={projectId} documentId={doc.id} fallback={faux} /> : faux}
 				{/* soften the bottom edge so a bright page blends into the card */}
@@ -295,7 +308,10 @@ function DocumentCard({ doc, projectId, onDelete }: { doc: DocumentSummary; proj
 				</div>
 				{/* hover remove */}
 				<button
-					onClick={onDelete}
+					onClick={(e) => {
+						e.stopPropagation();
+						onDelete();
+					}}
 					title="Remove document"
 					className="absolute left-3.5 top-3.5 flex h-[26px] w-[26px] items-center justify-center rounded-lg border border-mc-border bg-mc-card/90 text-mc-muted opacity-0 backdrop-blur-sm transition-all hover:text-mc-danger group-hover:opacity-100"
 				>
@@ -325,17 +341,33 @@ function FauxPreview({ grad }: { grad: string }) {
 	);
 }
 
-function DocumentRow({ doc, divider, onDelete }: { doc: DocumentSummary; divider: boolean; onDelete: () => void }) {
+function DocumentRow({ doc, projectId, divider, onDelete }: { doc: DocumentSummary; projectId: string; divider: boolean; onDelete: () => void }) {
 	const { icon: Icon, color } = previewStyle(doc.sourceType);
+	const openDoc = () => window.open(api.documentContentUrl(projectId, doc.id), '_blank', 'noopener,noreferrer');
 	return (
-		<div className={cn('group flex items-center gap-3 px-4 py-3', divider && 'border-t border-mc-hairline')}>
+		<div
+			role="button"
+			tabIndex={0}
+			onClick={openDoc}
+			onKeyDown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					openDoc();
+				}
+			}}
+			title="Open document in a new tab"
+			className={cn('group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-mc-surface', divider && 'border-t border-mc-hairline')}
+		>
 			<Icon className="h-4 w-4 flex-none" style={{ color }} />
 			<span className="flex-1 truncate text-[13px] font-medium text-mc-text">{doc.filename}</span>
 			<span className="font-mono text-[10.5px] uppercase text-mc-muted-2">{doc.sourceType}</span>
 			<StatusBadge status={doc.status} />
 			<span className="w-16 text-right text-[10.5px] text-mc-muted-2">{timeAgo(doc.updatedAt)}</span>
 			<button
-				onClick={onDelete}
+				onClick={(e) => {
+					e.stopPropagation();
+					onDelete();
+				}}
 				title="Remove document"
 				className="flex h-7 w-7 items-center justify-center rounded-lg text-mc-muted opacity-0 transition-all hover:bg-mc-danger/[.08] hover:text-mc-danger group-hover:opacity-100"
 			>
