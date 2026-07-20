@@ -58,7 +58,7 @@ export function ProjectHomePage() {
 					</HeaderButton>
 					<Link
 						to="../chat"
-						className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.28)] transition-colors hover:bg-mc-accent-hi"
+						className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-glow-accent transition-colors hover:bg-mc-accent-hi"
 					>
 						<Sparkles className="h-3.5 w-3.5" /> Ask Mesh
 					</Link>
@@ -119,7 +119,7 @@ export function ProjectHomePage() {
 							<h2 className="text-[13px] font-semibold text-mc-text">Get started</h2>
 						</div>
 						<div className="flex flex-col gap-2">
-							<BeamCard className="bg-gradient-to-r from-[#F4F7FF] to-white">
+							<BeamCard>
 								<QuickAction
 									icon={<FileText className="h-4 w-4 text-mc-accent" />}
 									title="Upload documents"
@@ -154,7 +154,7 @@ export function ProjectHomePage() {
 								<div className="px-4 py-3 text-sm text-mc-text-3">No repositories connected yet.</div>
 							)}
 							{repoList.map((r, i) => (
-								<div key={r.id} className={cn('flex items-center gap-3 px-4 py-3', i > 0 && 'border-t border-black/[.05]')}>
+								<div key={r.id} className={cn('flex items-center gap-3 px-4 py-3', i > 0 && 'border-t border-mc-hairline')}>
 									<FolderGit2 className="h-3.5 w-3.5 text-mc-accent" />
 									<span className="flex-1 truncate font-mono text-xs text-mc-text">{r.remoteUrl ?? '(zip upload)'}</span>
 									<RepoStatusBadge status={r.syncStatus} />
@@ -189,7 +189,7 @@ export function ProjectHomePage() {
 									e.preventDefault();
 									askMesh(question);
 								}}
-								className="flex items-center gap-2 rounded-xl border border-black/[.09] bg-mc-surface px-3 py-2"
+								className="flex items-center gap-2 rounded-xl border border-mc-border bg-mc-surface px-3 py-2"
 							>
 								<input
 									value={question}
@@ -220,7 +220,7 @@ export function ProjectHomePage() {
 			{/* Floating Ask Mesh dock */}
 			<Link
 				to="../chat"
-				className="fixed bottom-6 right-8 z-20 flex animate-float items-center gap-2 rounded-full bg-mc-accent shadow-[0_10px_30px_rgba(26,115,232,.32)] transition-colors hover:bg-mc-accent-hi"
+				className="fixed bottom-6 right-8 z-20 flex animate-float items-center gap-2 rounded-full bg-mc-accent shadow-glow-accent-lg transition-colors hover:bg-mc-accent-hi"
 				style={{ padding: '10px 18px' }}
 			>
 				<Sparkles className="h-3.5 w-3.5 text-white" />
@@ -234,7 +234,7 @@ function HeaderButton({ to, icon, children }: { to: string; icon: ReactNode; chi
 	return (
 		<Link
 			to={to}
-			className="flex items-center gap-2 rounded-full border border-black/[.1] bg-white px-3.5 py-2 text-[12.5px] font-medium text-mc-text-3 shadow-[0_1px_3px_rgba(16,24,40,.04)] transition-colors hover:bg-mc-surface hover:text-mc-text"
+			className="flex items-center gap-2 rounded-full border border-mc-border bg-mc-card px-3.5 py-2 text-[12.5px] font-medium text-mc-text-3 shadow-e1 transition-colors hover:bg-mc-surface hover:text-mc-text"
 		>
 			{icon}
 			{children}
@@ -246,8 +246,8 @@ function MetricCard({ label, children, accent = false }: { label: string; childr
 	return (
 		<div
 			className={cn(
-				'flex flex-col gap-2 rounded-xl border p-4 shadow-[0_1px_3px_rgba(16,24,40,.04)]',
-				accent ? 'border-mc-accent/[.18] bg-mc-accent/[.05]' : 'border-black/[.06] bg-white'
+				'flex flex-col gap-2 rounded-xl border p-4 shadow-e1',
+				accent ? 'border-mc-accent/25 bg-mc-accent/[.06]' : 'border-mc-hairline bg-mc-card'
 			)}
 		>
 			<span className={cn('font-mono text-[10px] uppercase tracking-[0.1em]', accent ? 'text-mc-accent' : 'text-mc-muted-2')}>{label}</span>
@@ -283,7 +283,7 @@ function QuickAction({
 				className={cn(
 					'whitespace-nowrap rounded-lg px-3 py-1.5 text-[11.5px] font-medium transition-colors',
 					subtle
-						? 'border border-black/[.1] bg-white text-mc-text-3 shadow-[0_1px_2px_rgba(16,24,40,.04)] hover:text-mc-text'
+						? 'border border-mc-border bg-mc-card text-mc-text-3 shadow-e1 hover:text-mc-text'
 						: 'bg-mc-accent text-white hover:bg-mc-accent-hi'
 				)}
 			>

@@ -29,7 +29,7 @@ export function JobProgressCenter() {
 		return (
 			<button
 				onClick={() => setOpen(true)}
-				className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full border border-black/[.08] bg-white px-3.5 py-2 text-[12.5px] font-medium text-mc-text shadow-[0_8px_24px_rgba(16,24,40,.14)] transition-transform hover:-translate-y-0.5"
+				className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full border border-mc-border bg-mc-card px-3.5 py-2 text-[12.5px] font-medium text-mc-text shadow-e3 transition-transform hover:-translate-y-0.5"
 			>
 				{activeCount > 0 ? <Loader2 className="h-4 w-4 animate-spin text-mc-accent" /> : <Activity className="h-4 w-4 text-mc-text-3" />}
 				{activeCount > 0 ? `${activeCount} running` : 'Background jobs'}
@@ -38,8 +38,8 @@ export function JobProgressCenter() {
 	}
 
 	return (
-		<div className="fixed bottom-5 right-5 z-40 flex max-h-[72vh] w-[380px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-black/[.08] bg-mc-bg/95 shadow-[0_20px_48px_rgba(16,24,40,.22)] backdrop-blur-xl animate-fade">
-			<header className="flex flex-none items-center gap-2 border-b border-black/[.06] px-4 py-3">
+		<div className="fixed bottom-5 right-5 z-40 flex max-h-[72vh] w-[380px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-mc-border bg-mc-card/95 shadow-e4 backdrop-blur-xl animate-fade">
+			<header className="flex flex-none items-center gap-2 border-b border-mc-hairline px-4 py-3">
 				<Activity className="h-4 w-4 text-mc-accent" />
 				<span className="text-[13px] font-semibold text-mc-text">Background jobs</span>
 				{activeCount > 0 && <span className="rounded-full bg-mc-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-mc-accent-lo">{activeCount} active</span>}

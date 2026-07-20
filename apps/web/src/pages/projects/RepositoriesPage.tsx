@@ -145,7 +145,7 @@ export function RepositoriesPage() {
 						<FolderGit2 className="h-4 w-4 flex-none text-mc-text-2" />
 						<button
 							onClick={() => setPickerOpen((o) => !o)}
-							className="flex h-9 flex-1 items-center justify-between gap-2 rounded-lg border border-black/[.1] bg-mc-surface px-3 text-left text-sm text-mc-text-2 hover:bg-mc-raised"
+							className="flex h-9 flex-1 items-center justify-between gap-2 rounded-lg border border-mc-border bg-mc-surface px-3 text-left text-sm text-mc-text-2 hover:bg-mc-raised"
 						>
 							<span className="truncate">
 								{picked.size > 0 ? `${picked.size} repositor${picked.size === 1 ? 'y' : 'ies'} selected` : `Select repositories from ${githubIntegration.externalAccountName ?? 'your GitHub app'}`}
@@ -155,7 +155,7 @@ export function RepositoriesPage() {
 						<button
 							onClick={() => void connectPicked()}
 							disabled={picked.size === 0 || attaching}
-							className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
+							className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-glow-accent transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
 						>
 							{attaching ? 'Connecting…' : `Connect${picked.size ? ` ${picked.size}` : ''}`}
 						</button>
@@ -168,8 +168,8 @@ export function RepositoriesPage() {
 						<>
 							{/* click-outside backdrop */}
 							<div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
-							<GlassCard className="absolute left-0 right-0 top-full z-20 mt-1.5 flex flex-col gap-0 overflow-hidden p-0 shadow-[0_12px_32px_rgba(16,24,40,.14)]">
-								<div className="flex items-center gap-2.5 border-b border-black/[.06] px-3.5 py-2.5">
+							<GlassCard className="absolute left-0 right-0 top-full z-20 mt-1.5 flex flex-col gap-0 overflow-hidden p-0 shadow-e3">
+								<div className="flex items-center gap-2.5 border-b border-mc-hairline px-3.5 py-2.5">
 									<Search className="h-4 w-4 flex-none text-mc-text-2" />
 									<input
 										autoFocus
@@ -216,7 +216,7 @@ export function RepositoriesPage() {
 									})}
 								</div>
 								{picked.size > 0 && (
-									<div className="flex items-center justify-between border-t border-black/[.06] px-3.5 py-2.5">
+									<div className="flex items-center justify-between border-t border-mc-hairline px-3.5 py-2.5">
 										<button onClick={() => setPicked(new Set())} className="text-[11.5px] text-mc-text-3 hover:text-mc-text">
 											Clear
 										</button>
@@ -241,12 +241,12 @@ export function RepositoriesPage() {
 							value={remoteUrl}
 							onChange={(e) => setRemoteUrl(e.target.value)}
 							placeholder="https://github.com/owner/repo"
-							className="h-9 min-w-[240px] flex-1 rounded-lg border border-black/[.1] bg-mc-surface px-3 font-mono text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-accent/50"
+							className="h-9 min-w-[240px] flex-1 rounded-lg border border-mc-border bg-mc-surface px-3 font-mono text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-accent/50"
 						/>
 						<button
 							onClick={doConnect}
 							disabled={!remoteUrl.trim() || connect.state.status === 'pending'}
-							className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
+							className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-glow-accent transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
 						>
 							{connect.state.status === 'pending' ? 'Connecting…' : 'Connect'}
 						</button>
@@ -292,7 +292,7 @@ export function RepositoriesPage() {
 									onClick={() => setSelectedId(r.id)}
 									className={cn(
 										'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors',
-										i > 0 && 'border-t border-black/[.05]',
+										i > 0 && 'border-t border-mc-hairline',
 										isSel ? 'bg-mc-accent/[.06]' : 'hover:bg-mc-surface'
 									)}
 								>
@@ -316,7 +316,7 @@ export function RepositoriesPage() {
 											void doSync(r.id);
 										}}
 										disabled={sync.state.status === 'pending'}
-										className="flex items-center gap-1.5 rounded-lg border border-black/[.09] bg-white px-2.5 py-1.5 text-[11.5px] text-mc-text-3 shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-colors hover:text-mc-text disabled:opacity-50"
+										className="flex items-center gap-1.5 rounded-lg border border-mc-border bg-mc-card px-2.5 py-1.5 text-[11.5px] text-mc-text-3 shadow-e1 transition-colors hover:bg-mc-surface hover:text-mc-text disabled:opacity-50"
 									>
 										<RefreshCw className="h-3 w-3" /> Sync
 									</button>
@@ -326,7 +326,7 @@ export function RepositoriesPage() {
 											setPendingDelete(r);
 										}}
 										title="Disconnect repository"
-										className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-black/[.09] bg-white text-mc-muted shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-colors hover:border-mc-danger/30 hover:text-mc-danger"
+										className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-mc-border bg-mc-card text-mc-muted shadow-e1 transition-colors hover:border-mc-danger/30 hover:text-mc-danger"
 									>
 										<Trash2 className="h-3.5 w-3.5" />
 									</button>
@@ -339,7 +339,7 @@ export function RepositoriesPage() {
 
 				{/* Right rail — repository intelligence (honest ingestion guidance + selected repo details) */}
 				<div className="flex flex-col gap-4">
-					<BeamCard className="bg-gradient-to-br from-[#F4F7FF] to-[#F6F5FF] p-4">
+					<BeamCard className="bg-gradient-to-br from-mc-accent/[.08] to-mc-purple/[.10] p-4">
 						<div className="flex flex-col gap-2.5">
 							<div className="flex items-center gap-2">
 								<MeshAvatar size={22} breathe />
@@ -377,7 +377,7 @@ export function RepositoriesPage() {
 			</div>
 
 			<Dialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
-				<DialogContent className="border-black/[.08] bg-white">
+				<DialogContent className="border-mc-border bg-mc-card">
 					<DialogHeader>
 						<DialogTitle>Disconnect this repository?</DialogTitle>
 						<DialogDescription>

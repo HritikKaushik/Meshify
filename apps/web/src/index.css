@@ -2,68 +2,400 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Indeterminate progress sweep for the Job Progress Center (stages without a percentage). */
-@keyframes mc-indeterminate {
-	0% {
-		transform: translateX(-100%);
-	}
-	100% {
-		transform: translateX(400%);
-	}
-}
+/* ============================================================================
+   Meshify 2.0 — design tokens
+   Dark-first. Every color is a CSS variable so the whole app themes from one
+   place. The shadcn contract (--background, --primary, …) drives components/ui;
+   the mc-* channel tokens drive Meshify's bespoke surfaces. `.light` overrides
+   the dark defaults. Tokens are HSL channels ("H S% L%") so Tailwind can inject
+   opacity via `hsl(var(--x) / <alpha-value>)` — except border/hairline/shadows,
+   which carry their own alpha.
+   ========================================================================== */
 
-/* Meshify light theme — a calm, engineered light surface (canvas #F7F8FB, white
-   cards) with Google-Blue actions and an indigo "Mesh" (AI) accent. Matches the
-   Meshify Design Doc / Brand v1. `darkMode: 'class'` stays wired for a future
-   dark mode, but light is the only theme in effect today. */
 @layer base {
-	:root {
-		--background: 222 30% 98%; /* #F7F8FB canvas */
-		--foreground: 222 22% 9%; /* #12141A ink */
-		--card: 0 0% 100%; /* #FFFFFF */
-		--card-foreground: 222 22% 9%;
-		--popover: 0 0% 100%;
-		--popover-foreground: 222 22% 9%;
-		--primary: 214 82% 51%; /* #1A73E8 Google Blue */
+	:root,
+	.dark {
+		/* — shadcn contract (dark) — */
+		--background: 240 6% 7%;
+		--foreground: 0 0% 98%;
+		--card: 240 6% 9.5%;
+		--card-foreground: 0 0% 98%;
+		--popover: 240 6% 11%;
+		--popover-foreground: 0 0% 98%;
+		--primary: 245 78% 68%;
 		--primary-foreground: 0 0% 100%;
-		--secondary: 222 30% 96%; /* #F4F6FA */
-		--secondary-foreground: 222 22% 9%;
-		--muted: 222 30% 96%;
-		--muted-foreground: 222 12% 40%; /* #5A6072 */
-		--accent: 222 30% 95%;
-		--accent-foreground: 222 22% 9%;
-		--destructive: 359 76% 59%; /* #E5484D */
+		--secondary: 240 5% 14%;
+		--secondary-foreground: 0 0% 98%;
+		--muted: 240 5% 14%;
+		--muted-foreground: 240 5% 63%;
+		--accent: 240 5% 16%;
+		--accent-foreground: 0 0% 98%;
+		--destructive: 358 70% 58%;
 		--destructive-foreground: 0 0% 100%;
-		--border: 222 30% 90%; /* ~rgba(16,24,40,.08) */
-		--input: 222 25% 88%;
-		--ring: 214 82% 51%;
-		--radius: 0.7rem;
+		--border: 240 5% 19%;
+		--input: 240 5% 20%;
+		--ring: 245 78% 68%;
+		--radius: 0.625rem;
+
+		/* — Meshify surfaces + ink (dark) — */
+		--mc-bg: 240 6% 7%;
+		--mc-card: 240 6% 9.5%;
+		--mc-surface: 240 5% 12.5%;
+		--mc-raised: 240 5% 16%;
+		--mc-text: 0 0% 98%;
+		--mc-text-2: 240 6% 82%;
+		--mc-text-3: 240 5% 63%;
+		--mc-muted: 240 5% 50%;
+		--mc-muted-2: 240 4% 42%;
+
+		/* — accent (indigo → iris) + Mesh/AI (violet) — */
+		--mc-accent: 245 78% 68%;
+		--mc-accent-hi: 246 90% 77%;
+		--mc-accent-lo: 244 92% 83%; /* bright text on faint accent tints (dark) */
+		--mc-purple: 258 82% 73%;
+		--mc-purple-lo: 258 92% 83%;
+
+		/* — status (dark) — */
+		--mc-success: 152 55% 52%;
+		--mc-success-lo: 152 62% 68%;
+		--mc-indexing: 213 90% 67%;
+		--mc-danger: 358 72% 63%;
+		--mc-danger-lo: 358 88% 75%;
+		--mc-amber: 38 92% 60%;
+		--mc-amber-lo: 40 96% 70%;
+		--mc-teal: 190 82% 56%;
+
+		/* — hairline borders (own alpha) — */
+		--mc-border: rgba(255, 255, 255, 0.09);
+		--mc-hairline: rgba(255, 255, 255, 0.06);
+
+		/* — elevation + glows (dark: soft, deep) — */
+		--e1: 0 1px 2px rgba(0, 0, 0, 0.44);
+		--e2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.36);
+		--e3: 0 2px 8px rgba(0, 0, 0, 0.44), 0 16px 40px rgba(0, 0, 0, 0.5);
+		--e4: 0 8px 24px rgba(0, 0, 0, 0.5), 0 32px 80px rgba(0, 0, 0, 0.62);
+		--glow-accent: 0 6px 20px rgba(112, 106, 245, 0.36);
+		--glow-accent-lg: 0 10px 30px rgba(112, 106, 245, 0.46);
+		--glow-purple: 0 6px 20px rgba(146, 108, 245, 0.36);
+		--glow-purple-lg: 0 10px 32px rgba(146, 108, 245, 0.46);
+
+		/* — scrollbar + skeleton (dark) — */
+		--scrollbar-thumb: rgba(255, 255, 255, 0.14);
+		--skeleton-base: 240 5% 15%;
+		--skeleton-sheen: rgba(255, 255, 255, 0.06);
+
+		/* — shadcn Sidebar (dark) — */
+		--sidebar: 240 6% 8.5%;
+		--sidebar-foreground: 240 5% 84%;
+		--sidebar-primary: 245 78% 68%;
+		--sidebar-primary-foreground: 0 0% 100%;
+		--sidebar-accent: 240 5% 14%;
+		--sidebar-accent-foreground: 0 0% 98%;
+		--sidebar-border: 240 5% 15%;
+		--sidebar-ring: 245 78% 68%;
+	}
+
+	.light {
+		/* — shadcn contract (light) — */
+		--background: 240 25% 99%;
+		--foreground: 240 18% 9%;
+		--card: 0 0% 100%;
+		--card-foreground: 240 18% 9%;
+		--popover: 0 0% 100%;
+		--popover-foreground: 240 18% 9%;
+		--primary: 245 68% 56%;
+		--primary-foreground: 0 0% 100%;
+		--secondary: 240 20% 96%;
+		--secondary-foreground: 240 18% 9%;
+		--muted: 240 20% 96%;
+		--muted-foreground: 240 8% 40%;
+		--accent: 240 20% 95%;
+		--accent-foreground: 240 18% 9%;
+		--destructive: 358 68% 53%;
+		--destructive-foreground: 0 0% 100%;
+		--border: 240 16% 90%;
+		--input: 240 14% 88%;
+		--ring: 245 68% 56%;
+
+		/* — Meshify surfaces + ink (light) — */
+		--mc-bg: 240 25% 99%;
+		--mc-card: 0 0% 100%;
+		--mc-surface: 240 22% 97%;
+		--mc-raised: 240 18% 94%;
+		--mc-text: 240 18% 9%;
+		--mc-text-2: 240 12% 22%;
+		--mc-text-3: 240 8% 40%;
+		--mc-muted: 240 6% 54%;
+		--mc-muted-2: 240 6% 62%;
+
+		/* — accent + Mesh/AI (light: deeper for contrast) — */
+		--mc-accent: 245 68% 56%;
+		--mc-accent-hi: 245 74% 63%;
+		--mc-accent-lo: 245 72% 46%; /* deep text on faint accent tints (light) */
+		--mc-purple: 258 68% 58%;
+		--mc-purple-lo: 258 72% 48%;
+
+		/* — status (light) — */
+		--mc-success: 152 62% 38%;
+		--mc-success-lo: 152 66% 30%;
+		--mc-indexing: 213 82% 52%;
+		--mc-danger: 358 66% 52%;
+		--mc-danger-lo: 358 72% 42%;
+		--mc-amber: 33 88% 44%;
+		--mc-amber-lo: 33 92% 34%;
+		--mc-teal: 190 78% 38%;
+
+		--mc-border: rgba(16, 24, 40, 0.1);
+		--mc-hairline: rgba(16, 24, 40, 0.06);
+
+		/* — elevation + glows (light: engineered soft) — */
+		--e1: 0 1px 2px rgba(16, 24, 40, 0.05);
+		--e2: 0 1px 2px rgba(16, 24, 40, 0.05), 0 10px 30px rgba(16, 24, 40, 0.07);
+		--e3: 0 2px 8px rgba(16, 24, 40, 0.06), 0 16px 40px rgba(16, 24, 40, 0.1);
+		--e4: 0 8px 20px rgba(16, 24, 40, 0.1), 0 30px 80px rgba(16, 24, 40, 0.16);
+		--glow-accent: 0 6px 16px rgba(79, 87, 229, 0.24);
+		--glow-accent-lg: 0 10px 28px rgba(79, 87, 229, 0.3);
+		--glow-purple: 0 6px 18px rgba(109, 90, 229, 0.24);
+		--glow-purple-lg: 0 10px 30px rgba(109, 90, 229, 0.3);
+
+		--scrollbar-thumb: rgba(16, 24, 40, 0.18);
+		--skeleton-base: 240 20% 93%;
+		--skeleton-sheen: rgba(255, 255, 255, 0.65);
+
+		/* — shadcn Sidebar (light) — */
+		--sidebar: 240 22% 98%;
+		--sidebar-foreground: 240 12% 22%;
+		--sidebar-primary: 245 68% 56%;
+		--sidebar-primary-foreground: 0 0% 100%;
+		--sidebar-accent: 240 20% 95%;
+		--sidebar-accent-foreground: 240 18% 9%;
+		--sidebar-border: 240 16% 90%;
+		--sidebar-ring: 245 68% 56%;
 	}
 
 	* {
 		@apply border-border;
 	}
 
+	html {
+		scroll-behavior: smooth;
+		scroll-padding-top: 88px; /* clears the sticky landing nav on anchor jumps */
+		color-scheme: dark;
+	}
+	html.light {
+		color-scheme: light;
+	}
+
 	body {
 		@apply bg-background text-foreground;
 		font-family: 'Geist', system-ui, -apple-system, sans-serif;
 		-webkit-font-smoothing: antialiased;
+		text-rendering: optimizeLegibility;
 	}
 
-	/* Thin, light scrollbars to match the calm light surface. */
+	/* Thin, theme-aware scrollbars. */
 	* {
 		scrollbar-width: thin;
-		scrollbar-color: rgba(16, 24, 40, 0.16) transparent;
+		scrollbar-color: var(--scrollbar-thumb) transparent;
 	}
 	*::-webkit-scrollbar {
 		width: 8px;
 		height: 8px;
 	}
 	*::-webkit-scrollbar-thumb {
-		background: rgba(16, 24, 40, 0.16);
+		background: var(--scrollbar-thumb);
 		border-radius: 99px;
 	}
 	*::-webkit-scrollbar-track {
 		background: transparent;
+	}
+
+	/* Respect reduced-motion — kill ambient loops + heavy transitions, keep the
+	   UI usable and calm. (a11y: prefers-reduced-motion) */
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.001ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.001ms !important;
+			scroll-behavior: auto !important;
+		}
+	}
+}
+
+@layer components {
+	/* Skeleton sheen — a soft sweep over a muted base. Powers <Skeleton>. */
+	.mc-skeleton {
+		position: relative;
+		overflow: hidden;
+		background: hsl(var(--skeleton-base));
+	}
+	.mc-skeleton::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		transform: translateX(-100%);
+		background: linear-gradient(90deg, transparent, var(--skeleton-sheen), transparent);
+		animation: shimmer 1.6s infinite;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.mc-skeleton::after {
+			display: none;
+		}
+	}
+
+	/* Rendered chat/markdown typography — tuned to the ink ramp, theme-aware. */
+	.mc-prose {
+		font-size: 15px;
+		line-height: 1.68;
+		color: hsl(var(--mc-text-2));
+	}
+	.mc-prose > * + * {
+		margin-top: 0.7em;
+	}
+	.mc-prose h1,
+	.mc-prose h2,
+	.mc-prose h3 {
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		color: hsl(var(--mc-text));
+		line-height: 1.3;
+	}
+	.mc-prose h1 {
+		font-size: 1.3em;
+	}
+	.mc-prose h2 {
+		font-size: 1.15em;
+	}
+	.mc-prose h3 {
+		font-size: 1.02em;
+	}
+	.mc-prose ul,
+	.mc-prose ol {
+		padding-left: 1.35em;
+	}
+	.mc-prose ul {
+		list-style: disc;
+	}
+	.mc-prose ol {
+		list-style: decimal;
+	}
+	.mc-prose li + li {
+		margin-top: 0.3em;
+	}
+	.mc-prose a {
+		color: hsl(var(--mc-accent-lo));
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.mc-prose a:hover {
+		color: hsl(var(--mc-accent));
+	}
+	.mc-prose strong {
+		font-weight: 600;
+		color: hsl(var(--mc-text));
+	}
+	.mc-prose code {
+		font-family: 'Geist Mono', ui-monospace, monospace;
+		font-size: 0.86em;
+		background: hsl(var(--mc-raised));
+		border: 1px solid var(--mc-hairline);
+		padding: 0.1em 0.36em;
+		border-radius: 6px;
+	}
+	.mc-prose pre {
+		overflow-x: auto;
+		background: hsl(var(--mc-surface));
+		border: 1px solid var(--mc-border);
+		border-radius: 12px;
+		padding: 14px 16px;
+		font-size: 12.5px;
+		line-height: 1.6;
+	}
+	.mc-prose pre code {
+		background: none;
+		border: 0;
+		padding: 0;
+		font-size: inherit;
+	}
+	.mc-prose blockquote {
+		border-left: 3px solid hsl(var(--mc-accent) / 0.5);
+		padding-left: 0.9em;
+		color: hsl(var(--mc-text-3));
+	}
+	.mc-prose table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 13px;
+	}
+	.mc-prose th,
+	.mc-prose td {
+		border: 1px solid var(--mc-border);
+		padding: 6px 10px;
+		text-align: left;
+	}
+	.mc-prose th {
+		background: hsl(var(--mc-surface));
+		font-weight: 600;
+	}
+
+	/* Syntax highlighting (rehype-highlight emits .hljs-*). Theme-aware via tokens. */
+	.hljs {
+		color: hsl(var(--mc-text-2));
+	}
+	.hljs-comment,
+	.hljs-quote {
+		color: hsl(var(--mc-muted));
+		font-style: italic;
+	}
+	.hljs-keyword,
+	.hljs-selector-tag,
+	.hljs-built_in,
+	.hljs-literal {
+		color: hsl(var(--mc-accent-lo));
+	}
+	.hljs-string,
+	.hljs-attr,
+	.hljs-regexp {
+		color: hsl(var(--mc-success-lo));
+	}
+	.hljs-number,
+	.hljs-symbol,
+	.hljs-bullet {
+		color: hsl(var(--mc-amber-lo));
+	}
+	.hljs-title,
+	.hljs-section,
+	.hljs-function .hljs-title,
+	.hljs-type,
+	.hljs-class .hljs-title {
+		color: hsl(var(--mc-purple-lo));
+	}
+	.hljs-variable,
+	.hljs-template-variable,
+	.hljs-tag,
+	.hljs-name {
+		color: hsl(var(--mc-danger-lo));
+	}
+	.hljs-attribute,
+	.hljs-meta {
+		color: hsl(var(--mc-text-3));
+	}
+	.hljs-emphasis {
+		font-style: italic;
+	}
+	.hljs-strong {
+		font-weight: 600;
+	}
+
+	/* Indeterminate progress sweep for the Job Progress Center. */
+	@keyframes mc-indeterminate {
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(400%);
+		}
 	}
 }

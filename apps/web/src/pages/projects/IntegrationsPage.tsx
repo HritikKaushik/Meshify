@@ -153,7 +153,7 @@ export function IntegrationsPage() {
 								<div className="flex min-w-0 items-start gap-3">
 									<span
 										className={`flex h-9 w-9 flex-none items-center justify-center rounded-xl ${
-											COLORED_BRAND_ICON_KEYS.has(provider.iconKey) ? 'border border-mc-line bg-white' : 'text-white'
+											COLORED_BRAND_ICON_KEYS.has(provider.iconKey) ? 'border border-mc-border bg-mc-text/5' : 'text-white'
 										}`}
 										style={COLORED_BRAND_ICON_KEYS.has(provider.iconKey) ? undefined : { backgroundColor: provider.brandColor ?? '#5f6368' }}
 									>

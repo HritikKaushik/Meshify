@@ -135,8 +135,8 @@ export function ChatPage() {
 
 					{turns.map((t, i) =>
 						t.role === 'user' ? (
-							<div key={i} className="ml-auto max-w-[80%] rounded-[18px] rounded-br-md bg-[#EEF2FB] px-4 py-3">
-								<p className="text-[14.5px] leading-relaxed text-mc-text-2">{t.content}</p>
+							<div key={i} className="ml-auto max-w-[80%] rounded-[18px] rounded-br-md border border-mc-accent/20 bg-mc-accent/[.12] px-4 py-3">
+								<p className="text-[14.5px] leading-relaxed text-mc-text">{t.content}</p>
 							</div>
 						) : (
 							<MeshMessage key={i} turn={t} reveal={i === turns.length - 1 && !!t.live} />
@@ -151,7 +151,7 @@ export function ChatPage() {
 			</div>
 
 			{/* Floating composer — fades into the canvas at the bottom of the column */}
-			<div className="flex-none px-5 pb-6 pt-3 sm:px-10" style={{ background: 'linear-gradient(0deg,#F7F8FB 62%,transparent)' }}>
+			<div className="flex-none px-5 pb-6 pt-3 sm:px-10" style={{ background: 'linear-gradient(0deg, hsl(var(--mc-bg)) 62%, transparent)' }}>
 				<div className="mx-auto w-full max-w-3xl">
 					{turns.length > 0 && (
 						<div className="mb-3 flex flex-wrap gap-1.5">
@@ -164,7 +164,7 @@ export function ChatPage() {
 					)}
 					<form
 						onSubmit={(e: FormEvent) => { e.preventDefault(); ask(question); }}
-						className="flex items-center gap-3 rounded-[18px] border border-black/[.09] bg-white px-4 py-3 shadow-[0_12px_36px_rgba(16,24,40,.1),0_2px_8px_rgba(16,24,40,.05)] transition-colors focus-within:border-mc-accent/40"
+						className="flex items-center gap-3 rounded-[18px] border border-mc-border bg-mc-card px-4 py-3 shadow-e3 transition-colors focus-within:border-mc-accent/40"
 					>
 						<input
 							value={question}
@@ -176,7 +176,7 @@ export function ChatPage() {
 						<button
 							type="submit"
 							disabled={!question.trim() || chat.state.status === 'pending'}
-							className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-xl bg-mc-accent text-white shadow-[0_4px_12px_rgba(26,115,232,.3)] transition-colors hover:bg-mc-accent-hi disabled:opacity-40"
+							className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-xl bg-mc-accent text-white shadow-glow-accent transition-colors hover:bg-mc-accent-hi disabled:opacity-40"
 						>
 							<ArrowUp className="h-4 w-4" />
 						</button>
