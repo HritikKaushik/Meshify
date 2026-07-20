@@ -10,4 +10,8 @@ export {
 	InMemorySlackConversationRepository,
 	InMemorySlackSyncStateRepository,
 	InMemoryPipelineJobRepository,
+	InMemoryIntegrationRepository,
+	InMemoryIntegrationResourceRepository,
+	InMemoryWebhookEventRepository,
+	InMemoryIntegrationCredentialRepository,
 } from './in-memory-repositories.js';

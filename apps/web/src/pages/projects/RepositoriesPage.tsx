@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { FolderGit2, Link2, RefreshCw, Sparkles, GitBranch, TriangleAlert, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { FolderGit2, Link2, RefreshCw, Sparkles, GitBranch, TriangleAlert, Trash2, Search, Lock, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
 import { api } from '@/api-client';
-import type { Repository } from '@/api';
+import type { Repository, Integration, IntegrationResource } from '@/api';
 import { useAsync } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
@@ -25,10 +26,17 @@ import { cn } from '@/lib/utils';
 export function RepositoriesPage() {
 	const { project } = useWorkspace();
 	const [remoteUrl, setRemoteUrl] = useState('');
+	const [manualMode, setManualMode] = useState(false);
+	const [search, setSearch] = useState('');
+	const [pickerOpen, setPickerOpen] = useState(false);
+	const [picked, setPicked] = useState<Set<string>>(new Set());
+	const [attaching, setAttaching] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const list = useAsync<Repository[]>();
 	const connect = useAsync<unknown>();
 	const sync = useAsync<unknown>();
+	const integrations = useAsync<Integration[]>();
+	const resources = useAsync<{ resources: IntegrationResource[]; nextCursor?: string }>();
 	const [pendingDelete, setPendingDelete] = useState<Repository | null>(null);
 	const [deleting, setDeleting] = useState(false);
 
@@ -36,8 +44,23 @@ export function RepositoriesPage() {
 
 	useEffect(() => {
 		void refresh();
+		integrations.run(() => api.listIntegrations());
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [project.id]);
+
+	// The org's active GitHub app grant, if any — enables browsing its repositories instead of pasting URLs.
+	const githubIntegration = useMemo(
+		() => (integrations.state.status === 'success' ? integrations.state.value.find((i) => i.provider === 'github' && i.status === 'active') : undefined),
+		[integrations.state]
+	);
+
+	const loadResources = () => {
+		if (githubIntegration) resources.run(() => api.listIntegrationResources(githubIntegration.id));
+	};
+	useEffect(() => {
+		loadResources();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [githubIntegration?.id]);
 
 	// Real-time: refresh sync status when a repo ingest/sync job finishes (live progress in the Job Progress Center).
 	useRefreshOnJobComplete(['clone_repo', 'sync_repo'], refresh);
@@ -45,11 +68,51 @@ export function RepositoriesPage() {
 	const repos = list.state.status === 'success' ? list.state.value : [];
 	const selected = repos.find((r) => r.id === selectedId) ?? repos[0];
 
+	const browsable = resources.state.status === 'success' ? resources.state.value.resources : [];
+	const filtered = useMemo(() => {
+		const q = search.trim().toLowerCase();
+		const matches = q ? browsable.filter((r) => r.name.toLowerCase().includes(q)) : browsable;
+		return [...matches].sort((a, b) => Number(a.connected) - Number(b.connected) || a.name.localeCompare(b.name)).slice(0, 60);
+	}, [browsable, search]);
+
 	const doConnect = async () => {
 		if (!remoteUrl.trim()) return;
 		await connect.run(() => api.connectGitHub(project.id, remoteUrl));
 		setRemoteUrl('');
 		await refresh();
+	};
+
+	const togglePick = (id: string) =>
+		setPicked((prev) => {
+			const next = new Set(prev);
+			next.has(id) ? next.delete(id) : next.add(id);
+			return next;
+		});
+
+	const connectPicked = async () => {
+		if (!githubIntegration || picked.size === 0) return;
+		setAttaching(true);
+		let done = 0;
+		try {
+			for (const id of picked) {
+				await api.connectRepoFromIntegration(project.id, githubIntegration.id, id);
+				done += 1;
+			}
+			toast.success(`${done} repositor${done === 1 ? 'y' : 'ies'} connected — ingestion started`);
+			setPicked(new Set());
+			setSearch('');
+			setPickerOpen(false);
+			await refresh();
+			loadResources();
+		} catch (err) {
+			toast.error((err as Error).message);
+			if (done > 0) {
+				await refresh();
+				loadResources();
+			}
+		} finally {
+			setAttaching(false);
+		}
 	};
 
 	const doSync = async (id: string) => {
@@ -75,26 +138,134 @@ export function RepositoriesPage() {
 
 	return (
 		<div className="flex flex-col gap-5">
-			{/* Connect bar */}
-			<GlassCard className="flex flex-wrap items-center gap-3 p-4">
-				<Link2 className="h-4 w-4 text-mc-text-2" />
-				<input
-					value={remoteUrl}
-					onChange={(e) => setRemoteUrl(e.target.value)}
-					placeholder="https://github.com/owner/repo"
-					className="h-9 min-w-[240px] flex-1 rounded-lg border border-black/[.1] bg-mc-surface px-3 font-mono text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-accent/50"
-				/>
-				<button
-					onClick={doConnect}
-					disabled={!remoteUrl.trim() || connect.state.status === 'pending'}
-					className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
-				>
-					{connect.state.status === 'pending' ? 'Connecting…' : 'Connect'}
-				</button>
-			</GlassCard>
-			{connect.state.status === 'error' && (
-				<p className="text-sm text-mc-danger">{(connect.state.error as Error).message}</p>
+			{/* Connect: multi-select repositories from the connected GitHub app, or paste a URL. */}
+			{githubIntegration && !manualMode ? (
+				<div className="relative">
+					<GlassCard className="flex flex-wrap items-center gap-3 p-4">
+						<FolderGit2 className="h-4 w-4 flex-none text-mc-text-2" />
+						<button
+							onClick={() => setPickerOpen((o) => !o)}
+							className="flex h-9 flex-1 items-center justify-between gap-2 rounded-lg border border-black/[.1] bg-mc-surface px-3 text-left text-sm text-mc-text-2 hover:bg-mc-raised"
+						>
+							<span className="truncate">
+								{picked.size > 0 ? `${picked.size} repositor${picked.size === 1 ? 'y' : 'ies'} selected` : `Select repositories from ${githubIntegration.externalAccountName ?? 'your GitHub app'}`}
+							</span>
+							<ChevronDown className={cn('h-4 w-4 flex-none text-mc-text-3 transition-transform', pickerOpen && 'rotate-180')} />
+						</button>
+						<button
+							onClick={() => void connectPicked()}
+							disabled={picked.size === 0 || attaching}
+							className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
+						>
+							{attaching ? 'Connecting…' : `Connect${picked.size ? ` ${picked.size}` : ''}`}
+						</button>
+						<button onClick={() => setManualMode(true)} className="text-[11.5px] text-mc-text-3 hover:text-mc-text">
+							Paste a URL
+						</button>
+					</GlassCard>
+
+					{pickerOpen && (
+						<>
+							{/* click-outside backdrop */}
+							<div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
+							<GlassCard className="absolute left-0 right-0 top-full z-20 mt-1.5 flex flex-col gap-0 overflow-hidden p-0 shadow-[0_12px_32px_rgba(16,24,40,.14)]">
+								<div className="flex items-center gap-2.5 border-b border-black/[.06] px-3.5 py-2.5">
+									<Search className="h-4 w-4 flex-none text-mc-text-2" />
+									<input
+										autoFocus
+										value={search}
+										onChange={(e) => setSearch(e.target.value)}
+										placeholder="Search repositories…"
+										className="h-6 flex-1 bg-transparent text-sm text-mc-text placeholder:text-mc-muted focus:outline-none"
+									/>
+									<button onClick={loadResources} title="Refresh list" className="text-mc-text-3 hover:text-mc-text">
+										<RefreshCw className="h-3.5 w-3.5" />
+									</button>
+								</div>
+								<div className="max-h-[300px] overflow-y-auto py-1">
+									{resources.state.status === 'pending' && <div className="px-4 py-4 text-sm text-mc-text-3">Loading repositories from GitHub…</div>}
+									{resources.state.status === 'error' && <div className="px-4 py-4 text-sm text-mc-danger">{(resources.state.error as Error).message}</div>}
+									{resources.state.status === 'success' && filtered.length === 0 && (
+										<div className="px-4 py-6 text-center text-[13px] text-mc-text-3">
+											{browsable.length === 0 ? 'This installation exposes no repositories. Grant repos to the app on GitHub, then refresh.' : 'No repositories match your search.'}
+										</div>
+									)}
+									{filtered.map((repo) => {
+										const checked = repo.connected || picked.has(repo.id);
+										return (
+											<label
+												key={repo.id}
+												className={cn(
+													'flex cursor-pointer items-center gap-3 px-3.5 py-2 text-[13px]',
+													repo.connected ? 'cursor-default opacity-55' : 'hover:bg-mc-accent/[.06]'
+												)}
+											>
+												<input
+													type="checkbox"
+													disabled={repo.connected}
+													checked={checked}
+													onChange={() => togglePick(repo.id)}
+													className="h-3.5 w-3.5 flex-none accent-mc-accent"
+												/>
+												<FolderGit2 className="h-4 w-4 flex-none text-mc-accent" />
+												<span className="truncate font-mono text-mc-text">{repo.name}</span>
+												{repo.private && <Lock className="h-3 w-3 flex-none text-mc-muted" />}
+												{repo.connected && <span className="ml-auto flex-none text-[11px] text-mc-text-3">connected</span>}
+											</label>
+										);
+									})}
+								</div>
+								{picked.size > 0 && (
+									<div className="flex items-center justify-between border-t border-black/[.06] px-3.5 py-2.5">
+										<button onClick={() => setPicked(new Set())} className="text-[11.5px] text-mc-text-3 hover:text-mc-text">
+											Clear
+										</button>
+										<button
+											onClick={() => void connectPicked()}
+											disabled={attaching}
+											className="rounded-full bg-mc-accent px-3.5 py-1.5 text-[12px] font-semibold text-white hover:bg-mc-accent-hi disabled:opacity-50"
+										>
+											{attaching ? 'Connecting…' : `Connect ${picked.size}`}
+										</button>
+									</div>
+								)}
+							</GlassCard>
+						</>
+					)}
+				</div>
+			) : (
+				<GlassCard className="flex flex-col gap-2 p-4">
+					<div className="flex flex-wrap items-center gap-3">
+						<Link2 className="h-4 w-4 text-mc-text-2" />
+						<input
+							value={remoteUrl}
+							onChange={(e) => setRemoteUrl(e.target.value)}
+							placeholder="https://github.com/owner/repo"
+							className="h-9 min-w-[240px] flex-1 rounded-lg border border-black/[.1] bg-mc-surface px-3 font-mono text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-accent/50"
+						/>
+						<button
+							onClick={doConnect}
+							disabled={!remoteUrl.trim() || connect.state.status === 'pending'}
+							className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
+						>
+							{connect.state.status === 'pending' ? 'Connecting…' : 'Connect'}
+						</button>
+					</div>
+					<p className="text-[11.5px] text-mc-text-3">
+						{githubIntegration ? (
+							<button onClick={() => setManualMode(false)} className="text-mc-accent hover:underline">
+								← Browse your GitHub app's repositories instead
+							</button>
+						) : (
+							<>
+								Tip: <Link to={`/projects/${project.id}/integrations`} className="text-mc-accent hover:underline">connect your GitHub app</Link> to browse and search
+								its repositories instead of pasting URLs.
+							</>
+						)}
+					</p>
+				</GlassCard>
 			)}
+			{connect.state.status === 'error' && <p className="text-sm text-mc-danger">{(connect.state.error as Error).message}</p>}
 
 			<div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
 				{/* Repository list */}

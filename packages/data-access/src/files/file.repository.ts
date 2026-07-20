@@ -15,5 +15,9 @@ export interface FileRepository {
 	upsert(input: UpsertFileInput): Promise<RepoFile>;
 	listByRepository(repositoryId: string): Promise<RepoFile[]>;
 	updateStatusByRepository(repositoryId: string, from: FileStatus, to: FileStatus): Promise<void>;
+	/** Batch lookup by exact paths — the ConnectorEngine's content-hash ledger read. */
+	findByRepositoryAndPaths(repositoryId: string, paths: string[]): Promise<RepoFile[]>;
+	/** Flip a specific path set (the engine's per-batch embedded stamp). */
+	updateStatusForPaths(repositoryId: string, paths: string[], status: FileStatus): Promise<void>;
 	markDeleted(repositoryId: string, paths: string[]): Promise<void>;
 }

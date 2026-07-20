@@ -118,6 +118,9 @@ importers:
       '@meshify/object-storage':
         specifier: workspace:*
         version: link:../../packages/object-storage
+      '@meshify/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@meshify/queues':
         specifier: workspace:*
         version: link:../../packages/queues
@@ -264,6 +267,9 @@ importers:
       '@meshify/object-storage':
         specifier: workspace:*
         version: link:../../packages/object-storage
+      '@meshify/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@meshify/queues':
         specifier: workspace:*
         version: link:../../packages/queues
@@ -351,6 +357,9 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
 
   packages/embeddings:
     devDependencies:
@@ -385,6 +394,37 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+
+  packages/providers:
+    dependencies:
+      '@meshify/data-access':
+        specifier: workspace:*
+        version: link:../data-access
+      '@meshify/github':
+        specifier: workspace:*
+        version: link:../github
+      '@meshify/slack':
+        specifier: workspace:*
+        version: link:../slack
+      adm-zip:
+        specifier: ^0.5.16
+        version: 0.5.18
+      tar:
+        specifier: ^7.4.3
+        version: 7.5.19
+    devDependencies:
+      '@types/adm-zip':
+        specifier: ^0.5.7
+        version: 0.5.8
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
 
   packages/queues:
     dependencies:

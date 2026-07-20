@@ -17,7 +17,7 @@ import type { JobEventPublisher } from '@meshify/queues';
 import type { RagPort } from '@meshify/rocketride-gateway';
 import { resolveIngestToken, type IngestTokenDeps } from '../processors/resolve-ingest-token.js';
 import type { JobProgress } from '../processors/job-progress.js';
-import { groupConversations } from './conversation-grouper.js';
+import { groupConversations } from '@meshify/providers';
 
 /** Narrow port over the vector store — purges a conversation's stale points before a re-ingest. */
 export interface SlackVectorStore {
@@ -64,6 +64,11 @@ export async function ingestWorkspace(deps: SlackIngestionDeps, command: SlackIn
 	if (!deps.encryptionKey) throw new Error('ORG_KEY_ENCRYPTION_KEY is not set — cannot decrypt the Slack access token');
 
 	progress?.setTitle(workspace.teamName ?? 'Slack workspace');
+	// Legacy per-workspace token; the provider-platform sync engine sources the
+	// token from the integration's CredentialVault instead (M4 cutover).
+	if (!workspace.encryptedAccessToken) {
+		throw new Error(`Slack workspace "${workspace.id}" has no legacy access token — it must sync through its integration`);
+	}
 	const token = decryptSecret(deps.encryptionKey, workspace.encryptedAccessToken);
 	await progress?.stage('Loading channels', 10);
 	const channels = await deps.slackChannels.listSelectedByWorkspace(command.workspaceId);

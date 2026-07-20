@@ -1,4 +1,11 @@
-import type { GitHubAppAuth } from './github-app-auth.js';
+/**
+ * Anything that can produce an installation token covering owner/repo:
+ * GitHubAppAuth (per-repo discovery, legacy path) or a vault-backed source
+ * (provider platform — the DB-cached installation token).
+ */
+export interface InstallationTokenSource {
+	installationToken(owner: string, repo: string): Promise<string>;
+}
 
 export interface RepoHead {
 	defaultBranch: string;
@@ -20,7 +27,7 @@ export class GitHubRepoClient {
 	private readonly apiBaseUrl: string;
 
 	constructor(
-		private readonly auth: GitHubAppAuth,
+		private readonly auth: InstallationTokenSource,
 		apiBaseUrl = 'https://api.github.com'
 	) {
 		this.apiBaseUrl = apiBaseUrl;

@@ -12,6 +12,11 @@ export interface Repository {
 	lastSyncedCommit: string | null;
 	syncStatus: RepositorySyncStatus;
 	archiveObjectKey: string | null;
+	/** GitHub's numeric repo id (stable across renames) — the webhook resolution key. Backfilled lazily on sync; pg bigint arrives as a string. */
+	githubRepoId: string | null;
+	owner: string | null;
+	name: string | null;
+	lastSyncedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 }

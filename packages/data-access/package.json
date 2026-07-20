@@ -8,6 +8,7 @@
 	"scripts": {
 		"build": "tsc -b",
 		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
 		"migrate": "tsx --env-file=../../.env src/migrate.ts",
 		"issue-api-key": "tsx src/scripts/issue-api-key.ts"
 	},
@@ -19,6 +20,7 @@
 		"typescript": "^5.6.3",
 		"tsx": "^4.19.2",
 		"@types/pg": "^8.11.10",
-		"@types/node": "^22.9.0"
+		"@types/node": "^22.9.0",
+		"vitest": "^2.1.8"
 	}
 }

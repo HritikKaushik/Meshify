@@ -10,12 +10,24 @@ import type { SyncRepositoryUseCase } from '../application/sync-repository.useca
 import { RepositoryNotFoundError } from '../application/sync-repository.usecase.js';
 import type { ListRepositoriesUseCase } from '../application/list-repositories.usecase.js';
 import type { DeleteRepositoryUseCase } from '../application/delete-repository.usecase.js';
+import type { ConnectRepositoryFromIntegrationUseCase } from '../application/connect-repository-from-integration.usecase.js';
+import {
+	GitHubIntegrationNotFoundError,
+	RepositoryAlreadyConnectedError,
+	ResourceNotAccessibleError,
+} from '../application/connect-repository-from-integration.usecase.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 const connectGitHubSchema = z.object({
 	source: z.literal('github'),
 	remoteUrl: z.string().url(),
+});
+
+// Provider-platform intake: bind a repository of the org's GitHub installation by stable id.
+const connectFromIntegrationSchema = z.object({
+	integrationId: z.string().uuid(),
+	githubRepoId: z.string().min(1),
 });
 
 function toResponse(repository: Repository) {
@@ -35,6 +47,7 @@ function toResponse(repository: Repository) {
 export function createRepositoriesController(deps: {
 	getProject: GetProjectUseCase;
 	connectGitHub: ConnectGitHubRepositoryUseCase;
+	connectFromIntegration: ConnectRepositoryFromIntegrationUseCase;
 	uploadZip: UploadRepositoryZipUseCase;
 	syncRepository: SyncRepositoryUseCase;
 	listRepositories: ListRepositoriesUseCase;
@@ -43,7 +56,9 @@ export function createRepositoriesController(deps: {
 	const router = Router();
 	const guard = projectIsolationGuard(deps.getProject);
 
-	// One route, two intake modes: multipart = ZIP upload, JSON = GitHub connect.
+	// One route, three intake modes: multipart = ZIP upload, JSON {integrationId,
+	// githubRepoId} = picker connect via the org's installation, JSON
+	// {source:'github', remoteUrl} = legacy URL paste (kept for back-compat).
 	router.post('/v1/projects/:projectId/repositories', guard, upload.single('file'), async (req, res) => {
 		try {
 			if (req.file) {
@@ -56,10 +71,26 @@ export function createRepositoriesController(deps: {
 				return;
 			}
 
+			if (req.body && typeof req.body === 'object' && 'integrationId' in req.body) {
+				const parsed = connectFromIntegrationSchema.safeParse(req.body);
+				if (!parsed.success) {
+					res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+					return;
+				}
+				const result = await deps.connectFromIntegration.execute({
+					projectId: req.project!.id,
+					orgId: req.auth!.orgId,
+					integrationId: parsed.data.integrationId,
+					githubRepoId: parsed.data.githubRepoId,
+				});
+				res.status(202).json({ repository: toResponse(result.repository), jobId: result.jobId });
+				return;
+			}
+
 			const parsed = connectGitHubSchema.safeParse(req.body);
 			if (!parsed.success) {
 				res.status(400).json({
-					error: 'Send either multipart field "file" (ZIP) or JSON {source:"github", remoteUrl}',
+					error: 'Send multipart field "file" (ZIP), JSON {integrationId, githubRepoId}, or JSON {source:"github", remoteUrl}',
 					details: parsed.error.flatten(),
 				});
 				return;
@@ -68,7 +99,15 @@ export function createRepositoriesController(deps: {
 			const result = await deps.connectGitHub.execute({ projectId: req.project!.id, remoteUrl: parsed.data.remoteUrl });
 			res.status(202).json({ repository: toResponse(result.repository), jobId: result.jobId });
 		} catch (err) {
-			res.status(400).json({ error: err instanceof Error ? err.message : 'Repository intake failed' });
+			if (err instanceof GitHubIntegrationNotFoundError) {
+				res.status(404).json({ error: err.message });
+			} else if (err instanceof RepositoryAlreadyConnectedError) {
+				res.status(409).json({ error: err.message });
+			} else if (err instanceof ResourceNotAccessibleError) {
+				res.status(400).json({ error: err.message });
+			} else {
+				res.status(400).json({ error: err instanceof Error ? err.message : 'Repository intake failed' });
+			}
 		}
 	});
 

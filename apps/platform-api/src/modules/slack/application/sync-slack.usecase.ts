@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { KnowledgeConnectorRepository, PipelineJobRepository, SlackWorkspaceRepository } from '@meshify/data-access';
 import type { Queue } from 'bullmq';
-import type { SlackSyncJobPayload } from '@meshify/queues';
+import type { SlackSyncJobPayload, SourceSyncJobPayload } from '@meshify/queues';
 import { loadSlackWorkspace } from './slack-support.js';
 
 /**
@@ -14,11 +14,31 @@ export class SyncSlackUseCase {
 		private readonly connectors: KnowledgeConnectorRepository,
 		private readonly workspaces: SlackWorkspaceRepository,
 		private readonly pipelineJobs: PipelineJobRepository,
-		private readonly syncQueue: Queue<SlackSyncJobPayload>
+		private readonly syncQueue: Queue<SlackSyncJobPayload>,
+		private readonly sourceSyncQueue: Queue<SourceSyncJobPayload>
 	) {}
 
 	async execute(command: { projectId: string; connectorId: string }): Promise<{ jobId: string }> {
 		const { workspace } = await loadSlackWorkspace(this.connectors, this.workspaces, command.projectId, command.connectorId);
+
+		// Integration-linked workspaces ride the provider platform's generic lane.
+		if (workspace.integrationId) {
+			const { job, created } = await this.pipelineJobs.createDeduped({
+				id: randomUUID(),
+				projectId: command.projectId,
+				jobType: 'source_sync',
+				payload: { connectorId: command.connectorId, mode: 'incremental' },
+				dedupeKey: `source_sync:${command.connectorId}:incremental`,
+			});
+			if (created) {
+				await this.sourceSyncQueue.add(
+					'sync',
+					{ pipelineJobId: job.id, connectorId: command.connectorId, projectId: command.projectId, mode: 'incremental' },
+					{ jobId: job.id }
+				);
+			}
+			return { jobId: job.id };
+		}
 
 		const pipelineJobId = randomUUID();
 		await this.pipelineJobs.create({

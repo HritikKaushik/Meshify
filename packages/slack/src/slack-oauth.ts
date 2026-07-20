@@ -47,24 +47,61 @@ export async function exchangeCodeForToken(config: SlackOAuthConfig, code: strin
 	});
 
 	if (!res.ok) throw new Error(`Slack oauth.v2.access failed: HTTP ${res.status}`);
-	const body = (await res.json()) as {
-		ok: boolean;
-		error?: string;
-		access_token?: string;
-		scope?: string;
-		bot_user_id?: string;
-		team?: { id?: string; name?: string };
-	};
+	const body = (await res.json()) as OAuthAccessBody;
 
 	if (!body.ok || !body.access_token || !body.team?.id) {
 		throw new Error(`Slack OAuth exchange rejected: ${body.error ?? 'missing access_token/team'}`);
 	}
 
+	return toOAuthResult(body);
+}
+
+/**
+ * Rotate an expiring bot token (apps with token rotation enabled) via
+ * oauth.v2.access `grant_type=refresh_token`. Returns a fresh access +
+ * refresh token pair; the previous refresh token is single-use.
+ */
+export async function refreshAccessToken(config: SlackOAuthConfig, refreshToken: string): Promise<SlackOAuthResult> {
+	const res = await fetch(`${config.apiBaseUrl ?? SLACK_API_BASE}/oauth.v2.access`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/x-www-form-urlencoded; charset=utf-8' },
+		body: new URLSearchParams({
+			client_id: config.clientId,
+			client_secret: config.clientSecret,
+			grant_type: 'refresh_token',
+			refresh_token: refreshToken,
+		}).toString(),
+	});
+
+	if (!res.ok) throw new Error(`Slack token refresh failed: HTTP ${res.status}`);
+	const body = (await res.json()) as OAuthAccessBody;
+	if (!body.ok || !body.access_token || !body.team?.id) {
+		throw new Error(`Slack token refresh rejected: ${body.error ?? 'missing access_token/team'}`);
+	}
+	return toOAuthResult(body);
+}
+
+interface OAuthAccessBody {
+	ok: boolean;
+	error?: string;
+	access_token?: string;
+	refresh_token?: string;
+	expires_in?: number;
+	scope?: string;
+	bot_user_id?: string;
+	app_id?: string;
+	team?: { id?: string; name?: string };
+}
+
+function toOAuthResult(body: OAuthAccessBody): SlackOAuthResult {
 	return {
-		accessToken: body.access_token,
-		teamId: body.team.id,
-		teamName: body.team.name ?? null,
+		accessToken: body.access_token!,
+		teamId: body.team!.id!,
+		teamName: body.team?.name ?? null,
 		botUserId: body.bot_user_id ?? null,
 		scope: body.scope ?? null,
+		refreshToken: body.refresh_token ?? null,
+		expiresInSeconds: body.expires_in ?? null,
+		appId: body.app_id ?? null,
 	};
 }
