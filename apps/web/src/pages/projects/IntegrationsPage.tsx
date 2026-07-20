@@ -53,7 +53,7 @@ export function IntegrationsPage() {
 	const [busyProvider, setBusyProvider] = useState<string | null>(null);
 	const [picker, setPicker] = useState<{ integration: Integration; provider: ProviderCatalogEntry } | null>(null);
 	const [disconnecting, setDisconnecting] = useState<Integration | null>(null);
-	const [byoaFor, setByoaFor] = useState<Integration | null>(null);
+	const [byoaFor, setByoaFor] = useState<{ provider: string; providerName: string; accountName?: string } | null>(null);
 
 	const refresh = useCallback(() => {
 		catalog.run(() => api.listProviders());
@@ -207,7 +207,11 @@ export function IntegrationsPage() {
 											</Button>
 										)}
 										{provider.capabilities.byoa && (
-											<Button variant="glass" size="sm" onClick={() => setByoaFor(integration)}>
+											<Button
+												variant="glass"
+												size="sm"
+												onClick={() => setByoaFor({ provider: provider.id, providerName: provider.displayName, accountName: integration.externalAccountName })}
+											>
 												<Building2 size={14} className="mr-1.5" /> {integration.mode === 'byoa' ? 'Enterprise app' : 'Use own app'}
 											</Button>
 										)}
@@ -219,10 +223,24 @@ export function IntegrationsPage() {
 							) : provider.availability === 'coming_soon' ? (
 								<span className="w-fit rounded-full bg-mc-raised px-3 py-1 text-[11.5px] font-medium text-mc-text-3">Coming soon</span>
 							) : !provider.configured ? (
-								<p className="text-[12.5px] text-mc-text-3">
-									<Lock size={12} className="mr-1 inline" />
-									Not configured on this deployment — ask your operator to set up the {provider.displayName} app.
-								</p>
+								<div className="space-y-2.5">
+									<p className="text-[12.5px] text-mc-text-3">
+										<Lock size={12} className="mr-1 inline" />
+										{provider.capabilities.byoa
+											? `No managed ${provider.displayName} app on this deployment — bring your organization's own app to enable it.`
+											: `Not configured on this deployment — ask your operator to set up the ${provider.displayName} app.`}
+									</p>
+									{provider.capabilities.byoa && (
+										<Button
+											variant="glass"
+											size="sm"
+											className="w-fit"
+											onClick={() => setByoaFor({ provider: provider.id, providerName: provider.displayName })}
+										>
+											<Building2 size={14} className="mr-1.5" /> Use own app
+										</Button>
+									)}
+								</div>
 							) : (
 								<Button
 									variant="mesh"
@@ -239,7 +257,15 @@ export function IntegrationsPage() {
 				})}
 			</div>
 
-			{byoaFor && <ByoaConfigDialog integration={byoaFor} onClose={() => setByoaFor(null)} onSaved={refresh} />}
+			{byoaFor && (
+				<ByoaConfigDialog
+					provider={byoaFor.provider}
+					providerName={byoaFor.providerName}
+					accountName={byoaFor.accountName}
+					onClose={() => setByoaFor(null)}
+					onSaved={refresh}
+				/>
+			)}
 
 			{picker && (
 				<ResourcePickerDialog

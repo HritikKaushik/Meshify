@@ -2,33 +2,48 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Copy, ShieldCheck } from 'lucide-react';
 import { api } from '@/api-client';
-import type { ByoaFieldView, Integration } from '@/api';
+import type { ByoaFieldView } from '@/api';
 import { useAsync } from '@/ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 /**
- * Enterprise Bring-Your-Own-App configuration. The form is provider-declared
+ * Enterprise Bring-Your-Own-App configuration. Registration is org-scoped and
+ * keyed only by `provider`, so this works both to override a connected
+ * integration's app AND to bootstrap a provider that has no managed app on the
+ * deployment (no integration exists yet). The form is provider-declared
  * (ByoaCapable.describeByoaConfig) so this component holds no provider
  * knowledge. Secrets are write-only — the server reports only whether each is
  * set; a blank field on save keeps the stored value. Saving returns the
- * per-integration webhook URL the org's app must target.
+ * per-registration webhook URL the org's app must target.
  */
-export function ByoaConfigDialog({ integration, onClose, onSaved }: { integration: Integration; onClose: () => void; onSaved: () => void }) {
+export function ByoaConfigDialog({
+	provider,
+	providerName,
+	accountName,
+	onClose,
+	onSaved,
+}: {
+	provider: string;
+	providerName: string;
+	accountName?: string;
+	onClose: () => void;
+	onSaved: () => void;
+}) {
 	const config = useAsync<{ mode: string; fields: ByoaFieldView[] }>();
 	const [values, setValues] = useState<Record<string, string>>({});
 	const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 
 	useEffect(() => {
-		config.run(() => api.describeRegistration(integration.provider));
+		config.run(() => api.describeRegistration(provider));
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [integration.provider]);
+	}, [provider]);
 
 	async function save() {
 		setSaving(true);
 		try {
-			const { webhookPath } = await api.configureRegistration(integration.provider, values);
+			const { webhookPath } = await api.configureRegistration(provider, values);
 			setWebhookUrl(`${window.location.origin}/api${webhookPath}`);
 			toast.success('Enterprise app configured');
 			onSaved();
@@ -45,7 +60,7 @@ export function ByoaConfigDialog({ integration, onClose, onSaved }: { integratio
 		<Dialog open onOpenChange={(open) => !open && onClose()}>
 			<DialogContent className="max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Bring your own {integration.provider} app · {integration.externalAccountName}</DialogTitle>
+					<DialogTitle>Bring your own {providerName} app{accountName ? ` · ${accountName}` : ''}</DialogTitle>
 					<DialogDescription>
 						Use your organization's own provider app instead of Meshify's managed one. Credentials are encrypted at rest and never shown again.
 						Leave a secret blank to keep the stored value.
