@@ -1,7 +1,7 @@
 export { RocketRideClientPool } from './client-pool.js';
 export type { ClientPoolLogger } from './client-pool.js';
 
-export { PipelineRegistry } from './pipeline-registry.js';
+export { PipelineRegistry, RocketRidePipelineTimeoutError } from './pipeline-registry.js';
 
 export { RocketRideRagService } from './rag.service.js';
 export { FakeRagService } from './rag.service.fake.js';
