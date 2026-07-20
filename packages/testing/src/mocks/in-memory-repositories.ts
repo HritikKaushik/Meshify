@@ -649,6 +649,10 @@ export class InMemoryPipelineJobRepository implements PipelineJobRepository {
 		return [...this.jobs.values()].filter((j) => j.projectId === projectId).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, limit);
 	}
 
+	async listStuckQueued(before: Date): Promise<PipelineJob[]> {
+		return [...this.jobs.values()].filter((j) => j.status === 'queued' && j.createdAt < before);
+	}
+
 	async markRunning(id: string): Promise<void> {
 		this.patch(id, { status: 'running', progress: 0 });
 	}
@@ -877,6 +881,10 @@ export class InMemoryWebhookEventRepository implements WebhookEventRepository {
 	async markStatus(id: string, status: WebhookEventStatus, error?: string | null): Promise<void> {
 		const e = this.events.get(id);
 		if (e) this.events.set(id, { ...e, status, error: error ?? null, processedAt: ['processed', 'skipped', 'failed'].includes(status) ? TEST_EPOCH : e.processedAt });
+	}
+
+	async listReprocessable(before: Date): Promise<WebhookEvent[]> {
+		return [...this.events.values()].filter((e) => (e.status === 'received' || e.status === 'queued') && e.receivedAt < before);
 	}
 
 	async listRecentByIntegration(integrationId: string, limit: number): Promise<WebhookEvent[]> {

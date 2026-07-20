@@ -171,9 +171,18 @@ async function enqueueIncrementalSync(deps: WebhookEventProcessorDeps, connector
 		dedupeKey: `source_sync:${connector.id}:incremental`,
 	});
 	if (!created) return; // a queued sync already covers this burst
-	await deps.sourceSyncQueue.add(
-		'sync',
-		{ pipelineJobId: job.id, connectorId: connector.id, projectId: connector.projectId, mode: 'incremental' },
-		{ jobId: job.id, delay: delayMs }
-	);
+	try {
+		await deps.sourceSyncQueue.add(
+			'sync',
+			{ pipelineJobId: job.id, connectorId: connector.id, projectId: connector.projectId, mode: 'incremental' },
+			{ jobId: job.id, delay: delayMs }
+		);
+	} catch (err) {
+		// The row committed but the enqueue failed (Redis blip). Free the
+		// queued dedupe slot so the connector isn't permanently bricked (the
+		// partial unique index would otherwise block every future sync); the
+		// maintenance recovery sweep also re-drives stuck queued jobs.
+		await deps.pipelineJobs.markFailed(job.id, `enqueue failed: ${err instanceof Error ? err.message : String(err)}`, 'failed').catch(() => undefined);
+		throw err;
+	}
 }

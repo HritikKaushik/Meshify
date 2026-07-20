@@ -55,10 +55,18 @@ export async function executeGitHubSync(deps: GitHubSyncDeps, ctx: SyncContext, 
 		await deps.repos.updateGitHubIdentity(repository.id, { owner, name });
 	}
 
-	if (ctx.mode === 'incremental') {
-		await incrementalSync(deps, ctx, sink, { repository, owner, name, head });
-	} else {
-		await fullSync(deps, ctx, sink, { repository, owner, name, head });
+	try {
+		if (ctx.mode === 'incremental') {
+			await incrementalSync(deps, ctx, sink, { repository, owner, name, head });
+		} else {
+			await fullSync(deps, ctx, sink, { repository, owner, name, head });
+		}
+	} catch (err) {
+		// Clear the transient 'cloning' status on failure so a dead-lettered
+		// sync doesn't leave the repository showing a perpetual spinner while its
+		// connector reads 'error'. Best-effort — never mask the original error.
+		await deps.repos.updateSyncStatus(repository.id, 'failed').catch(() => undefined);
+		throw err;
 	}
 }
 

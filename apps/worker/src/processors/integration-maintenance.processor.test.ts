@@ -55,6 +55,7 @@ function harness(provider: Provider, integrationOverrides: Parameters<typeof bui
 		oauthStates: { create: async () => ({} as never), consumeByHash: async () => undefined, deleteExpiredBefore: async () => 3 },
 		webhookEvents: new InMemoryWebhookEventRepository(),
 		sourceSyncQueue: { add: async (_n: string, payload: unknown) => void enqueued.push(payload) } as never,
+		webhookQueue: { add: async () => undefined } as never,
 		vault,
 		registrations: { resolveForIntegration: async () => fakeRegistration() } as never,
 		bus: new InMemoryPlatformEventBus(),
@@ -119,11 +120,15 @@ describe('processMaintenanceJob', () => {
 		}
 
 		await processMaintenanceJob(jobFor('refresh'), h.deps);
-		expect(h.enqueued).toHaveLength(2);
+		const distinctConnectors = new Set(h.enqueued.map((p) => (p as { connectorId: string }).connectorId));
+		expect(distinctConnectors).toEqual(new Set(['c-stale', 'c-interval']));
 
-		// Re-running while jobs are queued must not duplicate (dedupe keys).
+		// Re-running must not create DUPLICATE pipeline jobs (dedupe keys) — even
+		// though the recovery sweep re-drives the still-queued jobs onto the queue.
+		const jobsAfterFirst = new Set(h.enqueued.map((p) => (p as { pipelineJobId: string }).pipelineJobId));
 		await processMaintenanceJob(jobFor('refresh'), h.deps);
-		expect(h.enqueued).toHaveLength(2);
+		const allPipelineJobIds = new Set(h.enqueued.map((p) => (p as { pipelineJobId: string }).pipelineJobId));
+		expect(allPipelineJobIds).toEqual(jobsAfterFirst); // no new job ids — dedup held
 	});
 
 	it('health: publishes health.changed only on transitions', async () => {

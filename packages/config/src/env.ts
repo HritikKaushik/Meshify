@@ -69,6 +69,12 @@ const envSchema = z.object({
 	GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
 	// App slug (github.com/apps/<slug>) — builds the installation URL for Connect GitHub.
 	GITHUB_APP_SLUG: z.string().optional(),
+	// GitHub App user-authorization OAuth — REQUIRED for secure connect: verifies
+	// the connecting user actually controls the installation (enable "Request user
+	// authorization (OAuth) during installation" on the App). Without these the
+	// github provider reports "not configured" and refuses to connect.
+	GITHUB_APP_CLIENT_ID: z.string().optional(),
+	GITHUB_APP_CLIENT_SECRET: z.string().optional(),
 
 	// Encrypts integration credentials at rest (the CredentialVault's key).
 	// Falls back to ORG_KEY_ENCRYPTION_KEY so existing deployments need no new

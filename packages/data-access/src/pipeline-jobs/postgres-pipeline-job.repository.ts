@@ -101,6 +101,11 @@ export class PostgresPipelineJobRepository implements PipelineJobRepository {
 		return rows.map(toDomain);
 	}
 
+	async listStuckQueued(before: Date): Promise<PipelineJob[]> {
+		const { rows } = await this.pool.query<PipelineJobRow>("select * from pipeline_jobs where status = 'queued' and created_at < $1 order by created_at limit 500", [before]);
+		return rows.map(toDomain);
+	}
+
 	async markRunning(id: string): Promise<void> {
 		await this.pool.query("update pipeline_jobs set status = 'running', progress = coalesce(progress, 0), updated_at = now() where id = $1", [id]);
 	}

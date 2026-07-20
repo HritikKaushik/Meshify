@@ -34,7 +34,7 @@ function deps(overrides: { transport?: FakeGitHubTransport } = {}): GitHubProvid
 	return { transportFactory: () => transport };
 }
 
-const REG = fakeRegistration({ provider: 'github', secrets: { app_private_key: '-----BEGIN PRIVATE KEY-----k', app_webhook_secret: WEBHOOK_SECRET } });
+const REG = fakeRegistration({ provider: 'github', config: { app_id: '777', app_slug: 'meshify-app', app_client_id: 'Iv1.abc' }, secrets: { app_private_key: '-----BEGIN PRIVATE KEY-----k', app_webhook_secret: WEBHOOK_SECRET, app_client_secret: 'ghsecret' } });
 
 const pushPayload = {
 	ref: 'refs/heads/main',
@@ -48,10 +48,10 @@ providerContractTests('github', () => ({
 	fixtures: {
 		integration: { provider: 'github', externalAccountId: '12345' },
 		vault: fakeVaultHandle(),
-		registration: fakeRegistration({ provider: 'github', secrets: { app_private_key: '-----BEGIN PRIVATE KEY-----k', app_webhook_secret: WEBHOOK_SECRET } }),
+		registration: fakeRegistration({ provider: 'github', config: { app_id: '777', app_slug: 'meshify-app', app_client_id: 'Iv1.abc' }, secrets: { app_private_key: '-----BEGIN PRIVATE KEY-----k', app_webhook_secret: WEBHOOK_SECRET, app_client_secret: 'ghsecret' } }),
 		oauth: {
-			validCallback: { params: { installation_id: '12345', setup_action: 'install' } },
-			invalidCallback: { params: { installation_id: '99999' } },
+			validCallback: { params: { installation_id: '12345', setup_action: 'install', code: 'valid-code' } },
+			invalidCallback: { params: { installation_id: '99999', code: 'valid-code' } },
 			expectedExternalAccountId: '12345',
 		},
 		webhook: {
@@ -76,13 +76,37 @@ providerContractTests('github', () => ({
 describe('GitHubProvider specifics', () => {
 	it('refuses to verify a callback whose installation is unknown to the app', async () => {
 		const provider = createGitHubProvider(deps());
-		await expect(provider.completeConnect({ params: { installation_id: '31337' } }, REG)).rejects.toBeInstanceOf(ProviderAuthError);
+		await expect(provider.completeConnect({ params: { installation_id: '31337', code: 'valid-code' } }, REG)).rejects.toBeInstanceOf(ProviderAuthError);
+	});
+
+	it('rejects an installation the connecting user does not control (cross-org claim defense)', async () => {
+		const transport = new FakeGitHubTransport({ installations: [buildGitHubInstallation({ id: 12345 }), buildGitHubInstallation({ id: 999 })] });
+		// The user can access installation 999 but NOT 12345 (another org's).
+		transport.userInstallationIds = new Set(['999']);
+		const provider = createGitHubProvider(deps({ transport }));
+		await expect(provider.completeConnect({ params: { installation_id: '12345', code: 'valid-code' } }, REG)).rejects.toThrow(/do not have access/);
+	});
+
+	it('rejects a callback with no user-authorization code', async () => {
+		const provider = createGitHubProvider(deps());
+		await expect(provider.completeConnect({ params: { installation_id: '12345' } }, REG)).rejects.toThrow(/user authorization/);
+	});
+
+	it('rejects a bad/expired user code', async () => {
+		const provider = createGitHubProvider(deps());
+		await expect(provider.completeConnect({ params: { installation_id: '12345', code: 'stale' } }, REG)).rejects.toThrow(/could not be verified/);
+	});
+
+	it('502s connect when the registration lacks user-auth client credentials', async () => {
+		const provider = createGitHubProvider(deps());
+		const noClient = fakeRegistration({ provider: 'github', config: { app_id: '777', app_slug: 'meshify-app' }, secrets: { app_private_key: '-----BEGIN PRIVATE KEY-----k' } });
+		await expect(provider.completeConnect({ params: { installation_id: '12345', code: 'valid-code' } }, noClient)).rejects.toThrow(/user authorization.*not configured/);
 	});
 
 	it('rejects suspended installations at connect time', async () => {
 		const transport = new FakeGitHubTransport({ installations: [buildGitHubInstallation({ suspendedAt: '2026-01-01T00:00:00Z' })] });
 		const provider = createGitHubProvider(deps({ transport }));
-		await expect(provider.completeConnect({ params: { installation_id: '12345' } }, REG)).rejects.toThrow(/suspended/);
+		await expect(provider.completeConnect({ params: { installation_id: '12345', code: 'valid-code' } }, REG)).rejects.toThrow(/suspended/);
 	});
 
 	it('caches installation tokens in the vault — second call mints nothing', async () => {

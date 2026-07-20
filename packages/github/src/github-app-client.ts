@@ -31,11 +31,56 @@ export interface InstallationToken {
 
 const PAGE_SIZE = 100;
 
+/** GitHub App OAuth (user-authorization) settings — needed to verify installation ownership at connect. */
+export interface GitHubUserOAuth {
+	clientId: string;
+	clientSecret: string;
+}
+
 export class GitHubAppClient {
 	private readonly apiBaseUrl: string;
+	private readonly oauthBaseUrl: string;
 
-	constructor(private readonly auth: GitHubAppAuth, apiBaseUrl = 'https://api.github.com') {
+	constructor(
+		private readonly auth: GitHubAppAuth,
+		private readonly userOAuth?: GitHubUserOAuth,
+		apiBaseUrl = 'https://api.github.com',
+		oauthBaseUrl = 'https://github.com'
+	) {
 		this.apiBaseUrl = apiBaseUrl;
+		this.oauthBaseUrl = oauthBaseUrl;
+	}
+
+	/**
+	 * Exchange the user-authorization `code` (returned by installations/new when
+	 * "Request user authorization during installation" is enabled) for a
+	 * user-to-server token. Proves the caller is the GitHub user who authorized.
+	 */
+	async exchangeUserCode(code: string): Promise<string> {
+		if (!this.userOAuth) throw new Error('GitHub App user OAuth (client id/secret) is not configured');
+		const res = await fetch(`${this.oauthBaseUrl}/login/oauth/access_token`, {
+			method: 'POST',
+			headers: { accept: 'application/json', 'content-type': 'application/json' },
+			body: JSON.stringify({ client_id: this.userOAuth.clientId, client_secret: this.userOAuth.clientSecret, code }),
+		});
+		if (!res.ok) throw new Error(`GitHub user code exchange failed: ${res.status}`);
+		const body = (await res.json()) as { access_token?: string; error?: string };
+		if (!body.access_token) throw new Error(`GitHub user code exchange rejected: ${body.error ?? 'no access_token'}`);
+		return body.access_token;
+	}
+
+	/** The installation ids the authenticated USER can access — the ownership set to check installation_id against. */
+	async listUserInstallationIds(userToken: string): Promise<Set<string>> {
+		const ids = new Set<string>();
+		for (let page = 1; ; page += 1) {
+			const res = await fetch(`${this.apiBaseUrl}/user/installations?per_page=${PAGE_SIZE}&page=${page}`, {
+				headers: { authorization: `Bearer ${userToken}`, accept: 'application/vnd.github+json' },
+			});
+			if (!res.ok) throw new Error(`GitHub user installations lookup failed: ${res.status}`);
+			const body = (await res.json()) as { installations: Array<{ id: number }> };
+			for (const i of body.installations) ids.add(String(i.id));
+			if (body.installations.length < PAGE_SIZE) return ids;
+		}
 	}
 
 	/** Fetch an installation of THIS app by id — the callback-verification primitive. Throws on 404 (not our installation). */

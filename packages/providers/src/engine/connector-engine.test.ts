@@ -91,7 +91,7 @@ describe('ConnectorEngine', () => {
 		expect(summary).toMatchObject({ itemsUpserted: 2, itemsSkipped: 1, itemsRemoved: 0 });
 		// a.ts was previously embedded → purged before the batch embeds; c.ts is new → no purge.
 		expect(writer.calls).toEqual([
-			{ op: 'delete', target: 'code', refs: ['a.ts'] },
+			{ op: 'delete', target: 'code', refs: ['a.ts', 'c.ts'] },
 			{ op: 'embed', target: 'code', refs: ['a.ts', 'c.ts'] },
 		]);
 		expect(ledger.hashes.get('a.ts')).toBe('hash-NEW');
@@ -124,6 +124,7 @@ describe('ConnectorEngine', () => {
 
 		expect(summary).toMatchObject({ itemsUpserted: 1, itemsRemoved: 1 });
 		expect(writer.calls).toEqual([
+			{ op: 'delete', target: 'documents', refs: ['new.md'] },
 			{ op: 'embed', target: 'documents', refs: ['new.md'] },
 			{ op: 'delete', target: 'documents', refs: ['gone.md'] },
 			{ op: 'delete', target: 'code', refs: ['gone.md'] },
@@ -158,7 +159,9 @@ describe('ConnectorEngine', () => {
 		);
 
 		expect(writer.calls).toEqual([
+			{ op: 'delete', target: 'documents', refs: ['doc.md'] },
 			{ op: 'embed', target: 'documents', refs: ['doc.md'] },
+			{ op: 'delete', target: 'code', refs: ['code.ts'] },
 			{ op: 'embed', target: 'code', refs: ['code.ts'] },
 		]);
 	});

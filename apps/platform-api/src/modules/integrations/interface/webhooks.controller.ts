@@ -93,16 +93,22 @@ export function createWebhooksController(deps: WebhookReceiverDeps): Router {
 			}
 
 			// Resolve the integration this delivery belongs to by the payload's
-			// external account (installation id / team id). For a BYOA route, prefer
-			// the integration bound to that registration when several orgs share an
-			// account id (they cannot — but be defensive).
+			// external account (installation id / team id). CRITICAL isolation:
+			// only ever consider integrations that belong to the registration
+			// which verified this signature — the BYOA route matches that
+			// registration id, the managed route matches managed (null)
+			// integrations. `external_account_id` is NOT globally unique (Slack
+			// team_id is shared across apps/orgs), so a fallback to the unscoped
+			// cross-org candidate set would let a signed BYOA delivery bind
+			// another org's managed integration. No fallback.
 			let integrationId: string | null = null;
 			if (described.externalAccountId) {
 				const candidates = await deps.integrations.findByProviderAccount(providerId, described.externalAccountId);
-				const scoped = registrationIdParam ? candidates.filter((c) => c.registrationId === registrationIdParam) : candidates;
-				const chosen = scoped.length > 0 ? scoped : candidates;
+				const chosen = registrationIdParam
+					? candidates.filter((c) => c.registrationId === registrationIdParam)
+					: candidates.filter((c) => c.registrationId === null);
 				if (chosen.length > 1) {
-					deps.logger.warn({ providerId, externalAccountId: described.externalAccountId }, 'webhook grant claimed by multiple orgs — routing to the earliest claim');
+					deps.logger.warn({ providerId, externalAccountId: described.externalAccountId }, 'webhook grant claimed by multiple integrations of the same registration — routing to the earliest');
 				}
 				integrationId = chosen[0]?.id ?? null;
 			}

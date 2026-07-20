@@ -23,6 +23,8 @@ export interface PipelineJobRepository {
 	listActiveByProject(projectId: string): Promise<PipelineJob[]>;
 	/** Most recent jobs for a project (any status), newest first — the History section. */
 	listRecentByProject(projectId: string, limit: number): Promise<PipelineJob[]>;
+	/** Queued jobs older than `before` — the orphan-recovery sweep (row committed but enqueue may have failed). */
+	listStuckQueued(before: Date): Promise<PipelineJob[]>;
 	markRunning(id: string): Promise<void>;
 	/** Record the current stage + completion percent (0-100) of a running job. */
 	updateProgress(id: string, progress: { stage: string; percent: number }): Promise<void>;

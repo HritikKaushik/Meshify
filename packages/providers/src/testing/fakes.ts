@@ -204,6 +204,18 @@ export class FakeGitHubTransport implements GitHubAppTransport {
 	async listInstallationRepos(_installationToken: string): Promise<InstallationRepo[]> {
 		return this.repos;
 	}
+
+	/** Seeded set of installation ids the "user" can access (defaults to every seeded installation). */
+	userInstallationIds?: Set<string>;
+
+	async exchangeUserCode(code: string): Promise<string> {
+		if (code !== 'valid-code') throw new Error('bad_verification_code');
+		return `ghu_user_${code}`;
+	}
+
+	async listUserInstallationIds(_userToken: string): Promise<Set<string>> {
+		return this.userInstallationIds ?? new Set(this.installations.keys());
+	}
 }
 
 export function buildGitHubInstallation(overrides: Partial<GitHubInstallation> = {}): GitHubInstallation {

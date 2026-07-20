@@ -62,10 +62,13 @@ export class ConnectorEngine {
 			for (const target of ['documents', 'code'] as const) {
 				const forTarget = changed.filter((i) => i.target === target);
 				if (forTarget.length === 0) continue;
-				// Previously-embedded refs get purged first so re-embedding can
-				// never leave duplicate points behind.
-				const previouslyEmbedded = forTarget.filter((i) => known.has(i.sourceRef)).map((i) => i.sourceRef);
-				if (previouslyEmbedded.length > 0) await this.writer.deleteBySourceRefs(target, previouslyEmbedded);
+				// Purge EVERY ref in the batch before re-embedding, not just the
+				// ledger-known subset. `writer.embed` (RocketRide) appends, so a
+				// retry after "embed succeeded but the ledger stamp failed" would
+				// duplicate points for a ref the ledger still thinks is new. A
+				// delete of an absent ref is a no-op, so purging all is safe and
+				// makes retries idempotent regardless of where the last attempt died.
+				await this.writer.deleteBySourceRefs(target, forTarget.map((i) => i.sourceRef));
 				await this.writer.embed(target, forTarget);
 				await this.ledger.setHashes(
 					connectorId,

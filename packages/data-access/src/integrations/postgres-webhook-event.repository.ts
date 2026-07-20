@@ -62,6 +62,11 @@ export class PostgresWebhookEventRepository implements WebhookEventRepository {
 		);
 	}
 
+	async listReprocessable(before: Date): Promise<WebhookEvent[]> {
+		const { rows } = await this.pool.query<WebhookEventRow>("select * from webhook_events where status in ('received','queued') and received_at < $1 order by received_at limit 500", [before]);
+		return rows.map(toDomain);
+	}
+
 	async listRecentByIntegration(integrationId: string, limit: number): Promise<WebhookEvent[]> {
 		const { rows } = await this.pool.query<WebhookEventRow>(
 			'select * from webhook_events where integration_id = $1 order by received_at desc limit $2',

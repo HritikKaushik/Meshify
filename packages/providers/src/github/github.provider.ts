@@ -67,12 +67,14 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 	private async appSettings(registration: RegistrationContext): Promise<GitHubAppSettings> {
 		const appId = strOf(registration.config.app_id);
 		const slug = strOf(registration.config.app_slug);
+		const clientId = strOf(registration.config.app_client_id);
 		const privateKey = (await registration.secrets.get('app_private_key'))?.value;
 		const webhookSecret = (await registration.secrets.get('app_webhook_secret'))?.value ?? '';
+		const clientSecret = (await registration.secrets.get('app_client_secret'))?.value ?? '';
 		if (!appId || !slug || !privateKey) {
 			throw new ProviderNotConfiguredError('github', `The GitHub app registration (${registration.mode}) is missing app_id, app_slug, or the private key`);
 		}
-		return { appId, slug, privateKey, webhookSecret };
+		return { appId, slug, privateKey, webhookSecret, clientId, clientSecret };
 	}
 
 	private async transport(registration: RegistrationContext): Promise<GitHubAppTransport> {
@@ -91,14 +93,39 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 	}
 
 	async completeConnect(input: CallbackInput, registration: RegistrationContext): Promise<ConnectResult> {
-		const transport = await this.transport(registration);
+		const settings = await this.appSettings(registration);
+		const transport = this.deps.transportFactory(settings);
 		const installationId = input.params.installation_id;
 		if (!installationId || !/^\d+$/.test(installationId)) {
 			throw new ProviderAuthError('GitHub callback is missing a valid installation_id');
 		}
 
-		// Never trust the bare id: confirm this installation exists on OUR app
-		// and read its account identity via the App JWT.
+		// OWNERSHIP CHECK (critical for tenant isolation): installation ids are
+		// guessable sequential integers, and getInstallation via the App JWT only
+		// proves the installation EXISTS on the shared app — not that the caller
+		// controls it. Require the user-authorization `code` (issued by GitHub
+		// only to the user who just authorized), exchange it, and verify the
+		// installation is among the user's accessible installations. Without this
+		// an attacker could claim another org's installation by guessing its id.
+		if (!settings.clientId || !settings.clientSecret) {
+			throw new ProviderNotConfiguredError('github', 'GitHub App user authorization (client id/secret) is not configured — cannot verify installation ownership');
+		}
+		const code = input.params.code;
+		if (!code) {
+			throw new ProviderAuthError('GitHub connect did not include user authorization — reconnect and approve access when prompted');
+		}
+		let accessible: Set<string>;
+		try {
+			const userToken = await transport.exchangeUserCode(code);
+			accessible = await transport.listUserInstallationIds(userToken);
+		} catch (err) {
+			throw new ProviderAuthError(`GitHub user authorization could not be verified: ${(err as Error).message}`);
+		}
+		if (!accessible.has(installationId)) {
+			throw new ProviderAuthError('You do not have access to this GitHub installation');
+		}
+
+		// Ownership proven; read the installation's account identity via the App JWT.
 		let installation;
 		try {
 			installation = await transport.getInstallation(installationId);
@@ -268,7 +295,9 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 		return [
 			{ key: 'app_id', label: 'GitHub App ID', secret: false, placeholder: '123456' },
 			{ key: 'app_slug', label: 'GitHub App slug', secret: false, placeholder: 'acme-meshify' },
+			{ key: 'app_client_id', label: 'OAuth Client ID', secret: false, placeholder: 'Iv1.0123456789abcdef' },
 			{ key: 'app_private_key', label: 'Private key (PEM)', secret: true, multiline: true },
+			{ key: 'app_client_secret', label: 'OAuth Client secret', secret: true },
 			{ key: 'app_webhook_secret', label: 'Webhook secret', secret: true },
 		];
 	}
