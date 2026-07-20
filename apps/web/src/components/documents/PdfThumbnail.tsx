@@ -63,8 +63,12 @@ export function PdfThumbnail({
 					cache.set(documentId, url);
 					setSrc(url);
 				}
-			} catch {
-				if (!cancelled) setFailed(true);
+			} catch (err) {
+				// Non-fatal: fall back to the placeholder, but surface why in dev.
+				if (!cancelled) {
+					console.warn('[PdfThumbnail] could not render', documentId, err);
+					setFailed(true);
+				}
 			}
 		})();
 		return () => {
