@@ -54,9 +54,9 @@ export function PdfThumbnail({
 				const canvas = document.createElement('canvas');
 				canvas.width = Math.ceil(viewport.width);
 				canvas.height = Math.ceil(viewport.height);
-				// pdf.js v6: pass the canvas ELEMENT (it obtains the 2D context itself).
-				// Passing a live canvasContext alongside a non-null canvas is rejected.
-				await page.render({ canvas, viewport }).promise;
+				const ctx = canvas.getContext('2d');
+				if (!ctx) throw new Error('canvas 2d context unavailable');
+				await page.render({ canvasContext: ctx, viewport }).promise;
 				const url = canvas.toDataURL('image/jpeg', 0.82);
 				void pdf.cleanup();
 				if (!cancelled) {
