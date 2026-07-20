@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { ByoaConfigDialog } from './ByoaConfigDialog';
 import { Building2 } from 'lucide-react';
-import { ProviderBrandIcon } from '@/components/ProviderBrandIcon';
+import { ProviderBrandIcon, COLORED_BRAND_ICON_KEYS } from '@/components/ProviderBrandIcon';
 
 const HEALTH_PRESENTATION: Record<IntegrationHealth, { label: string; color: DotColor }> = {
 	unknown: { label: 'Health unknown', color: 'muted' },
@@ -152,8 +152,10 @@ export function IntegrationsPage() {
 							<div className="flex items-start justify-between gap-3">
 								<div className="flex items-center gap-3">
 									<span
-										className="flex h-9 w-9 items-center justify-center rounded-xl text-white"
-										style={{ backgroundColor: provider.brandColor ?? '#5f6368' }}
+										className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+											COLORED_BRAND_ICON_KEYS.has(provider.iconKey) ? 'border border-mc-line bg-white' : 'text-white'
+										}`}
+										style={COLORED_BRAND_ICON_KEYS.has(provider.iconKey) ? undefined : { backgroundColor: provider.brandColor ?? '#5f6368' }}
 									>
 										<ProviderBrandIcon iconKey={provider.iconKey} size={18} />
 									</span>
