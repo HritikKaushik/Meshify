@@ -2,11 +2,19 @@ import type { ReactNode } from 'react';
 import { Blocks, MessagesSquare } from 'lucide-react';
 
 /**
- * Full-color brand marks that render in their own official colors rather than
- * `currentColor`. Their cards use a light chip (see COLORED_BRAND_ICON_KEYS) so
- * the colors read correctly. Slack's mark is the official four-color hash.
+ * Official brand marks for integration providers, keyed by the provider
+ * manifest's `iconKey`. Every mark renders in its authentic brand color on a
+ * neutral chip (the Slack treatment) so the marketplace reads as real logos:
+ *  - FULL_COLOR: genuine multi-color logos (colors baked into the paths).
+ *  - MONO_KEYS: marks that are officially monochrome — drawn in `currentColor`
+ *    so they adapt to the theme (light on dark, dark on light).
+ *  - BRAND_COLOR: single-color marks drawn in their official brand color.
+ * Single-path silhouettes are from Simple Icons (https://simpleicons.org, CC0),
+ * normalized to a 24×24 viewBox. Multi-color logos use each brand's own SVG.
  */
-const COLORED_ICONS: Record<string, { viewBox: string; content: ReactNode }> = {
+
+/** Genuine multi-color logos — rendered exactly as their official artwork. */
+const FULL_COLOR: Record<string, { viewBox: string; content: ReactNode }> = {
 	slack: {
 		viewBox: '0 0 122.8 122.8',
 		content: (
@@ -22,36 +30,58 @@ const COLORED_ICONS: Record<string, { viewBox: string; content: ReactNode }> = {
 			</>
 		),
 	},
+	gitlab: {
+		viewBox: '0 0 25 24',
+		content: (
+			<>
+				<path
+					d="M24.507 9.5l-.034-.09L21.082.827a.896.896 0 00-1.694.091l-2.29 7.01H7.825L5.535.917A.896.896 0 003.84.827L.451 9.41.417 9.5a6.297 6.297 0 002.09 7.278l.01.01.03.022 5.16 3.867 2.556 1.93 1.555 1.176a1.051 1.051 0 001.267 0l1.555-1.175 2.556-1.93 5.184-3.883.014-.01A6.297 6.297 0 0024.507 9.5z"
+					fill="#E24329"
+				/>
+				<path d="M24.507 9.5l-.034-.09a11.44 11.44 0 00-4.56 2.05l-7.447 5.632 4.742 3.584 5.185-3.883.015-.01A6.297 6.297 0 0024.507 9.5z" fill="#FC6D26" />
+				<path d="M7.707 20.677l2.556 1.93 1.555 1.176a1.051 1.051 0 001.267 0l1.555-1.175 2.556-1.93-4.742-3.584-5.302 3.583z" fill="#FCA326" />
+				<path d="M5.01 11.461a11.43 11.43 0 00-4.56-2.05L.417 9.5a6.297 6.297 0 002.09 7.278l.01.01.03.022 5.16 3.867 4.742-3.584L5.01 11.46z" fill="#FC6D26" />
+			</>
+		),
+	},
+	googledrive: {
+		viewBox: '0 0 87.3 78',
+		content: (
+			<>
+				<path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da" />
+				<path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00ac47" />
+				<path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335" />
+				<path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d" />
+				<path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
+				<path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00" />
+			</>
+		),
+	},
 };
 
-/** Providers whose mark is full-color and wants a light chip instead of the brand color. */
-export const COLORED_BRAND_ICON_KEYS = new Set(Object.keys(COLORED_ICONS));
+/** Officially monochrome marks — drawn in currentColor so they adapt to the theme. */
+const MONO_KEYS = new Set(['github', 'notion', 'zendesk', 'linear']);
 
-/**
- * Providers whose brand color is dark/desaturated — rendered as a white mark on
- * a solid brand-color chip so the logo stays legible in both light and dark
- * themes (the rest get their brand-colored mark on a faint brand-tinted chip).
- */
-export const DARK_BRAND_ICON_KEYS = new Set(['github', 'notion', 'confluence', 'zendesk', 'sharepoint']);
+/** Official primary brand color for single-color marks. */
+const BRAND_COLOR: Record<string, string> = {
+	bitbucket: '#2684FF',
+	azuredevops: '#0078D4',
+	teams: '#6264A7',
+	discord: '#5865F2',
+	onedrive: '#0078D4',
+	sharepoint: '#03787C',
+	confluence: '#2684FF',
+	jira: '#2684FF',
+	salesforce: '#00A1E0',
+	hubspot: '#FF7A59',
+};
 
-/**
- * Official brand marks for integration providers, keyed by the provider
- * manifest's `iconKey`. Paths are single-path SVGs from Simple Icons
- * (https://simpleicons.org, CC0), normalized to a 24×24 viewBox, and drawn in
- * `currentColor` so they inherit the brand-color chip's white text. Any key
- * without a mark falls back to a generic block glyph.
- */
 const BRAND_ICON_PATHS: Record<string, string> = {
 	github:
 		'M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12',
-	gitlab:
-		'm23.6004 9.5927-.0337-.0862L20.3.9814a.851.851 0 0 0-.3362-.405.8748.8748 0 0 0-.9997.0539.8748.8748 0 0 0-.29.4399l-2.2055 6.748H7.5375l-2.2057-6.748a.8573.8573 0 0 0-.29-.4412.8748.8748 0 0 0-.9997-.0537.8585.8585 0 0 0-.3362.4049L.4332 9.5015l-.0325.0862a6.0657 6.0657 0 0 0 2.0119 7.0105l.0113.0087.03.0213 4.976 3.7264 2.462 1.8633 1.4995 1.1321a1.0085 1.0085 0 0 0 1.2197 0l1.4995-1.1321 2.4619-1.8633 5.006-3.7489.0125-.01a6.0682 6.0682 0 0 0 2.0094-7.003z',
 	bitbucket:
 		'M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.891zM14.52 15.53H9.522L8.17 8.466h7.561z',
-	azuredevops:
-		'M0 8.877L2.247 5.91l8.405-3.416V.022l7.37 5.393L2.966 8.338v8.225L0 15.707zm24-4.45v14.651l-5.753 4.9-9.303-3.057v3.056l-5.978-7.416 15.057 1.798V5.415z',
-	slack:
-		'M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z',
+	azuredevops: 'M0 8.877L2.247 5.91l8.405-3.416V.022l7.37 5.393L2.966 8.338v8.225L0 15.707zm24-4.45v14.651l-5.753 4.9-9.303-3.057v3.056l-5.978-7.416 15.057 1.798V5.415z',
 	discord:
 		'M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z',
 	confluence:
@@ -66,8 +96,6 @@ const BRAND_ICON_PATHS: Record<string, string> = {
 		'M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z',
 	zendesk:
 		'M12.914 2.904V16.29L24 2.905H12.914zM0 2.906C0 5.966 2.483 8.45 5.543 8.45s5.542-2.484 5.543-5.544H0zm11.086 4.807L0 21.096h11.086V7.713zm7.37 7.84c-3.063 0-5.542 2.48-5.542 5.543H24c0-3.06-2.48-5.543-5.543-5.543z',
-	googledrive:
-		'M12.01 1.485c-2.082 0-3.754.02-3.743.047.01.02 1.708 3.001 3.774 6.62l3.76 6.574h3.76c2.081 0 3.753-.02 3.742-.047-.005-.02-1.708-3.001-3.775-6.62l-3.76-6.574zm-4.76 1.73a789.828 789.861 0 0 0-3.63 6.319L0 15.868l1.89 3.298 1.885 3.297 3.62-6.335 3.618-6.33-1.88-3.287C8.1 4.704 7.255 3.22 7.25 3.214zm2.259 12.653-.203.348c-.114.198-.96 1.672-1.88 3.287a423.93 423.948 0 0 1-1.698 2.97c-.01.026 3.24.042 7.222.042h7.244l1.796-3.157c.992-1.734 1.85-3.23 1.906-3.323l.104-.167h-7.249z',
 	onedrive:
 		'M19.453 9.95q.961.058 1.787.468.826.41 1.442 1.066.615.657.966 1.512.352.856.352 1.816 0 1.008-.387 1.893-.386.885-1.049 1.547-.662.662-1.546 1.049-.885.387-1.893.387H6q-1.242 0-2.332-.475-1.09-.475-1.904-1.29-.815-.814-1.29-1.903Q0 14.93 0 13.688q0-.985.31-1.887.311-.903.862-1.658.55-.756 1.324-1.325.774-.568 1.711-.861.434-.129.85-.187.416-.06.861-.082h.012q.515-.786 1.207-1.413.691-.627 1.5-1.066.808-.44 1.705-.668.896-.229 1.845-.229 1.278 0 2.456.417 1.177.416 2.144 1.16.967.744 1.658 1.78.692 1.038 1.008 2.28z',
 	salesforce:
@@ -77,23 +105,23 @@ const BRAND_ICON_PATHS: Record<string, string> = {
 };
 
 export function ProviderBrandIcon({ iconKey, size = 18, className }: { iconKey: string; size?: number; className?: string }) {
-	const colored = COLORED_ICONS[iconKey];
-	if (colored) {
+	const full = FULL_COLOR[iconKey];
+	if (full) {
 		return (
-			<svg role="img" viewBox={colored.viewBox} width={size} height={size} className={className} aria-hidden="true">
-				{colored.content}
+			<svg role="img" viewBox={full.viewBox} width={size} height={size} className={className} aria-hidden="true">
+				{full.content}
 			</svg>
 		);
 	}
 	const path = BRAND_ICON_PATHS[iconKey];
+	const color = MONO_KEYS.has(iconKey) ? 'currentColor' : BRAND_COLOR[iconKey];
 	if (!path) {
-		// No single-path mark bundled — use a category-appropriate glyph rather
-		// than a generic block (Teams is a chat provider).
+		// No bundled mark — a category-appropriate glyph (Teams is a chat provider).
 		const Fallback = iconKey === 'teams' ? MessagesSquare : Blocks;
-		return <Fallback size={size} className={className} />;
+		return <Fallback size={size} className={className} color={color && color !== 'currentColor' ? color : undefined} />;
 	}
 	return (
-		<svg role="img" viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className} aria-hidden="true">
+		<svg role="img" viewBox="0 0 24 24" width={size} height={size} fill={color ?? 'currentColor'} className={className} aria-hidden="true">
 			<path d={path} />
 		</svg>
 	);
