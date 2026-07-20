@@ -27,9 +27,9 @@ split into four layers. HTTP controllers are thin; business rules live in
 [`@meshify/data-access`](../../packages/data-access/README.md).
 
 Modules present today: `health`, `security`, `projects`, `documents`,
-`repositories`, `connectors`, `slack`, `chat`, `search`, `jobs`. (`search` is now
-shared retrieval infrastructure for `chat`; the standalone search + evaluation
-endpoints were removed.)
+`repositories`, `connectors`, `slack`, `chat`, `retrieval`, `jobs`. (`retrieval`
+is shared infrastructure for `chat` — the embedding-provider factory + result
+ranking; the standalone search + evaluation endpoints were removed.)
 
 ## Architecture
 

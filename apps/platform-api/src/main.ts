@@ -66,7 +66,7 @@ import { DeleteConversationUseCase } from './modules/chat/application/delete-con
 import { GetConversationMessagesUseCase } from './modules/chat/application/get-conversation-messages.usecase.js';
 import { createChatController } from './modules/chat/interface/chat.controller.js';
 import { QdrantSearchClient } from '@meshify/vector-store';
-import { ConfiguredEmbeddingProviderFactory } from './modules/search/infrastructure/embedding-provider.factory.js';
+import { ConfiguredEmbeddingProviderFactory } from './modules/retrieval/infrastructure/embedding-provider.factory.js';
 import { PostgresApiKeyRepository, PostgresAuditLogRepository } from '@meshify/data-access';
 import { AuthenticateApiKeyUseCase } from './modules/security/application/authenticate.usecase.js';
 import { authGuard } from './modules/security/interface/auth.guard.js';
