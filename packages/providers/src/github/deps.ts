@@ -20,5 +20,7 @@ export interface GitHubProviderDeps {
 	/** null = deployment has no managed app configured → operations 503 via ProviderNotConfiguredError. */
 	app: GitHubAppSettings | null;
 	transport: GitHubAppTransport | null;
+	/** Content-sync wiring (detail ports + repo transport) — provided by the worker only. */
+	sync?: import('./sync.js').GitHubSyncDeps;
 	now?: () => Date;
 }

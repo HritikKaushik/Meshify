@@ -59,6 +59,17 @@ export class PostgresFileRepository implements FileRepository {
 		await this.pool.query('update files set status = $3, updated_at = now() where repository_id = $1 and status = $2', [repositoryId, from, to]);
 	}
 
+	async findByRepositoryAndPaths(repositoryId: string, paths: string[]): Promise<RepoFile[]> {
+		if (paths.length === 0) return [];
+		const { rows } = await this.pool.query<FileRow>('select * from files where repository_id = $1 and path = any($2)', [repositoryId, paths]);
+		return rows.map(toDomain);
+	}
+
+	async updateStatusForPaths(repositoryId: string, paths: string[], status: FileStatus): Promise<void> {
+		if (paths.length === 0) return;
+		await this.pool.query('update files set status = $3, updated_at = now() where repository_id = $1 and path = any($2)', [repositoryId, paths, status]);
+	}
+
 	async markDeleted(repositoryId: string, paths: string[]): Promise<void> {
 		if (paths.length === 0) return;
 		await this.pool.query("update files set status = 'deleted', updated_at = now() where repository_id = $1 and path = any($2)", [repositoryId, paths]);

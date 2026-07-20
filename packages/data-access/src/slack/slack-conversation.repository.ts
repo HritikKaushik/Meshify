@@ -31,6 +31,8 @@ export interface SlackConversationRepository {
 	listByChannel(slackChannelId: string): Promise<SlackConversation[]>;
 	listSourcePathsByWorkspace(workspaceId: string): Promise<string[]>;
 	updateStatus(id: string, status: SlackConversationStatus): Promise<void>;
+	/** Batch lookup by source paths — the ConnectorEngine's content-hash ledger read. */
+	findBySourcePaths(projectId: string, sourcePaths: string[]): Promise<SlackConversation[]>;
 	/** Single-row aggregate for connector stats — counts + latest activity without loading rows. */
 	statsByWorkspace(workspaceId: string): Promise<{ total: number; embedded: number; lastUpdatedAt: Date | null }>;
 }

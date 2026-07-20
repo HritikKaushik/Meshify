@@ -48,5 +48,15 @@ export { SlackProvider, createSlackProvider, SLACK_MANIFEST } from './slack/slac
 export type { SlackProviderDeps, SlackAppSettings, SlackTransport } from './slack/deps.js';
 export { createSlackTransport } from './slack/transport.js';
 
+// Sync implementations + shared source utilities
+export { executeGitHubSync } from './github/sync.js';
+export type { GitHubSyncDeps, GitHubRepoTransport } from './github/sync.js';
+export { executeSlackSync } from './slack/sync.js';
+export type { SlackSyncDeps } from './slack/sync.js';
+export { scanExtractedRepo, detectLanguage, hashContent, isBinaryBuffer, isDeniedPath } from './github/archive/repo-scanner.js';
+export type { ScannedFile } from './github/archive/repo-scanner.js';
+export { withExtractedArchive } from './github/archive/archive-extractor.js';
+export { groupConversations } from './slack/conversation-grouper.js';
+
 // Catalog
 export { COMING_SOON_PROVIDERS } from './catalog/coming-soon.js';

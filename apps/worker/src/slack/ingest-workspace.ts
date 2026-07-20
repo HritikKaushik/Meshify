@@ -17,7 +17,7 @@ import type { JobEventPublisher } from '@meshify/queues';
 import type { RagPort } from '@meshify/rocketride-gateway';
 import { resolveIngestToken, type IngestTokenDeps } from '../processors/resolve-ingest-token.js';
 import type { JobProgress } from '../processors/job-progress.js';
-import { groupConversations } from './conversation-grouper.js';
+import { groupConversations } from '@meshify/providers';
 
 /** Narrow port over the vector store — purges a conversation's stale points before a re-ingest. */
 export interface SlackVectorStore {

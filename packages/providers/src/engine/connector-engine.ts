@@ -82,6 +82,7 @@ export class ConnectorEngine {
 					if (buffer.length >= batchSize) await flush();
 				}
 			},
+			flush,
 			remove: async (sourceRefs) => {
 				if (sourceRefs.length === 0) return;
 				await flush(); // preserve upsert→remove ordering

@@ -297,6 +297,14 @@ export class InMemoryFileRepository implements FileRepository {
 		this.files = this.files.map((f) => (f.repositoryId === repositoryId && f.status === from ? { ...f, status: to } : f));
 	}
 
+	async findByRepositoryAndPaths(repositoryId: string, paths: string[]): Promise<RepoFile[]> {
+		return this.files.filter((f) => f.repositoryId === repositoryId && paths.includes(f.path));
+	}
+
+	async updateStatusForPaths(repositoryId: string, paths: string[], status: FileStatus): Promise<void> {
+		this.files = this.files.map((f) => (f.repositoryId === repositoryId && paths.includes(f.path) ? { ...f, status } : f));
+	}
+
 	async markDeleted(repositoryId: string, paths: string[]): Promise<void> {
 		const set = new Set(paths);
 		this.files = this.files.map((f) => (f.repositoryId === repositoryId && set.has(f.path) ? { ...f, status: 'deleted' } : f));
@@ -553,6 +561,10 @@ export class InMemorySlackConversationRepository implements SlackConversationRep
 
 	async updateStatus(id: string, status: SlackConversationStatus): Promise<void> {
 		this.conversations = this.conversations.map((c) => (c.id === id ? { ...c, status } : c));
+	}
+
+	async findBySourcePaths(projectId: string, sourcePaths: string[]): Promise<SlackConversation[]> {
+		return this.conversations.filter((c) => c.projectId === projectId && sourcePaths.includes(c.sourcePath));
 	}
 
 	async statsByWorkspace(workspaceId: string): Promise<{ total: number; embedded: number; lastUpdatedAt: Date | null }> {

@@ -4,6 +4,9 @@ import type { CallbackInput, ConnectInput, ConnectResult, CredentialRefresh, OAu
 import type { IntegrationContext } from '../base/context.js';
 import type { RawWebhookRequest, WebhookCapable, WebhookDescriptor } from '../base/webhook.js';
 import type { HealthCapable, ProviderHealthReport } from '../base/health.js';
+import type { SyncCapable, SyncContext } from '../base/sync.js';
+import type { KnowledgeSink } from '../base/knowledge.js';
+import { executeSlackSync } from './sync.js';
 import type { ResourceBrowsingCapable, ResourcePage } from '../base/resources.js';
 import type { ByoaCapable, ByoaConfigField } from '../base/byoa.js';
 import type { PlatformEvent } from '../events/platform-events.js';
@@ -37,7 +40,10 @@ export const SLACK_MANIFEST: ProviderManifest = {
 		resourcePicker: true,
 		healthCheck: true,
 		byoa: true,
-		// Sync + realtime flags flip on with the sync-engine/dispatcher
+		fullSync: true,
+		incrementalSync: true,
+		manualSync: true,
+		// realtimeEvents/scheduledSync flip on with the dispatcher + scheduler
 		// milestones; tools stays false until a tools milestone ships real ones.
 	},
 };
@@ -47,7 +53,7 @@ export const SLACK_MANIFEST: ProviderManifest = {
  * both non-expiring bot tokens and rotation-enabled apps (refresh token +
  * expiry captured when Slack issues them).
  */
-export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, HealthCapable, ResourceBrowsingCapable, ByoaCapable {
+export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, HealthCapable, ResourceBrowsingCapable, ByoaCapable, SyncCapable {
 	readonly manifest = SLACK_MANIFEST;
 	private readonly now: () => Date;
 
@@ -118,6 +124,13 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 		];
 		if (result.refreshToken) credentials.push({ kind: REFRESH_TOKEN_KIND, value: result.refreshToken, expiresAt: null });
 		return credentials;
+	}
+
+	// --- SyncCapable ---------------------------------------------------------
+
+	async executeSync(ctx: SyncContext, sink: KnowledgeSink): Promise<void> {
+		if (!this.deps.sync) throw new ProviderNotConfiguredError('slack', 'Slack sync is not wired in this process (worker-only)');
+		await executeSlackSync(this.deps.sync, ctx, sink);
 	}
 
 	// --- ResourceBrowsingCapable ---------------------------------------------

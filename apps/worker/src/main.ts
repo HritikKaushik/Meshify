@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { Redis } from 'ioredis';
 import { Worker } from 'bullmq';
@@ -14,6 +15,11 @@ import {
 	PostgresSlackConversationRepository,
 	PostgresSlackSyncStateRepository,
 	PostgresSlackWorkspaceRepository,
+	PostgresIntegrationRepository,
+	PostgresIntegrationCredentialRepository,
+	PostgresSyncCursorRepository,
+	encryptSecret,
+	decryptSecret,
 } from '@meshify/data-access';
 import { ObjectStorageClient } from '@meshify/object-storage';
 import {
@@ -22,12 +28,14 @@ import {
 	REPO_SYNC_QUEUE,
 	SLACK_INGEST_QUEUE,
 	SLACK_SYNC_QUEUE,
+	SOURCE_SYNC_QUEUE,
 	JobEventPublisher,
 	type DocumentIngestJobPayload,
 	type RepoIngestJobPayload,
 	type RepoSyncJobPayload,
 	type SlackIngestJobPayload,
 	type SlackSyncJobPayload,
+	type SourceSyncJobPayload,
 } from '@meshify/queues';
 import { GitHubAppAuth, GitHubRepoClient } from '@meshify/github';
 import { HttpSlackClient } from '@meshify/slack';
@@ -39,6 +47,20 @@ import { processRepoSyncJob } from './processors/repo-sync.processor.js';
 import { processSlackIngestJob } from './processors/slack-ingest.processor.js';
 import { processSlackSyncJob } from './processors/slack-sync.processor.js';
 import type { SlackIngestionDeps } from './slack/ingest-workspace.js';
+import {
+	CredentialVault,
+	ProviderNotConfiguredError,
+	ProviderRegistry,
+	createGitHubProvider,
+	createGitHubTransport,
+	createSlackProvider,
+	createSlackTransport,
+	type ContentLedger,
+} from '@meshify/providers';
+import type { KnowledgeConnector } from '@meshify/data-access';
+import { processSourceSyncJob } from './processors/source-sync.processor.js';
+import { ProjectKnowledgeWriter } from './processors/knowledge-writer.js';
+import { createGitHubContentLedger, createSlackContentLedger } from './processors/content-ledgers.js';
 
 const DOCUMENT_CHUNK_SIZE = 768; // prose default per ROCKETRIDE_PIPELINE_RULES.md (512-1024 chars)
 const CODE_CHUNK_SIZE = 384; // code default per ROCKETRIDE_PIPELINE_RULES.md (256-512 chars)
@@ -124,6 +146,85 @@ async function bootstrap(): Promise<void> {
 		encryptionKey: env.ORG_KEY_ENCRYPTION_KEY,
 	};
 
+	// --- Provider platform: registry + vault + generic source-sync ----------
+	const integrations = new PostgresIntegrationRepository(pgPool);
+	const integrationCredentials = new PostgresIntegrationCredentialRepository(pgPool);
+	const syncCursors = new PostgresSyncCursorRepository(pgPool);
+	const integrationKey = env.INTEGRATION_ENCRYPTION_KEY ?? env.ORG_KEY_ENCRYPTION_KEY;
+	const requireIntegrationKey = (): string => {
+		if (!integrationKey) throw new ProviderNotConfiguredError('platform', 'Set INTEGRATION_ENCRYPTION_KEY (or ORG_KEY_ENCRYPTION_KEY) to run provider syncs');
+		return integrationKey;
+	};
+	const credentialVault = new CredentialVault(integrationCredentials, {
+		encrypt: (plaintext) => encryptSecret(requireIntegrationKey(), plaintext),
+		decrypt: (ciphertext) => decryptSecret(requireIntegrationKey(), ciphertext),
+	});
+
+	const githubAppSettings =
+		env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY && env.GITHUB_APP_SLUG && env.GITHUB_APP_WEBHOOK_SECRET
+			? { appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, slug: env.GITHUB_APP_SLUG, webhookSecret: env.GITHUB_APP_WEBHOOK_SECRET }
+			: null;
+	const slackAppSettings =
+		env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET && env.SLACK_REDIRECT_URI && env.SLACK_SIGNING_SECRET
+			? { clientId: env.SLACK_CLIENT_ID, clientSecret: env.SLACK_CLIENT_SECRET, redirectUri: env.SLACK_REDIRECT_URI, signingSecret: env.SLACK_SIGNING_SECRET }
+			: null;
+
+	// The repo transport closes over the provider instance (declared below) so
+	// sync fetches ride the vault-cached installation token, not per-repo discovery.
+	const githubProvider = createGitHubProvider({
+		app: githubAppSettings,
+		transport: githubAppSettings ? createGitHubTransport(githubAppSettings) : null,
+		sync: {
+			repos: repositories,
+			files,
+			repoTransport: (ctx) => new GitHubRepoClient({ installationToken: () => githubProvider.getInstallationToken(ctx) }),
+			generateId: () => randomUUID(),
+		},
+	});
+	const slackProvider = createSlackProvider({
+		app: slackAppSettings,
+		transport: slackAppSettings ? createSlackTransport(slackAppSettings) : null,
+		sync: {
+			workspaces: slackWorkspaces,
+			channels: slackChannels,
+			conversations: slackConversations,
+			syncState: slackSyncState,
+			client: slackClient,
+			generateId: () => randomUUID(),
+		},
+	});
+	const providerRegistry = new ProviderRegistry();
+	providerRegistry.register(githubProvider);
+	providerRegistry.register(slackProvider);
+
+	const ledgers = new Map<string, (connector: KnowledgeConnector) => ContentLedger>([
+		['github', createGitHubContentLedger({ repositories, files })],
+		['slack', createSlackContentLedger({ conversations: slackConversations })],
+	]);
+
+	const sourceSyncDeps = {
+		registry: providerRegistry,
+		connectors,
+		integrations,
+		projects,
+		pipelineJobs,
+		syncCursors,
+		vault: credentialVault,
+		jobEvents,
+		ledgers,
+		writerFor: async (projectId: string) => {
+			const project = await projects.findById(projectId);
+			if (!project) throw new Error(`Project "${projectId}" not found`);
+			return new ProjectKnowledgeWriter(
+				project,
+				rag,
+				qdrantSearchClient,
+				{ pipelineRegistry, qdrantHost, qdrantPort, qdrantApiKey },
+				{ documents: DOCUMENT_CHUNK_SIZE, code: CODE_CHUNK_SIZE }
+			);
+		},
+	};
+
 	const documentWorker = new Worker<DocumentIngestJobPayload>(
 		DOCUMENT_INGEST_QUEUE,
 		(job) =>
@@ -189,7 +290,11 @@ async function bootstrap(): Promise<void> {
 	const slackIngestWorker = new Worker<SlackIngestJobPayload>(SLACK_INGEST_QUEUE, (job) => processSlackIngestJob(job, slackDeps), { connection: bullRedis, concurrency: 2 });
 	const slackSyncWorker = new Worker<SlackSyncJobPayload>(SLACK_SYNC_QUEUE, (job) => processSlackSyncJob(job, slackDeps), { connection: bullRedis, concurrency: 2 });
 
-	const workers = [documentWorker, repoIngestWorker, repoSyncWorker, slackIngestWorker, slackSyncWorker];
+	// The provider platform's generic sync lane; legacy per-provider workers
+	// above remain only to drain in-flight jobs enqueued before the cutover.
+	const sourceSyncWorker = new Worker<SourceSyncJobPayload>(SOURCE_SYNC_QUEUE, (job) => processSourceSyncJob(job, sourceSyncDeps), { connection: bullRedis, concurrency: 3 });
+
+	const workers = [documentWorker, repoIngestWorker, repoSyncWorker, slackIngestWorker, slackSyncWorker, sourceSyncWorker];
 	for (const worker of workers) {
 		worker.on('completed', (job) => logger.info({ queue: worker.name, jobId: job.id }, 'job completed'));
 		worker.on('failed', (job, err) => logger.error({ queue: worker.name, jobId: job?.id, err: err.message }, 'job failed'));

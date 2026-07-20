@@ -267,6 +267,9 @@ importers:
       '@meshify/object-storage':
         specifier: workspace:*
         version: link:../../packages/object-storage
+      '@meshify/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@meshify/queues':
         specifier: workspace:*
         version: link:../../packages/queues
@@ -403,7 +406,16 @@ importers:
       '@meshify/slack':
         specifier: workspace:*
         version: link:../slack
+      adm-zip:
+        specifier: ^0.5.16
+        version: 0.5.18
+      tar:
+        specifier: ^7.4.3
+        version: 7.5.19
     devDependencies:
+      '@types/adm-zip':
+        specifier: ^0.5.7
+        version: 0.5.8
       '@types/node':
         specifier: ^22.9.0
         version: 22.20.1

@@ -30,7 +30,7 @@ import { JobEventHub } from './modules/jobs/infrastructure/job-event-hub.js';
 import { createJobsController } from './modules/jobs/interface/jobs.controller.js';
 import { JobEventSubscriber } from '@meshify/queues';
 import { PostgresRepositoryRepository, PostgresFileRepository } from '@meshify/data-access';
-import { createRepoIngestQueue, createRepoSyncQueue } from '@meshify/queues';
+import { createRepoIngestQueue, createRepoSyncQueue, createSourceSyncQueue } from '@meshify/queues';
 import { ConnectGitHubRepositoryUseCase } from './modules/repositories/application/connect-github-repository.usecase.js';
 import { UploadRepositoryZipUseCase } from './modules/repositories/application/upload-repository-zip.usecase.js';
 import { SyncRepositoryUseCase } from './modules/repositories/application/sync-repository.usecase.js';
@@ -159,9 +159,10 @@ async function bootstrap(): Promise<void> {
 		const fileRepository = new PostgresFileRepository(pgPool);
 	const repoIngestQueue = createRepoIngestQueue(bullRedis);
 	const repoSyncQueue = createRepoSyncQueue(bullRedis);
+	const sourceSyncQueue = createSourceSyncQueue(bullRedis);
 	const connectGitHub = new ConnectGitHubRepositoryUseCase(knowledgeConnectorRepository, repositoryRepository, pipelineJobRepository, repoIngestQueue);
 	const uploadZip = new UploadRepositoryZipUseCase(knowledgeConnectorRepository, repositoryRepository, pipelineJobRepository, objectStorage, repoIngestQueue);
-	const syncRepository = new SyncRepositoryUseCase(repositoryRepository, pipelineJobRepository, repoSyncQueue);
+	const syncRepository = new SyncRepositoryUseCase(repositoryRepository, knowledgeConnectorRepository, pipelineJobRepository, repoSyncQueue, sourceSyncQueue);
 	const listRepositories = new ListRepositoriesUseCase(repositoryRepository);
 
 	const qdrantSearchClient = new QdrantSearchClient(env.QDRANT_URL, env.QDRANT_API_KEY);
@@ -210,8 +211,8 @@ async function bootstrap(): Promise<void> {
 	const startSlackOAuth = new StartSlackOAuthUseCase(slackRuntimeConfig);
 	const completeSlackOAuth = new CompleteSlackOAuthUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, slackClient, slackRuntimeConfig);
 	const listSlackChannels = new ListSlackChannelsUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository);
-	const selectSlackChannels = new SelectSlackChannelsUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, pipelineJobRepository, slackIngestQueue);
-	const syncSlack = new SyncSlackUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, pipelineJobRepository, slackSyncQueue);
+	const selectSlackChannels = new SelectSlackChannelsUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, pipelineJobRepository, slackIngestQueue, sourceSyncQueue);
+	const syncSlack = new SyncSlackUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, pipelineJobRepository, slackSyncQueue, sourceSyncQueue);
 
 	// --- Provider Platform: registry, vault, state, events, org-scoped API ---
 	// Managed apps are operator-level config; a missing one registers the
@@ -268,7 +269,7 @@ async function bootstrap(): Promise<void> {
 		knowledgeConnectorRepository,
 		repositoryRepository,
 		pipelineJobRepository,
-		repoIngestQueue
+		sourceSyncQueue
 	);
 
 	// Chat is the one synchronous RocketRide path in the API: questions run
@@ -351,7 +352,7 @@ async function bootstrap(): Promise<void> {
 	const shutdown = async (signal: string) => {
 		logger.info({ signal }, 'shutting down');
 		server.close();
-		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close()]);
+		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close(), sourceSyncQueue.close()]);
 		await rocketridePool.shutdown();
 		await redis.quit();
 		await bullRedis.quit();

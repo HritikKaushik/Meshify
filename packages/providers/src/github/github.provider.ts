@@ -2,6 +2,9 @@ import type { Provider } from '../base/provider.js';
 import type { ProviderManifest } from '../base/manifest.js';
 import type { CallbackInput, ConnectInput, ConnectResult, OAuthCapable } from '../base/oauth.js';
 import type { IntegrationContext } from '../base/context.js';
+import type { SyncCapable, SyncContext } from '../base/sync.js';
+import type { KnowledgeSink } from '../base/knowledge.js';
+import { executeGitHubSync } from './sync.js';
 import type { RawWebhookRequest, WebhookCapable, WebhookDescriptor } from '../base/webhook.js';
 import type { HealthCapable, ProviderHealthReport } from '../base/health.js';
 import type { ResourceBrowsingCapable, ResourcePage } from '../base/resources.js';
@@ -36,10 +39,11 @@ export const GITHUB_MANIFEST: ProviderManifest = {
 		resourcePicker: true,
 		healthCheck: true,
 		byoa: true,
-		// fullSync/incrementalSync/realtimeEvents/manualSync/scheduledSync flip on
-		// as the sync-engine and dispatcher milestones land — capability flags
-		// never advertise what the platform cannot do yet. tools stays false
-		// until a tools milestone ships real ones.
+		fullSync: true,
+		incrementalSync: true,
+		manualSync: true,
+		// realtimeEvents/scheduledSync flip on with the dispatcher + scheduler
+		// milestones; tools stays false until a tools milestone ships real ones.
 	},
 };
 
@@ -49,7 +53,7 @@ export const GITHUB_MANIFEST: ProviderManifest = {
  * platform only ever binds installations through a state-carrying flow and
  * this provider re-verifies the installation against the App JWT.
  */
-export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, HealthCapable, ResourceBrowsingCapable, ByoaCapable {
+export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, HealthCapable, ResourceBrowsingCapable, ByoaCapable, SyncCapable {
 	readonly manifest = GITHUB_MANIFEST;
 	private readonly now: () => Date;
 
@@ -138,6 +142,13 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 	private installationIdOf(ctx: IntegrationContext): string {
 		// external_account_id IS the installation id for github integrations.
 		return ctx.integration.externalAccountId;
+	}
+
+	// --- SyncCapable ---------------------------------------------------------
+
+	async executeSync(ctx: SyncContext, sink: KnowledgeSink): Promise<void> {
+		if (!this.deps.sync) throw new ProviderNotConfiguredError('github', 'GitHub sync is not wired in this process (worker-only)');
+		await executeGitHubSync(this.deps.sync, ctx, sink);
 	}
 
 	// --- ResourceBrowsingCapable ---------------------------------------------

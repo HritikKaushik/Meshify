@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Queue } from 'bullmq';
-import type { RepoIngestJobPayload } from '@meshify/queues';
+import type { SourceSyncJobPayload } from '@meshify/queues';
 import {
 	ConnectRepositoryFromIntegrationUseCase,
 	GitHubIntegrationNotFoundError,
@@ -50,8 +50,8 @@ function harness(grantedRepos = [{ id: '42', name: 'acme/api', owner: 'acme', sh
 	registry.register(pickerProvider(grantedRepos));
 	const vault = new CredentialVault(new InMemoryCredentialStore(), fakeCipher);
 	const listResources = new ListIntegrationResourcesUseCase(registry, integrations, resources, connectors, vault);
-	const enqueued: Array<{ name: string; payload: RepoIngestJobPayload; opts: { jobId?: string } }> = [];
-	const queue = { add: async (name: string, payload: RepoIngestJobPayload, opts: { jobId?: string }) => void enqueued.push({ name, payload, opts }) } as unknown as Queue<RepoIngestJobPayload>;
+	const enqueued: Array<{ name: string; payload: SourceSyncJobPayload; opts: { jobId?: string } }> = [];
+	const queue = { add: async (name: string, payload: SourceSyncJobPayload, opts: { jobId?: string }) => void enqueued.push({ name, payload, opts }) } as unknown as Queue<SourceSyncJobPayload>;
 	const useCase = new ConnectRepositoryFromIntegrationUseCase(integrations, resources, listResources, connectors, repositories, pipelineJobs, queue);
 	return { integrations, resources, connectors, repositories, pipelineJobs, enqueued, useCase };
 }
@@ -65,7 +65,10 @@ describe('ConnectRepositoryFromIntegrationUseCase', () => {
 		const connector = await h.connectors.findById(result.repository.connectorId!);
 		expect(connector).toMatchObject({ type: 'github', integrationId: 'int-gh' });
 		expect(connector?.config.resourceIds).toEqual(['42']);
-		expect(h.enqueued[0]).toMatchObject({ payload: { repositoryId: result.repository.id, projectId: 'proj-1' }, opts: { jobId: result.jobId } });
+		expect(h.enqueued[0]).toMatchObject({
+			payload: { connectorId: result.repository.connectorId, projectId: 'proj-1', mode: 'full' },
+			opts: { jobId: result.jobId },
+		});
 	});
 
 	it('refreshes the inventory once for a freshly-granted repo (cache miss → live listing)', async () => {

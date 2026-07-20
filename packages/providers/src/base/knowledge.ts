@@ -29,6 +29,13 @@ export interface KnowledgeItem {
 export interface KnowledgeSink {
 	upsert(items: KnowledgeItem[]): Promise<void>;
 	remove(sourceRefs: string[]): Promise<void>;
+	/**
+	 * Barrier: force buffered items through the writer. Call before committing
+	 * a cursor — a cursor must never advance past content that has not been
+	 * durably embedded (a failed tail-flush after an advanced cursor would
+	 * silently skip that content on retry).
+	 */
+	flush(): Promise<void>;
 	progress(stage: string, percent?: number): void;
 	/** Record a non-fatal per-scope failure; the sync continues and the engine aggregates these into the summary. */
 	scopeFailed(scope: string, error: string): void;

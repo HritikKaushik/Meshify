@@ -8,3 +8,5 @@ export { DEFAULT_JOB_OPTS } from './job-options.js';
 export type { ConnectionOptions } from 'bullmq';
 export { JOB_EVENTS_CHANNEL, JobEventPublisher, JobEventSubscriber } from './job-events.js';
 export type { JobEvent, JobPhase, RedisPublisherConnection, RedisSubscriberConnection } from './job-events.js';
+export { SOURCE_SYNC_QUEUE, createSourceSyncQueue } from './source-sync.queue.js';
+export type { SourceSyncJobPayload } from './source-sync.queue.js';
