@@ -15,6 +15,7 @@ import { ProviderAuthError, ProviderConfigError, ProviderNotConfiguredError } fr
 import { CURRENT_MANIFEST_VERSION, NO_CAPABILITIES } from '../base/manifest.js';
 import type { SlackProviderDeps } from './deps.js';
 import { describeSlackWebhook, verifySlackSignature } from './webhooks.js';
+import { readString } from '../base/config.js';
 import { SLACK_BOT_SCOPES } from '@meshify/slack';
 import type { SlackOAuthResult } from '@meshify/slack';
 
@@ -65,8 +66,8 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 
 	/** Resolve Slack app settings from the registration (uniform keys across managed and BYOA). */
 	private async appSettings(registration: RegistrationContext): Promise<SlackAppSettings> {
-		const clientId = strOf(registration.config.app_client_id);
-		const redirectUri = strOf(registration.config.app_redirect_uri);
+		const clientId = readString(registration.config, 'app_client_id');
+		const redirectUri = readString(registration.config, 'app_redirect_uri');
 		const clientSecret = (await registration.secrets.get('app_client_secret'))?.value ?? '';
 		const signingSecret = (await registration.secrets.get('app_signing_secret'))?.value ?? '';
 		if (!clientId || !redirectUri) {
@@ -84,8 +85,8 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 	buildConnectUrl(input: ConnectInput, registration: RegistrationContext): string {
 		// buildAuthorizeUrl is synchronous once settings resolve; the registration
 		// carries the client id + redirect uri (managed env or BYOA row).
-		const clientId = strOf(registration.config.app_client_id);
-		const redirectUri = strOf(registration.config.app_redirect_uri);
+		const clientId = readString(registration.config, 'app_client_id');
+		const redirectUri = readString(registration.config, 'app_redirect_uri');
 		if (!clientId || !redirectUri) throw new ProviderNotConfiguredError('slack', `The Slack app registration (${registration.mode}) is missing app_client_id or app_redirect_uri`);
 		return this.deps.transportFactory({ clientId, clientSecret: '', signingSecret: '', redirectUri }).buildAuthorizeUrl(input.stateToken);
 	}
@@ -250,6 +251,3 @@ export function createSlackProvider(deps: SlackProviderDeps): SlackProvider {
 	return new SlackProvider(deps);
 }
 
-function strOf(value: unknown): string {
-	return typeof value === 'string' ? value : value == null ? '' : String(value);
-}

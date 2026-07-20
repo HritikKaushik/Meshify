@@ -66,6 +66,7 @@ import {
 	ProviderRegistry,
 	ProviderRegistrationService,
 	RedisPlatformEventBus,
+	buildManagedRegistrations,
 	createGitHubProvider,
 	createGitHubTransport,
 	createSlackProvider,
@@ -73,7 +74,6 @@ import {
 	type ContentLedger,
 } from '@meshify/providers';
 import type { Integration, KnowledgeConnector } from '@meshify/data-access';
-import type { ManagedRegistration } from '@meshify/providers';
 import { processSourceSyncJob } from './processors/source-sync.processor.js';
 import { processWebhookEventJob } from './processors/webhook-event.processor.js';
 import { processMaintenanceJob } from './processors/integration-maintenance.processor.js';
@@ -84,29 +84,6 @@ const DOCUMENT_CHUNK_SIZE = 768; // prose default per ROCKETRIDE_PIPELINE_RULES.
 const CODE_CHUNK_SIZE = 384; // code default per ROCKETRIDE_PIPELINE_RULES.md (256-512 chars)
 
 
-/** Build the deployment's managed provider registrations from env (uniform config/secret keys). */
-function buildManagedRegistrations(env: ReturnType<typeof loadEnv>): Map<string, ManagedRegistration> {
-	const managed = new Map<string, ManagedRegistration>();
-	// github requires user-auth client creds too (installation ownership can't be
-	// verified without them) — gated so an unconfigured deployment fails closed.
-	if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY && env.GITHUB_APP_SLUG && env.GITHUB_APP_CLIENT_ID && env.GITHUB_APP_CLIENT_SECRET) {
-		managed.set('github', {
-			config: { app_id: env.GITHUB_APP_ID, app_slug: env.GITHUB_APP_SLUG, app_client_id: env.GITHUB_APP_CLIENT_ID },
-			secrets: {
-				app_private_key: env.GITHUB_APP_PRIVATE_KEY,
-				app_client_secret: env.GITHUB_APP_CLIENT_SECRET,
-				...(env.GITHUB_APP_WEBHOOK_SECRET ? { app_webhook_secret: env.GITHUB_APP_WEBHOOK_SECRET } : {}),
-			},
-		});
-	}
-	if (env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET && env.SLACK_REDIRECT_URI) {
-		managed.set('slack', {
-			config: { app_client_id: env.SLACK_CLIENT_ID, app_redirect_uri: env.SLACK_REDIRECT_URI },
-			secrets: { app_client_secret: env.SLACK_CLIENT_SECRET, ...(env.SLACK_SIGNING_SECRET ? { app_signing_secret: env.SLACK_SIGNING_SECRET } : {}) },
-		});
-	}
-	return managed;
-}
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -243,6 +220,7 @@ async function bootstrap(): Promise<void> {
 		['slack', createSlackContentLedger({ conversations: slackConversations })],
 	]);
 
+	const platformEventBus = new RedisPlatformEventBus(bullRedis);
 	const sourceSyncDeps = {
 		registry: providerRegistry,
 		connectors,
@@ -253,6 +231,8 @@ async function bootstrap(): Promise<void> {
 		vault: credentialVault,
 		registrations: registrationService,
 		jobEvents,
+		bus: platformEventBus,
+		logger,
 		ledgers,
 		writerFor: async (projectId: string) => {
 			const project = await projects.findById(projectId);
@@ -272,7 +252,6 @@ async function bootstrap(): Promise<void> {
 	const webhookEventRepository = new PostgresWebhookEventRepository(pgPool);
 	const integrationResources = new PostgresIntegrationResourceRepository(pgPool);
 	const sourceSyncQueue = createSourceSyncQueue(bullRedis);
-	const platformEventBus = new RedisPlatformEventBus(bullRedis);
 	const webhookDeps = {
 		registry: providerRegistry,
 		webhookEvents: webhookEventRepository,

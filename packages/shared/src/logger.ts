@@ -13,8 +13,25 @@ export function createLogger(options: LoggerOptions) {
 		// Credentials must never reach the logs. pino-http serializes request/
 		// response headers, which carry the Authorization API key (platform-api)
 		// and the Clerk session cookie (bff); mask them wherever they appear.
+		// The wildcard paths defensively mask provider/registration secrets and
+		// tokens if an object carrying them is ever logged accidentally.
 		redact: {
-			paths: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
+			paths: [
+				'req.headers.authorization',
+				'req.headers.cookie',
+				'res.headers["set-cookie"]',
+				'*.app_private_key',
+				'*.app_client_secret',
+				'*.app_signing_secret',
+				'*.app_webhook_secret',
+				'*.accessToken',
+				'*.refreshToken',
+				'*.access_token',
+				'*.refresh_token',
+				'*.privateKey',
+				'*.clientSecret',
+				'*.token',
+			],
 			censor: '[redacted]',
 		},
 	});

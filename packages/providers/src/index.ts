@@ -22,6 +22,9 @@ export { buildSourceRef, parseSourceRef } from './base/canonical.js';
 // Registry
 export { ProviderRegistry, manifestOnlyProvider } from './registry/provider-registry.js';
 export { ProviderRegistrationService } from './registry/provider-registration-service.js';
+export { buildManagedRegistrations } from './registry/managed-registrations.js';
+export type { ManagedRegistrationEnv } from './registry/managed-registrations.js';
+export { readString } from './base/config.js';
 export type { ManagedRegistration, RegistrationStore } from './registry/provider-registration-service.js';
 
 // Connector engine

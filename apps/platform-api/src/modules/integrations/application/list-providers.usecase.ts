@@ -14,11 +14,12 @@ export class ListProvidersUseCase {
 	) {}
 
 	async execute(orgId: string): Promise<ProviderCatalogEntry[]> {
-		return Promise.all(
-			this.registry.list().map(async (provider) => ({
-				manifest: provider.manifest,
-				configured: provider.manifest.availability === 'available' && (await this.registrations.isConfigured(orgId, provider.manifest.id)),
-			}))
-		);
+		// One query for the org's configurable providers, then resolve in memory —
+		// no per-provider DB round-trip on this per-page-load endpoint.
+		const configured = await this.registrations.configuredProviders(orgId);
+		return this.registry.list().map((provider) => ({
+			manifest: provider.manifest,
+			configured: provider.manifest.availability === 'available' && configured.has(provider.manifest.id),
+		}));
 	}
 }

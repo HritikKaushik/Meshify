@@ -87,9 +87,16 @@ export async function processWebhookEventJob(job: Job<WebhookEventJobPayload>, d
 
 /** Maps the provider-independent event vocabulary onto platform actions. */
 async function dispatch(event: PlatformEvent, integration: Integration, deps: WebhookEventProcessorDeps): Promise<void> {
+	// Fetch the integration's connectors once per dispatch and filter in memory —
+	// avoids re-querying per resource id (e.g. a permission.changed revoking K
+	// resources previously ran K identical listByIntegration queries).
+	const connectorsOf = memoize(() => deps.connectors.listByIntegration(integration.id));
+	const boundTo = async (resourceId: string) =>
+		(await connectorsOf()).filter((c) => Array.isArray(c.config.resourceIds) && (c.config.resourceIds as string[]).includes(resourceId));
+
 	switch (event.kind) {
 		case 'resource.updated': {
-			for (const connector of await boundConnectors(deps, integration.id, event.externalResourceId)) {
+			for (const connector of await boundTo(event.externalResourceId)) {
 				await enqueueIncrementalSync(deps, connector, 0);
 			}
 			return;
@@ -97,28 +104,28 @@ async function dispatch(event: PlatformEvent, integration: Integration, deps: We
 		case 'content.changed': {
 			// Chat-style activity: debounce-coalesce into one incremental sync per
 			// connector; the sync's cursors make an over-triggered run cheap.
-			for (const connector of await deps.connectors.listByIntegration(integration.id)) {
+			for (const connector of await connectorsOf()) {
 				await enqueueIncrementalSync(deps, connector, deps.contentDebounceMs ?? DEFAULT_CONTENT_DEBOUNCE_MS);
 			}
 			return;
 		}
 		case 'resource.removed': {
 			await deps.resources.markRemoved(integration.id, [event.externalResourceId]);
-			for (const connector of await boundConnectors(deps, integration.id, event.externalResourceId)) {
+			for (const connector of await boundTo(event.externalResourceId)) {
 				await deps.connectors.updateStatus(connector.id, 'error', 'The connected source was removed at the provider');
 			}
 			return;
 		}
 		case 'resource.renamed': {
 			await deps.resources.rename(integration.id, event.externalResourceId, event.name);
+			// Repository detail-table reconciliation is GitHub-shaped (owner/name/url
+			// keyed by the numeric repo id); it lives here rather than in the
+			// provider because normalizeWebhook only produces events, and the
+			// canonical inventory rename above stays provider-agnostic.
 			if (event.resourceType === 'repository' && event.name.includes('/')) {
 				const [owner, shortName] = event.name.split('/', 2) as [string, string];
 				for (const repository of await deps.repositories.findByGitHubRepoId(event.externalResourceId)) {
-					await deps.repositories.updateGitHubIdentity(repository.id, {
-						owner,
-						name: shortName,
-						remoteUrl: `https://github.com/${event.name}`,
-					});
+					await deps.repositories.updateGitHubIdentity(repository.id, { owner, name: shortName, remoteUrl: `https://github.com/${event.name}` });
 				}
 			}
 			return;
@@ -126,8 +133,10 @@ async function dispatch(event: PlatformEvent, integration: Integration, deps: We
 		case 'permission.changed': {
 			if (event.removed.length > 0) {
 				await deps.resources.markRemoved(integration.id, event.removed);
-				for (const removedId of event.removed) {
-					for (const connector of await boundConnectors(deps, integration.id, removedId)) {
+				const removed = new Set(event.removed);
+				for (const connector of await connectorsOf()) {
+					const ids = Array.isArray(connector.config.resourceIds) ? (connector.config.resourceIds as string[]) : [];
+					if (ids.some((id) => removed.has(id))) {
 						await deps.connectors.updateStatus(connector.id, 'error', 'Access to this source was revoked at the provider');
 					}
 				}
@@ -137,7 +146,7 @@ async function dispatch(event: PlatformEvent, integration: Integration, deps: We
 		case 'connection.revoked': {
 			await deps.integrations.updateStatus(integration.id, 'revoked', 'Uninstalled/revoked at the provider');
 			await deps.integrations.updateHealth(integration.id, 'disconnected');
-			for (const connector of await deps.connectors.listByIntegration(integration.id)) {
+			for (const connector of await connectorsOf()) {
 				await deps.connectors.updateStatus(connector.id, 'disconnected', 'The integration was revoked at the provider');
 			}
 			return;
@@ -156,10 +165,10 @@ async function dispatch(event: PlatformEvent, integration: Integration, deps: We
 	}
 }
 
-/** Connectors bound to a canonical resource (config.resourceIds — the provider-agnostic binding). */
-async function boundConnectors(deps: WebhookEventProcessorDeps, integrationId: string, resourceId: string): Promise<KnowledgeConnector[]> {
-	const connectors = await deps.connectors.listByIntegration(integrationId);
-	return connectors.filter((c) => Array.isArray(c.config.resourceIds) && (c.config.resourceIds as string[]).includes(resourceId));
+/** Single-flight memo for a per-dispatch async fetch. */
+function memoize<T>(fn: () => Promise<T>): () => Promise<T> {
+	let cached: Promise<T> | undefined;
+	return () => (cached ??= fn());
 }
 
 async function enqueueIncrementalSync(deps: WebhookEventProcessorDeps, connector: KnowledgeConnector, delayMs: number): Promise<void> {

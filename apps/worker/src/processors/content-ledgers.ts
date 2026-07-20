@@ -9,26 +9,32 @@ import type { ContentLedger } from '@meshify/providers';
  */
 
 export function createGitHubContentLedger(deps: { repositories: RepositoryRepository; files: FileRepository }): (connector: KnowledgeConnector) => ContentLedger {
-	return (connector) => ({
-		async getHashes(_connectorId, sourceRefs) {
-			const repository = await deps.repositories.findByConnectorId(connector.id);
-			if (!repository) return new Map();
-			const rows = await deps.files.findByRepositoryAndPaths(repository.id, sourceRefs);
-			return new Map(rows.filter((f) => f.status === 'embedded').map((f) => [f.path, f.contentHash]));
-		},
-		async setHashes(_connectorId, entries) {
-			const repository = await deps.repositories.findByConnectorId(connector.id);
-			if (!repository) return;
-			// The sync already upserted the rows (with hash) as pending; the
-			// engine's post-embed stamp flips exactly the embedded paths.
-			await deps.files.updateStatusForPaths(repository.id, entries.map((e) => e.sourceRef), 'embedded');
-		},
-		async deleteRefs(_connectorId, sourceRefs) {
-			const repository = await deps.repositories.findByConnectorId(connector.id);
-			if (!repository) return;
-			await deps.files.markDeleted(repository.id, sourceRefs);
-		},
-	});
+	return (connector) => {
+		// Resolve the repository row once per sync, not once per batch — the
+		// engine calls getHashes/setHashes/deleteRefs per 25-item batch.
+		let repoIdPromise: Promise<string | undefined> | undefined;
+		const repoId = () => (repoIdPromise ??= deps.repositories.findByConnectorId(connector.id).then((r) => r?.id));
+		return {
+			async getHashes(_connectorId, sourceRefs) {
+				const id = await repoId();
+				if (!id) return new Map();
+				const rows = await deps.files.findByRepositoryAndPaths(id, sourceRefs);
+				return new Map(rows.filter((f) => f.status === 'embedded').map((f) => [f.path, f.contentHash]));
+			},
+			async setHashes(_connectorId, entries) {
+				const id = await repoId();
+				if (!id) return;
+				// The sync already upserted the rows (with hash) as pending; the
+				// engine's post-embed stamp flips exactly the embedded paths.
+				await deps.files.updateStatusForPaths(id, entries.map((e) => e.sourceRef), 'embedded');
+			},
+			async deleteRefs(_connectorId, sourceRefs) {
+				const id = await repoId();
+				if (!id) return;
+				await deps.files.markDeleted(id, sourceRefs);
+			},
+		};
+	};
 }
 
 export function createSlackContentLedger(deps: { conversations: SlackConversationRepository }): (connector: KnowledgeConnector) => ContentLedger {

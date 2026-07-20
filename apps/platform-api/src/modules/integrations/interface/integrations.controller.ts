@@ -59,6 +59,9 @@ function mapError(err: unknown, res: import('express').Response, log?: { error: 
 	} else if (err instanceof ProviderNotConfiguredError) {
 		res.status(503).json({ error: err.message });
 	} else if (err instanceof InvalidOAuthStateError || err instanceof ProviderAuthError || err instanceof UnsupportedProviderOperationError || err instanceof ProviderConfigError) {
+		// Security-relevant (replayed/expired/cross-tenant state, failed provider
+		// verification) — log at warn so it's diagnosable; the response stays terse.
+		log?.error({ err: err.message, kind: err.name }, 'integration request rejected');
 		res.status(400).json({ error: err.message });
 	} else if (err instanceof ProjectNotInOrgError) {
 		res.status(404).json({ error: err.message });

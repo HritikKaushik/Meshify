@@ -15,6 +15,7 @@ import { ProviderAuthError, ProviderConfigError, ProviderNotConfiguredError } fr
 import { CURRENT_MANIFEST_VERSION, NO_CAPABILITIES } from '../base/manifest.js';
 import type { GitHubProviderDeps } from './deps.js';
 import { describeGitHubWebhook, verifyGitHubSignature } from './webhooks.js';
+import { readString } from '../base/config.js';
 
 const INSTALLATION_TOKEN_KIND = 'installation_token';
 /** Treat an installation token expiring within 5 min as absent — mint a fresh one. */
@@ -65,9 +66,9 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 
 	/** Resolve GitHub App settings from the registration (uniform keys across managed and BYOA). */
 	private async appSettings(registration: RegistrationContext): Promise<GitHubAppSettings> {
-		const appId = strOf(registration.config.app_id);
-		const slug = strOf(registration.config.app_slug);
-		const clientId = strOf(registration.config.app_client_id);
+		const appId = readString(registration.config, 'app_id');
+		const slug = readString(registration.config, 'app_slug');
+		const clientId = readString(registration.config, 'app_client_id');
 		const privateKey = (await registration.secrets.get('app_private_key'))?.value;
 		const webhookSecret = (await registration.secrets.get('app_webhook_secret'))?.value ?? '';
 		const clientSecret = (await registration.secrets.get('app_client_secret'))?.value ?? '';
@@ -84,7 +85,7 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 	// --- OAuthCapable --------------------------------------------------------
 
 	buildConnectUrl(input: ConnectInput, registration: RegistrationContext): string {
-		const slug = strOf(registration.config.app_slug);
+		const slug = readString(registration.config, 'app_slug');
 		if (!slug) throw new ProviderNotConfiguredError('github', `The GitHub app registration (${registration.mode}) is missing app_slug`);
 		// installations/new also short-circuits for already-installed accounts,
 		// bouncing straight back to the setup URL with state intact — which is
@@ -315,6 +316,3 @@ export function createGitHubProvider(deps: GitHubProviderDeps): GitHubProvider {
 	return new GitHubProvider(deps);
 }
 
-function strOf(value: unknown): string {
-	return typeof value === 'string' ? value : value == null ? '' : String(value);
-}

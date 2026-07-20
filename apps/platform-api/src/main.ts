@@ -96,12 +96,12 @@ import {
 	ProviderRegistry,
 	ProviderRegistrationService,
 	RedisPlatformEventBus,
+	buildManagedRegistrations,
 	createGitHubProvider,
 	createGitHubTransport,
 	createSlackProvider,
 	createSlackTransport,
 } from '@meshify/providers';
-import type { ManagedRegistration } from '@meshify/providers';
 import { ListProvidersUseCase } from './modules/integrations/application/list-providers.usecase.js';
 import { ListIntegrationsUseCase } from './modules/integrations/application/list-integrations.usecase.js';
 import { ConnectProviderUseCase } from './modules/integrations/application/connect-provider.usecase.js';
@@ -117,29 +117,6 @@ import { AttachSlackWorkspaceUseCase } from './modules/slack/application/attach-
 import { ConnectRepositoryFromIntegrationUseCase } from './modules/repositories/application/connect-repository-from-integration.usecase.js';
 
 
-/** Build the deployment's managed provider registrations from env (uniform config/secret keys). */
-function buildManagedRegistrations(env: ReturnType<typeof loadEnv>): Map<string, ManagedRegistration> {
-	const managed = new Map<string, ManagedRegistration>();
-	// github requires user-auth client creds too (installation ownership can't be
-	// verified without them) — gated so an unconfigured deployment fails closed.
-	if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY && env.GITHUB_APP_SLUG && env.GITHUB_APP_CLIENT_ID && env.GITHUB_APP_CLIENT_SECRET) {
-		managed.set('github', {
-			config: { app_id: env.GITHUB_APP_ID, app_slug: env.GITHUB_APP_SLUG, app_client_id: env.GITHUB_APP_CLIENT_ID },
-			secrets: {
-				app_private_key: env.GITHUB_APP_PRIVATE_KEY,
-				app_client_secret: env.GITHUB_APP_CLIENT_SECRET,
-				...(env.GITHUB_APP_WEBHOOK_SECRET ? { app_webhook_secret: env.GITHUB_APP_WEBHOOK_SECRET } : {}),
-			},
-		});
-	}
-	if (env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET && env.SLACK_REDIRECT_URI) {
-		managed.set('slack', {
-			config: { app_client_id: env.SLACK_CLIENT_ID, app_redirect_uri: env.SLACK_REDIRECT_URI },
-			secrets: { app_client_secret: env.SLACK_CLIENT_SECRET, ...(env.SLACK_SIGNING_SECRET ? { app_signing_secret: env.SLACK_SIGNING_SECRET } : {}) },
-		});
-	}
-	return managed;
-}
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();

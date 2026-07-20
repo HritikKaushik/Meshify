@@ -66,7 +66,7 @@ describe('DescribeRegistrationUseCase', () => {
 
 	it('after configuring, reports byoa mode + configured flags without echoing secrets', async () => {
 		const h = harness();
-		await h.configure.execute({ orgId: 'org-1', provider: 'github', values: { app_id: '999', app_slug: 'acme', app_private_key: '-----BEGIN PRIVATE KEY-----k', app_webhook_secret: 'wh' } });
+		await h.configure.execute({ orgId: 'org-1', provider: 'github', values: { app_id: '999', app_slug: 'acme', app_client_id: 'Iv1.cid', app_private_key: '-----BEGIN PRIVATE KEY-----k', app_client_secret: 'csec', app_webhook_secret: 'wh' } });
 		const result = await h.describe.execute({ orgId: 'org-1', provider: 'github' });
 		expect(result.mode).toBe('byoa');
 		expect(result.fields.find((f) => f.key === 'app_private_key')?.configured).toBe(true);
@@ -81,7 +81,7 @@ describe('ConfigureRegistrationUseCase', () => {
 		const result = await h.configure.execute({
 			orgId: 'org-1',
 			provider: 'github',
-			values: { app_id: '999', app_slug: 'acme', app_private_key: '-----BEGIN PRIVATE KEY-----k', app_webhook_secret: 'wh' },
+			values: { app_id: '999', app_slug: 'acme', app_client_id: 'Iv1.cid', app_private_key: '-----BEGIN PRIVATE KEY-----k', app_client_secret: 'csec', app_webhook_secret: 'wh' },
 		});
 		const reg = await h.registrations.findByOrgAndProvider('org-1', 'github');
 		expect(result.webhookPath).toBe(`/v1/integrations/webhooks/github/${reg!.id}`);
@@ -93,8 +93,8 @@ describe('ConfigureRegistrationUseCase', () => {
 
 	it('a blank secret on update keeps the stored one (validated against the true value)', async () => {
 		const h = harness();
-		await h.configure.execute({ orgId: 'org-1', provider: 'github', values: { app_id: '999', app_slug: 'acme', app_private_key: '-----BEGIN PRIVATE KEY-----orig', app_webhook_secret: 'wh' } });
-		await h.configure.execute({ orgId: 'org-1', provider: 'github', values: { app_id: '1000', app_slug: 'acme', app_private_key: '', app_webhook_secret: '' } });
+		await h.configure.execute({ orgId: 'org-1', provider: 'github', values: { app_id: '999', app_slug: 'acme', app_client_id: 'Iv1.cid', app_private_key: '-----BEGIN PRIVATE KEY-----orig', app_client_secret: 'csec', app_webhook_secret: 'wh' } });
+		await h.configure.execute({ orgId: 'org-1', provider: 'github', values: { app_id: '1000', app_slug: 'acme', app_client_id: 'Iv1.cid', app_private_key: '', app_client_secret: '', app_webhook_secret: '' } });
 		const reg = await h.registrations.findByOrgAndProvider('org-1', 'github');
 		expect((await h.vault.get(reg!.id, 'app_private_key'))?.value).toBe('-----BEGIN PRIVATE KEY-----orig');
 		expect(reg!.config.app_id).toBe('1000');

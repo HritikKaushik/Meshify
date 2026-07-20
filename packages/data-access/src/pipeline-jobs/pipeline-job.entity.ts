@@ -3,7 +3,7 @@
  * payload); the provider-specific types remain for legacy producers and
  * rendered history. The DB no longer CHECKs this enumeration.
  */
-export type PipelineJobType = 'ingest_document' | 'clone_repo' | 'sync_repo' | 'reindex' | 'cleanup' | 'slack_ingest' | 'slack_sync' | 'source_sync';
+export type PipelineJobType = 'ingest_document' | 'clone_repo' | 'sync_repo' | 'slack_ingest' | 'slack_sync' | 'source_sync';
 export type PipelineJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'dead_letter';
 
 export interface PipelineJob {

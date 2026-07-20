@@ -13,6 +13,7 @@ export interface ManagedRegistration {
 export interface RegistrationStore {
 	findByOrgAndProvider(orgId: string, provider: string): Promise<{ id: string; config: Record<string, unknown> } | undefined>;
 	findById(id: string): Promise<{ id: string; provider: string; config: Record<string, unknown> } | undefined>;
+	listByOrg(orgId: string): Promise<Array<{ id: string; provider: string; config: Record<string, unknown> }>>;
 }
 
 /** A read-only vault handle over a static secret map (the virtual managed registration's env secrets). */
@@ -72,6 +73,16 @@ export class ProviderRegistrationService {
 	/** Whether the org can operate this provider (managed env present or a BYOA registration exists). */
 	async isConfigured(orgId: string, provider: string): Promise<boolean> {
 		return (await this.resolve(orgId, provider)) !== undefined;
+	}
+
+	/**
+	 * The set of providers this org can operate — one `listByOrg` query plus the
+	 * managed map, so the marketplace catalog needs a single DB round-trip
+	 * instead of one per provider.
+	 */
+	async configuredProviders(orgId: string): Promise<Set<string>> {
+		const byoa = await this.store.listByOrg(orgId);
+		return new Set([...this.managed.keys(), ...byoa.map((r) => r.provider)]);
 	}
 
 	/** The virtual managed registration for a provider (deployment env) — used by the managed webhook route. */

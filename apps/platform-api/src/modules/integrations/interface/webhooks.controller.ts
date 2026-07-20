@@ -78,6 +78,9 @@ export function createWebhooksController(deps: WebhookReceiverDeps): Router {
 			};
 
 			if (!provider.verifyWebhook(raw, secret)) {
+				// A provider mis-set its webhook secret, or someone is probing — log
+				// (without echoing which registrations exist) so it's diagnosable.
+				deps.logger.warn({ providerId, registrationId: registrationIdParam ?? null, reason: 'signature' }, 'webhook rejected');
 				res.status(401).json({ error: 'Invalid webhook signature' });
 				return;
 			}

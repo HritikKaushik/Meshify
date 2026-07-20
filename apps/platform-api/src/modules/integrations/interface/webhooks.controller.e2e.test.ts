@@ -35,7 +35,7 @@ describe('webhook receiver (e2e over real HTTP, mounted exactly like main.ts)', 
 			['slack', { config: { app_client_id: 'c', app_redirect_uri: 'https://x/cb' }, secrets: { app_signing_secret: SLACK_SECRET } }],
 		]);
 		const registrations = new ProviderRegistrationService(
-			{ findByOrgAndProvider: async () => undefined, findById: async () => undefined },
+			{ findByOrgAndProvider: async () => undefined, findById: async () => undefined, listByOrg: async () => [] },
 			new CredentialVault(new InMemoryCredentialStore(), fakeCipher),
 			managed
 		);

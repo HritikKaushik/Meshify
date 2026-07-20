@@ -10,6 +10,8 @@ function service(seed: { byoa?: Record<string, { id: string; config: Record<stri
 	const store: RegistrationStore = {
 		findByOrgAndProvider: async (orgId, provider) => rows.get(`${orgId}:${provider}`),
 		findById: async (id) => byId.get(id),
+		listByOrg: async (orgId) =>
+			[...rows.entries()].filter(([key]) => key.startsWith(`${orgId}:`)).map(([key, row]) => ({ id: row.id, provider: key.split(':')[1]!, config: row.config })),
 	};
 	const registrationVault = new CredentialVault(new InMemoryCredentialStore(), fakeCipher);
 	const managed = new Map([['github', { config: { app_id: '1', app_slug: 'managed-app' }, secrets: { app_private_key: 'MANAGED-KEY', app_webhook_secret: 'managed-wh' } }]]);
