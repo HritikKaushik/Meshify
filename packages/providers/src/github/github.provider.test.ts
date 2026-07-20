@@ -138,14 +138,21 @@ describe('GitHubProvider specifics', () => {
 		expect(events).toEqual([]);
 	});
 
-	it('builds the installations/new URL from the app slug', () => {
+	it('builds the user-authorization URL from the OAuth client id (always issues a code, even when already installed)', () => {
 		const provider = createGitHubProvider(deps());
 		expect(provider.buildConnectUrl({ stateToken: 'tok/x', intent: 'connect' }, REG)).toBe(
-			'https://github.com/apps/meshify-app/installations/new?state=tok%2Fx'
+			'https://github.com/login/oauth/authorize?client_id=Iv1.abc&state=tok%2Fx'
 		);
 	});
 
-	it('throws ProviderNotConfiguredError when the registration lacks the app slug', () => {
+	it('derives the installation from the user when the callback omits installation_id (authorization flow)', async () => {
+		const transport = new FakeGitHubTransport({ installations: [buildGitHubInstallation({ id: 12345 })] });
+		const provider = createGitHubProvider(deps({ transport }));
+		const result = await provider.completeConnect({ params: { code: 'valid-code' } }, REG);
+		expect(result.externalAccountId).toBe('12345');
+	});
+
+	it('throws ProviderNotConfiguredError when the registration lacks both client id and app slug', () => {
 		const provider = createGitHubProvider(deps());
 		const emptyReg = fakeRegistration({ provider: 'github', config: {} });
 		expect(() => provider.buildConnectUrl({ stateToken: 't', intent: 'connect' }, emptyReg)).toThrow(ProviderNotConfiguredError);

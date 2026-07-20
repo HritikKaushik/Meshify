@@ -85,29 +85,33 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 	// --- OAuthCapable --------------------------------------------------------
 
 	buildConnectUrl(input: ConnectInput, registration: RegistrationContext): string {
+		const clientId = readString(registration.config, 'app_client_id');
 		const slug = readString(registration.config, 'app_slug');
-		if (!slug) throw new ProviderNotConfiguredError('github', `The GitHub app registration (${registration.mode}) is missing app_slug`);
-		// installations/new also short-circuits for already-installed accounts,
-		// bouncing straight back to the setup URL with state intact — which is
-		// how direct-from-GitHub installs get claimed safely.
+		// Prefer the user-authorization flow: `/login/oauth/authorize` ALWAYS
+		// issues an OAuth `code` (which we need to prove installation ownership)
+		// and lets the user install the app inline when it isn't yet installed.
+		// `installations/new` short-circuits for already-installed accounts,
+		// bouncing back with NO code — so a reconnect there can never be verified.
+		if (clientId) {
+			return `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&state=${encodeURIComponent(input.stateToken)}`;
+		}
+		// No OAuth client configured — fall back to the install URL (ownership
+		// verification in completeConnect will then reject the code-less callback).
+		if (!slug) throw new ProviderNotConfiguredError('github', `The GitHub app registration (${registration.mode}) is missing app_slug and app_client_id`);
 		return `https://github.com/apps/${slug}/installations/new?state=${encodeURIComponent(input.stateToken)}`;
 	}
 
 	async completeConnect(input: CallbackInput, registration: RegistrationContext): Promise<ConnectResult> {
 		const settings = await this.appSettings(registration);
 		const transport = this.deps.transportFactory(settings);
-		const installationId = input.params.installation_id;
-		if (!installationId || !/^\d+$/.test(installationId)) {
-			throw new ProviderAuthError('GitHub callback is missing a valid installation_id');
-		}
 
 		// OWNERSHIP CHECK (critical for tenant isolation): installation ids are
 		// guessable sequential integers, and getInstallation via the App JWT only
 		// proves the installation EXISTS on the shared app — not that the caller
 		// controls it. Require the user-authorization `code` (issued by GitHub
-		// only to the user who just authorized), exchange it, and verify the
-		// installation is among the user's accessible installations. Without this
-		// an attacker could claim another org's installation by guessing its id.
+		// only to the user who just authorized), exchange it, and enumerate the
+		// installations that user actually administers. Without this an attacker
+		// could claim another org's installation by guessing its id.
 		if (!settings.clientId || !settings.clientSecret) {
 			throw new ProviderNotConfiguredError('github', 'GitHub App user authorization (client id/secret) is not configured — cannot verify installation ownership');
 		}
@@ -122,8 +126,20 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 		} catch (err) {
 			throw new ProviderAuthError(`GitHub user authorization could not be verified: ${(err as Error).message}`);
 		}
-		if (!accessible.has(installationId)) {
-			throw new ProviderAuthError('You do not have access to this GitHub installation');
+
+		// Resolve which installation to connect. The install flow returns it as a
+		// callback param; the user-authorization flow does not, so fall back to
+		// the single installation the user administers through this app.
+		let installationId = input.params.installation_id ?? '';
+		if (installationId) {
+			if (!/^\d+$/.test(installationId)) throw new ProviderAuthError('GitHub callback included an invalid installation_id');
+			if (!accessible.has(installationId)) throw new ProviderAuthError('You do not have access to this GitHub installation');
+		} else if (accessible.size === 1) {
+			installationId = [...accessible][0]!;
+		} else if (accessible.size === 0) {
+			throw new ProviderAuthError('This GitHub app is not installed on your account yet — install it (Configure → Install), then reconnect');
+		} else {
+			throw new ProviderAuthError('You administer several installations of this app — open the specific one on GitHub and use “Configure” to connect it');
 		}
 
 		// Ownership proven; read the installation's account identity via the App JWT.
