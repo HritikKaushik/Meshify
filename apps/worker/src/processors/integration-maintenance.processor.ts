@@ -10,7 +10,7 @@ import type {
 	WebhookEventRepository,
 } from '@meshify/data-access';
 import type { IntegrationMaintenanceJobPayload, SourceSyncJobPayload } from '@meshify/queues';
-import type { CredentialVault, PlatformEventBus, ProviderRegistry } from '@meshify/providers';
+import type { CredentialVault, PlatformEventBus, ProviderRegistrationService, ProviderRegistry } from '@meshify/providers';
 import { supportsHealthCheck, supportsOAuth } from '@meshify/providers';
 
 export interface MaintenanceProcessorDeps {
@@ -23,6 +23,7 @@ export interface MaintenanceProcessorDeps {
 	webhookEvents: WebhookEventRepository;
 	sourceSyncQueue: Queue<SourceSyncJobPayload>;
 	vault: CredentialVault;
+	registrations: ProviderRegistrationService;
 	bus: PlatformEventBus;
 	logger: { info: (obj: unknown, msg: string) => void; warn: (obj: unknown, msg: string) => void };
 	now?: () => Date;
@@ -67,8 +68,10 @@ async function refreshExpiringCredentials(deps: MaintenanceProcessorDeps, now: D
 		const provider = deps.registry.find(integration.provider);
 		if (!provider || !supportsOAuth(provider) || !provider.refreshCredentials) continue;
 
+		const registration = await deps.registrations.resolveForIntegration(integration);
+		if (!registration) continue;
 		try {
-			const refreshed = await provider.refreshCredentials({ integration, vault: deps.vault.forIntegration(integration.id) });
+			const refreshed = await provider.refreshCredentials({ integration, vault: deps.vault.forIntegration(integration.id), registration });
 			if (refreshed) {
 				for (const credential of refreshed.credentials) {
 					await deps.vault.put(integration.id, credential.kind, credential.value, credential.expiresAt ?? null);
@@ -94,8 +97,10 @@ async function sweepHealth(deps: MaintenanceProcessorDeps): Promise<void> {
 	for (const provider of deps.registry.list()) {
 		if (!supportsHealthCheck(provider)) continue;
 		for (const integration of await deps.integrations.listActiveByProvider(provider.manifest.id)) {
+			const registration = await deps.registrations.resolveForIntegration(integration);
+			if (!registration) continue;
 			const report = await provider
-				.checkHealth({ integration, vault: deps.vault.forIntegration(integration.id) })
+				.checkHealth({ integration, vault: deps.vault.forIntegration(integration.id), registration })
 				.catch((err: Error) => ({ health: 'unknown' as const, detail: { error: err.message } }));
 			if (report.health === integration.health) continue;
 			await deps.integrations.updateHealth(integration.id, report.health, report.detail);

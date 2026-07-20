@@ -7,6 +7,7 @@ export interface CreateIntegrationInput {
 	mode?: IntegrationMode;
 	externalAccountId: string;
 	externalAccountName?: string;
+	registrationId?: string | null;
 	status?: IntegrationStatus;
 	metadata?: Record<string, unknown>;
 }

@@ -1,4 +1,4 @@
-import type { IntegrationContext } from './context.js';
+import type { IntegrationContext, RegistrationContext } from './context.js';
 
 /** Inputs for building the provider consent/install URL. */
 export interface ConnectInput {
@@ -40,13 +40,20 @@ export interface CredentialRefresh {
  * token and provider-issued codes.
  */
 export interface OAuthCapable {
-	buildConnectUrl(input: ConnectInput): string;
+	/**
+	 * Build the provider consent/install URL using the resolved registration's
+	 * app config (slug / client id / redirect uri). The registration is passed
+	 * because credentials must exist before an Integration does — that is the
+	 * whole reason Provider Registration is a distinct layer.
+	 */
+	buildConnectUrl(input: ConnectInput, registration: RegistrationContext): string;
 	/**
 	 * Verify the callback against the provider (token exchange / installation
-	 * lookup) and return the grant's identity + credentials. MUST throw
-	 * ProviderAuthError on anything unverifiable — never trust bare ids.
+	 * lookup) using the registration's app credentials, and return the grant's
+	 * identity + runtime credentials. MUST throw ProviderAuthError on anything
+	 * unverifiable — never trust bare ids.
 	 */
-	completeConnect(input: CallbackInput): Promise<ConnectResult>;
+	completeConnect(input: CallbackInput, registration: RegistrationContext): Promise<ConnectResult>;
 	/** Refresh expiring credentials; return null when nothing needs refreshing. */
 	refreshCredentials?(ctx: IntegrationContext): Promise<CredentialRefresh | null>;
 	/** Best-effort revocation at the provider on disconnect. */

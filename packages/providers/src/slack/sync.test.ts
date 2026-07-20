@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { executeSlackSync, type SlackSyncDeps } from './sync.js';
 import { ConnectorEngine, type ContentLedger, type KnowledgeItem, type KnowledgeWriter, type SyncContext } from '../index.js';
-import { buildIntegration, fakeVaultHandle } from '../testing/fakes.js';
+import { buildIntegration, fakeVaultHandle, fakeRegistration } from '../testing/fakes.js';
 import { FakeSlackClient } from '@meshify/slack';
 import type { SlackChannel, SlackConversation, SlackWorkspace, UpsertSlackConversationInput } from '@meshify/data-access';
 
@@ -52,6 +52,7 @@ function syncCtx(mode: 'full' | 'incremental'): SyncContext {
 		mode,
 		integration: buildIntegration({ provider: 'slack', externalAccountId: 'T111' }),
 		vault: fakeVaultHandle({ access_token: { value: 'xoxb-live' } }),
+		registration: fakeRegistration({ provider: 'slack' }),
 		connector: {
 			id: 'conn-1',
 			projectId: 'proj-1',

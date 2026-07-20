@@ -3,7 +3,7 @@ import { ConnectorEngine } from './connector-engine.js';
 import type { ContentLedger, KnowledgeWriter } from './connector-engine.js';
 import type { KnowledgeItem } from '../base/knowledge.js';
 import type { SyncCapable, SyncContext } from '../base/sync.js';
-import { buildIntegration, fakeVaultHandle } from '../testing/fakes.js';
+import { buildIntegration, fakeVaultHandle, fakeRegistration } from '../testing/fakes.js';
 
 class RecordingWriter implements KnowledgeWriter {
 	calls: Array<{ op: 'embed' | 'delete'; target: string; refs: string[] }> = [];
@@ -47,6 +47,7 @@ function syncCtx(): SyncContext {
 		mode: 'incremental',
 		integration: buildIntegration(),
 		vault: fakeVaultHandle(),
+		registration: fakeRegistration(),
 		connector: {
 			id: 'conn-1',
 			projectId: 'proj-1',

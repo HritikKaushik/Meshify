@@ -640,15 +640,15 @@ export class MeshifyApi {
 		);
 	}
 
-	/** The provider's BYOA config form for this integration — secrets report only whether they're set. */
-	async describeByoaConfig(integrationId: string): Promise<{ mode: string; fields: ByoaFieldView[] }> {
-		return this.parse(await fetch(this.url(`/api/v1/integrations/${integrationId}/config`), { credentials: 'include' }));
+	/** The org's Provider Registration form for a provider — secrets report only whether they're set. */
+	async describeRegistration(provider: string): Promise<{ mode: 'managed' | 'byoa'; fields: ByoaFieldView[] }> {
+		return this.parse(await fetch(this.url(`/api/v1/providers/${provider}/registration`), { credentials: 'include' }));
 	}
 
-	/** Store an org's own provider-app credentials (write-only) and switch the integration to BYOA. */
-	async configureByoa(integrationId: string, values: Record<string, string>): Promise<{ webhookPath: string }> {
+	/** Store the org's own provider-app credentials (write-only) — switches the org to BYOA for future connects. */
+	async configureRegistration(provider: string, values: Record<string, string>): Promise<{ webhookPath: string }> {
 		return this.parse(
-			await fetch(this.url(`/api/v1/integrations/${integrationId}/config`), {
+			await fetch(this.url(`/api/v1/providers/${provider}/registration`), {
 				method: 'PUT',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json' },

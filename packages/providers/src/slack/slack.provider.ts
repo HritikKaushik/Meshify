@@ -1,7 +1,8 @@
 import type { Provider } from '../base/provider.js';
 import type { ProviderManifest } from '../base/manifest.js';
 import type { CallbackInput, ConnectInput, ConnectResult, CredentialRefresh, OAuthCapable } from '../base/oauth.js';
-import type { IntegrationContext } from '../base/context.js';
+import type { IntegrationContext, RegistrationContext } from '../base/context.js';
+import type { SlackAppSettings, SlackTransport } from './deps.js';
 import type { RawWebhookRequest, WebhookCapable, WebhookDescriptor } from '../base/webhook.js';
 import type { HealthCapable, ProviderHealthReport } from '../base/health.js';
 import type { SyncCapable, SyncContext } from '../base/sync.js';
@@ -62,29 +63,41 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 		this.now = deps.now ?? (() => new Date());
 	}
 
-	isConfigured(): boolean {
-		return this.deps.app !== null && this.deps.transport !== null;
+	/** Resolve Slack app settings from the registration (uniform keys across managed and BYOA). */
+	private async appSettings(registration: RegistrationContext): Promise<SlackAppSettings> {
+		const clientId = strOf(registration.config.app_client_id);
+		const redirectUri = strOf(registration.config.app_redirect_uri);
+		const clientSecret = (await registration.secrets.get('app_client_secret'))?.value ?? '';
+		const signingSecret = (await registration.secrets.get('app_signing_secret'))?.value ?? '';
+		if (!clientId || !redirectUri) {
+			throw new ProviderNotConfiguredError('slack', `The Slack app registration (${registration.mode}) is missing app_client_id or app_redirect_uri`);
+		}
+		return { clientId, clientSecret, signingSecret, redirectUri };
 	}
 
-	private requireTransport() {
-		if (!this.deps.transport) throw new ProviderNotConfiguredError('slack', 'No managed Slack app is configured (SLACK_* env)');
-		return this.deps.transport;
+	private async transport(registration: RegistrationContext): Promise<SlackTransport> {
+		return this.deps.transportFactory(await this.appSettings(registration));
 	}
 
 	// --- OAuthCapable --------------------------------------------------------
 
-	buildConnectUrl(input: ConnectInput): string {
-		return this.requireTransport().buildAuthorizeUrl(input.stateToken);
+	buildConnectUrl(input: ConnectInput, registration: RegistrationContext): string {
+		// buildAuthorizeUrl is synchronous once settings resolve; the registration
+		// carries the client id + redirect uri (managed env or BYOA row).
+		const clientId = strOf(registration.config.app_client_id);
+		const redirectUri = strOf(registration.config.app_redirect_uri);
+		if (!clientId || !redirectUri) throw new ProviderNotConfiguredError('slack', `The Slack app registration (${registration.mode}) is missing app_client_id or app_redirect_uri`);
+		return this.deps.transportFactory({ clientId, clientSecret: '', signingSecret: '', redirectUri }).buildAuthorizeUrl(input.stateToken);
 	}
 
-	async completeConnect(input: CallbackInput): Promise<ConnectResult> {
+	async completeConnect(input: CallbackInput, registration: RegistrationContext): Promise<ConnectResult> {
 		if (input.params.error) throw new ProviderAuthError(`Slack authorization was not granted: ${input.params.error}`);
 		const code = input.params.code;
 		if (!code) throw new ProviderAuthError('Slack callback is missing the authorization code');
 
 		let result: SlackOAuthResult;
 		try {
-			result = await this.requireTransport().exchangeCode(code);
+			result = await (await this.transport(registration)).exchangeCode(code);
 		} catch (err) {
 			throw new ProviderAuthError(`Slack code exchange failed: ${(err as Error).message}`);
 		}
@@ -103,7 +116,7 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 		if (!refresh) return null;
 		let result: SlackOAuthResult;
 		try {
-			result = await this.requireTransport().refreshToken(refresh.value);
+			result = await (await this.transport(ctx.registration)).refreshToken(refresh.value);
 		} catch (err) {
 			throw new ProviderAuthError(`Slack token refresh failed: ${(err as Error).message}`);
 		}
@@ -112,7 +125,7 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 
 	async revokeAccess(ctx: IntegrationContext): Promise<void> {
 		const token = await ctx.vault.get(ACCESS_TOKEN_KIND);
-		if (token) await this.requireTransport().revokeToken(token.value);
+		if (token) await (await this.transport(ctx.registration)).revokeToken(token.value);
 	}
 
 	private credentialsFrom(result: SlackOAuthResult) {
@@ -138,7 +151,7 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 
 	async listResources(ctx: IntegrationContext, _cursor?: string): Promise<ResourcePage> {
 		const token = await this.requireAccessToken(ctx);
-		const channels = await this.requireTransport().listChannels(token);
+		const channels = await (await this.transport(ctx.registration)).listChannels(token);
 		return {
 			resources: channels.map((c) => ({ id: c.id, name: c.name, kind: 'channel', private: c.isPrivate })),
 		};
@@ -153,7 +166,6 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 	// --- HealthCapable -------------------------------------------------------
 
 	async checkHealth(ctx: IntegrationContext): Promise<ProviderHealthReport> {
-		if (!this.isConfigured()) return { health: 'unknown', detail: { reason: 'provider not configured' } };
 		const token = await ctx.vault.get(ACCESS_TOKEN_KIND);
 		if (!token) {
 			const hasRefresh = (await ctx.vault.get(REFRESH_TOKEN_KIND)) !== undefined;
@@ -162,7 +174,7 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 				: { health: 'needs_reauthorization', detail: { reason: 'no stored token' } };
 		}
 		try {
-			const identity = await this.requireTransport().testAuth(token.value);
+			const identity = await (await this.transport(ctx.registration)).testAuth(token.value);
 			return { health: 'healthy', detail: { teamId: identity.teamId, botUserId: identity.botUserId } };
 		} catch (err) {
 			const message = (err as Error).message;
@@ -236,4 +248,8 @@ export class SlackProvider implements Provider, OAuthCapable, WebhookCapable, He
 
 export function createSlackProvider(deps: SlackProviderDeps): SlackProvider {
 	return new SlackProvider(deps);
+}
+
+function strOf(value: unknown): string {
+	return typeof value === 'string' ? value : value == null ? '' : String(value);
 }

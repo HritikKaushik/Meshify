@@ -8,7 +8,7 @@ import type {
 	SyncCursorRepository,
 } from '@meshify/data-access';
 import type { JobEventPublisher, SourceSyncJobPayload } from '@meshify/queues';
-import type { ContentLedger, CredentialVault, CursorStore, KnowledgeWriter, ProviderRegistry, SyncContext } from '@meshify/providers';
+import type { ContentLedger, CredentialVault, CursorStore, KnowledgeWriter, ProviderRegistrationService, ProviderRegistry, SyncContext } from '@meshify/providers';
 import { ConnectorEngine, supportsSync } from '@meshify/providers';
 import { JobProgress } from './job-progress.js';
 import { runPipelineJob } from './run-pipeline-job.js';
@@ -21,6 +21,7 @@ export interface SourceSyncProcessorDeps {
 	pipelineJobs: PipelineJobRepository;
 	syncCursors: SyncCursorRepository;
 	vault: CredentialVault;
+	registrations: ProviderRegistrationService;
 	jobEvents: JobEventPublisher;
 	/** Per-provider ContentLedger factories (worker composition data, not code branching). */
 	ledgers: Map<string, (connector: KnowledgeConnector) => ContentLedger>;
@@ -73,7 +74,9 @@ export async function processSourceSyncJob(job: Job<SourceSyncJobPayload>, deps:
 				set: async (scopeKey, cursor) => void (await deps.syncCursors.upsert(connector.id, scopeKey, cursor)),
 			};
 
-			const ctx: SyncContext = { mode, integration, connector, vault: deps.vault.forIntegration(integration.id), cursors };
+			const registration = await deps.registrations.resolveForIntegration(integration);
+			if (!registration) throw new Error(`No provider registration resolves for ${integration.provider} (org ${integration.orgId})`);
+			const ctx: SyncContext = { mode, integration, connector, vault: deps.vault.forIntegration(integration.id), registration, cursors };
 			const writer = await deps.writerFor(projectId);
 			const engine = new ConnectorEngine(writer, ledgerFactory(connector));
 

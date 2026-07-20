@@ -11,7 +11,7 @@ import {
 } from '@meshify/testing';
 import { CredentialVault, ProviderRegistry, CURRENT_MANIFEST_VERSION, NO_CAPABILITIES } from '@meshify/providers';
 import type { CredentialRefresh, IntegrationContext, Provider, ProviderHealthReport } from '@meshify/providers';
-import { InMemoryPlatformEventBus, buildIntegration, fakeCipher } from '@meshify/providers/testing';
+import { InMemoryPlatformEventBus, buildIntegration, fakeCipher, fakeRegistration } from '@meshify/providers/testing';
 
 const NOW = new Date('2026-07-20T12:00:00.000Z');
 
@@ -56,6 +56,7 @@ function harness(provider: Provider, integrationOverrides: Parameters<typeof bui
 		webhookEvents: new InMemoryWebhookEventRepository(),
 		sourceSyncQueue: { add: async (_n: string, payload: unknown) => void enqueued.push(payload) } as never,
 		vault,
+		registrations: { resolveForIntegration: async () => fakeRegistration() } as never,
 		bus: new InMemoryPlatformEventBus(),
 		logger: { info: () => undefined, warn: () => undefined },
 		now: () => NOW,

@@ -9,6 +9,7 @@ interface IntegrationRow {
 	mode: IntegrationMode;
 	external_account_id: string;
 	external_account_name: string;
+	registration_id: string | null;
 	status: IntegrationStatus;
 	health: IntegrationHealth;
 	health_detail: Record<string, unknown>;
@@ -27,6 +28,7 @@ function toDomain(row: IntegrationRow): Integration {
 		mode: row.mode,
 		externalAccountId: row.external_account_id,
 		externalAccountName: row.external_account_name,
+		registrationId: row.registration_id,
 		status: row.status,
 		health: row.health,
 		healthDetail: row.health_detail,
@@ -43,8 +45,8 @@ export class PostgresIntegrationRepository implements IntegrationRepository {
 
 	async create(input: CreateIntegrationInput): Promise<Integration> {
 		const { rows } = await this.pool.query<IntegrationRow>(
-			`insert into integrations (id, org_id, provider, mode, external_account_id, external_account_name, status, metadata)
-			 values (coalesce($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8) returning *`,
+			`insert into integrations (id, org_id, provider, mode, external_account_id, external_account_name, registration_id, status, metadata)
+			 values (coalesce($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
 			[
 				input.id ?? null,
 				input.orgId,
@@ -52,6 +54,7 @@ export class PostgresIntegrationRepository implements IntegrationRepository {
 				input.mode ?? 'managed',
 				input.externalAccountId,
 				input.externalAccountName ?? '',
+				input.registrationId ?? null,
 				input.status ?? 'pending',
 				JSON.stringify(input.metadata ?? {}),
 			]

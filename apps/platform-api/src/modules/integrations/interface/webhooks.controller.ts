@@ -2,21 +2,27 @@ import express, { Router } from 'express';
 import type { Queue } from 'bullmq';
 import type { IntegrationRepository, WebhookEventRepository } from '@meshify/data-access';
 import type { WebhookEventJobPayload } from '@meshify/queues';
-import type { CredentialVault, ProviderRegistry, RawWebhookRequest } from '@meshify/providers';
+import type { ProviderRegistrationService, ProviderRegistry, RawWebhookRequest, RegistrationContext } from '@meshify/providers';
 import { supportsWebhooks } from '@meshify/providers';
 
-/** BYOA webhook-secret credential kinds, tried in order (GitHub apps vs Slack apps name theirs differently). */
-const BYOA_SECRET_KINDS = ['app_webhook_secret', 'app_signing_secret'];
+/** Webhook-secret credential kinds, tried in order (GitHub apps vs Slack apps name theirs differently). */
+const WEBHOOK_SECRET_KINDS = ['app_webhook_secret', 'app_signing_secret'];
+
+async function webhookSecretOf(registration: RegistrationContext): Promise<string | undefined> {
+	for (const kind of WEBHOOK_SECRET_KINDS) {
+		const found = await registration.secrets.get(kind).catch(() => undefined);
+		if (found) return found.value;
+	}
+	return undefined;
+}
 
 export interface WebhookReceiverDeps {
 	registry: ProviderRegistry;
 	integrations: IntegrationRepository;
 	webhookEvents: WebhookEventRepository;
 	webhookQueue: Queue<WebhookEventJobPayload>;
-	/** Managed-app webhook secrets per provider id (operator env — composition-root data, not provider knowledge). */
-	managedSecrets: Map<string, string>;
-	/** Resolves BYOA per-integration secrets. */
-	vault: CredentialVault;
+	/** Resolves the managed (deployment) or a specific BYOA registration for secret verification. */
+	registrations: ProviderRegistrationService;
 	limiter: { hit(identity: string): Promise<{ allowed: boolean }> };
 	logger: { warn: (obj: unknown, msg: string) => void; error: (obj: unknown, msg: string) => void };
 }
@@ -34,10 +40,10 @@ export function createWebhooksController(deps: WebhookReceiverDeps): Router {
 	const router = Router();
 	router.use('/v1/integrations/webhooks', express.raw({ type: () => true, limit: '2mb' }));
 
-	router.post(['/v1/integrations/webhooks/:provider', '/v1/integrations/webhooks/:provider/:integrationId'], async (req, res) => {
+	router.post(['/v1/integrations/webhooks/:provider', '/v1/integrations/webhooks/:provider/:registrationId'], async (req, res) => {
 		// Array route paths type params as string | string[] — normalize once.
 		const providerId = String(req.params.provider ?? '');
-		const integrationIdParam = req.params.integrationId ? String(req.params.integrationId) : undefined;
+		const registrationIdParam = req.params.registrationId ? String(req.params.registrationId) : undefined;
 		try {
 			const { allowed } = await deps.limiter.hit(`webhook:${providerId}`);
 			if (!allowed) {
@@ -51,21 +57,13 @@ export function createWebhooksController(deps: WebhookReceiverDeps): Router {
 				return;
 			}
 
-			// Secret resolution: per-integration (BYOA URL) or the managed app's.
-			let secret: string | undefined;
-			if (integrationIdParam) {
-				for (const kind of BYOA_SECRET_KINDS) {
-					const credential = await deps.vault.get(integrationIdParam, kind).catch(() => undefined);
-					if (credential) {
-						secret = credential.value;
-						break;
-					}
-				}
-			} else {
-				secret = deps.managedSecrets.get(providerId);
-			}
+			// Secret resolution via the registration layer: the managed route
+			// (/:provider) uses the deployment's managed app; the per-registration
+			// route (/:provider/:registrationId) uses that BYOA app's secret.
+			const registration = registrationIdParam ? await deps.registrations.resolveById(registrationIdParam) : deps.registrations.managedContext(providerId);
+			const secret = registration && registration.provider === providerId ? await webhookSecretOf(registration) : undefined;
 			if (!secret) {
-				// Indistinguishable from an unknown endpoint — never confirm which integrations exist.
+				// Indistinguishable from an unknown endpoint — never confirm which registrations exist.
 				res.status(404).json({ error: 'Unknown webhook endpoint' });
 				return;
 			}
@@ -94,17 +92,19 @@ export function createWebhooksController(deps: WebhookReceiverDeps): Router {
 				return;
 			}
 
-			// Resolve the integration this delivery belongs to.
+			// Resolve the integration this delivery belongs to by the payload's
+			// external account (installation id / team id). For a BYOA route, prefer
+			// the integration bound to that registration when several orgs share an
+			// account id (they cannot — but be defensive).
 			let integrationId: string | null = null;
-			if (integrationIdParam) {
-				const integration = await deps.integrations.findById(integrationIdParam);
-				integrationId = integration && integration.provider === providerId ? integration.id : null;
-			} else if (described.externalAccountId) {
+			if (described.externalAccountId) {
 				const candidates = await deps.integrations.findByProviderAccount(providerId, described.externalAccountId);
-				if (candidates.length > 1) {
+				const scoped = registrationIdParam ? candidates.filter((c) => c.registrationId === registrationIdParam) : candidates;
+				const chosen = scoped.length > 0 ? scoped : candidates;
+				if (chosen.length > 1) {
 					deps.logger.warn({ providerId, externalAccountId: described.externalAccountId }, 'webhook grant claimed by multiple orgs — routing to the earliest claim');
 				}
-				integrationId = candidates[0]?.id ?? null;
+				integrationId = chosen[0]?.id ?? null;
 			}
 
 			const recorded = await deps.webhookEvents.recordIfNew({

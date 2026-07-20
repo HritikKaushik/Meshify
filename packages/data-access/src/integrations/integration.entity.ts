@@ -32,6 +32,8 @@ export interface Integration {
 	/** The provider's natural id for the grant: GitHub installation id, Slack team id, … */
 	externalAccountId: string;
 	externalAccountName: string;
+	/** The Provider Registration this integration was connected through. Null = the virtual managed registration. */
+	registrationId: string | null;
 	status: IntegrationStatus;
 	health: IntegrationHealth;
 	healthDetail: Record<string, unknown>;

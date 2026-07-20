@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import express from 'express';
-import { CredentialVault, ProviderRegistry, createGitHubProvider, createSlackProvider } from '@meshify/providers';
+import { CredentialVault, ProviderRegistry, ProviderRegistrationService, createGitHubProvider, createSlackProvider } from '@meshify/providers';
 import { FakeGitHubTransport, FakeSlackTransport, InMemoryCredentialStore, buildGitHubInstallation, buildIntegration, fakeCipher } from '@meshify/providers/testing';
 import { InMemoryIntegrationRepository, InMemoryWebhookEventRepository } from '@meshify/testing';
 import { createWebhooksController } from './webhooks.controller.js';
@@ -26,17 +26,18 @@ describe('webhook receiver (e2e over real HTTP, mounted exactly like main.ts)', 
 
 	beforeAll(async () => {
 		const registry = new ProviderRegistry();
-		registry.register(
-			createGitHubProvider({
-				app: { appId: '1', privateKey: 'pem', slug: 'meshify', webhookSecret: GITHUB_SECRET },
-				transport: new FakeGitHubTransport({ installations: [buildGitHubInstallation()] }),
-			})
-		);
-		registry.register(
-			createSlackProvider({
-				app: { clientId: 'c', clientSecret: 's', signingSecret: SLACK_SECRET, redirectUri: 'https://x/cb' },
-				transport: new FakeSlackTransport(),
-			})
+		registry.register(createGitHubProvider({ transportFactory: () => new FakeGitHubTransport({ installations: [buildGitHubInstallation()] }) }));
+		registry.register(createSlackProvider({ transportFactory: () => new FakeSlackTransport() }));
+
+		// A registration service with the deployment's managed webhook secrets.
+		const managed = new Map([
+			['github', { config: { app_id: '1', app_slug: 'meshify' }, secrets: { app_webhook_secret: GITHUB_SECRET } }],
+			['slack', { config: { app_client_id: 'c', app_redirect_uri: 'https://x/cb' }, secrets: { app_signing_secret: SLACK_SECRET } }],
+		]);
+		const registrations = new ProviderRegistrationService(
+			{ findByOrgAndProvider: async () => undefined, findById: async () => undefined },
+			new CredentialVault(new InMemoryCredentialStore(), fakeCipher),
+			managed
 		);
 
 		const app = express();
@@ -47,11 +48,7 @@ describe('webhook receiver (e2e over real HTTP, mounted exactly like main.ts)', 
 				integrations,
 				webhookEvents,
 				webhookQueue: { add: async (_n: string, payload: { webhookEventId: string }, opts: { jobId?: string }) => void enqueued.push({ payload, opts }) } as never,
-				managedSecrets: new Map([
-					['github', GITHUB_SECRET],
-					['slack', SLACK_SECRET],
-				]),
-				vault: new CredentialVault(new InMemoryCredentialStore(), fakeCipher),
+				registrations,
 				limiter: { hit: async () => ({ allowed: true }) },
 				logger: { warn: () => undefined, error: () => undefined },
 			})

@@ -8,7 +8,7 @@ import type { CallbackInput, ConnectInput } from '../base/oauth.js';
 import type { RawWebhookRequest } from '../base/webhook.js';
 import type { PlatformEventKind } from '../events/platform-events.js';
 import { ProviderAuthError, ProviderConfigError } from '../base/errors.js';
-import { buildIntegration, fakeVaultHandle } from './fakes.js';
+import { buildIntegration, fakeVaultHandle, fakeRegistration } from './fakes.js';
 
 /**
  * Everything the reusable contract suite needs to exercise one provider.
@@ -18,6 +18,8 @@ import { buildIntegration, fakeVaultHandle } from './fakes.js';
  */
 export interface ProviderContractFixtures {
 	integration?: Partial<Integration>;
+	/** The resolved registration for connect/token ops (defaults to a managed fake). */
+	registration?: import('../base/context.js').RegistrationContext;
 	/** Vault seeded with whatever tokens the provider's read paths need. */
 	vault?: VaultHandle;
 	oauth?: {
@@ -64,7 +66,8 @@ export function providerContractTests(name: string, setup: () => { provider: Pro
 		function ctx(): { provider: Provider; fixtures: ProviderContractFixtures; ictx: IntegrationContext } {
 			const { provider, fixtures } = setup();
 			const integration = buildIntegration({ provider: provider.manifest.id, ...fixtures.integration });
-			return { provider, fixtures, ictx: { integration, vault: fixtures.vault ?? fakeVaultHandle() } };
+			const registration = fixtures.registration ?? fakeRegistration({ provider: provider.manifest.id });
+			return { provider, fixtures, ictx: { integration, vault: fixtures.vault ?? fakeVaultHandle(), registration } };
 		}
 
 		it('has a valid manifest', () => {
@@ -104,7 +107,7 @@ export function providerContractTests(name: string, setup: () => { provider: Pro
 		it('oauth: builds an absolute connect URL carrying the state token', () => {
 			const { provider, fixtures } = ctx();
 			if (!supportsOAuth(provider) || !fixtures.oauth) return;
-			const url = provider.buildConnectUrl({ stateToken: 'STATE-token_123', intent: 'connect', ...fixtures.oauth.connectInput });
+			const url = provider.buildConnectUrl({ stateToken: 'STATE-token_123', intent: 'connect', ...fixtures.oauth.connectInput }, ctx().ictx.registration);
 			expect(url).toMatch(/^https:\/\//);
 			expect(url).toContain(encodeURIComponent('STATE-token_123'));
 		});
@@ -112,7 +115,7 @@ export function providerContractTests(name: string, setup: () => { provider: Pro
 		it('oauth: completes a valid callback with verified identity and storable credentials', async () => {
 			const { provider, fixtures } = ctx();
 			if (!supportsOAuth(provider) || !fixtures.oauth) return;
-			const result = await provider.completeConnect(fixtures.oauth.validCallback);
+			const result = await provider.completeConnect(fixtures.oauth.validCallback, ctx().ictx.registration);
 			expect(result.externalAccountId).toBe(fixtures.oauth.expectedExternalAccountId);
 			expect(result.externalAccountName.length).toBeGreaterThan(0);
 			for (const credential of result.credentials) {
@@ -124,7 +127,7 @@ export function providerContractTests(name: string, setup: () => { provider: Pro
 		it('oauth: rejects an unverifiable callback with ProviderAuthError', async () => {
 			const { provider, fixtures } = ctx();
 			if (!supportsOAuth(provider) || !fixtures.oauth) return;
-			await expect(provider.completeConnect(fixtures.oauth.invalidCallback)).rejects.toBeInstanceOf(ProviderAuthError);
+			await expect(provider.completeConnect(fixtures.oauth.invalidCallback, ctx().ictx.registration)).rejects.toBeInstanceOf(ProviderAuthError);
 		});
 
 		it('webhooks: accepts a correctly signed request and rejects tampering + wrong secrets', () => {

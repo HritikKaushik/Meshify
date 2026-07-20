@@ -1,5 +1,5 @@
 import type { IntegrationRepository } from '@meshify/data-access';
-import type { OAuthStateService, ProviderRegistry } from '@meshify/providers';
+import type { OAuthStateService, ProviderRegistrationService, ProviderRegistry } from '@meshify/providers';
 import { supportsOAuth } from '@meshify/providers';
 import { UnsupportedProviderOperationError, loadIntegrationForOrg } from './integration-support.js';
 
@@ -8,13 +8,16 @@ export class ReconnectIntegrationUseCase {
 	constructor(
 		private readonly registry: ProviderRegistry,
 		private readonly states: OAuthStateService,
-		private readonly integrations: IntegrationRepository
+		private readonly integrations: IntegrationRepository,
+		private readonly registrations: ProviderRegistrationService
 	) {}
 
 	async execute(command: { orgId: string; integrationId: string; returnPath?: string; createdByKeyId?: string }): Promise<{ url: string }> {
 		const integration = await loadIntegrationForOrg(this.integrations, command.integrationId, command.orgId);
 		const provider = this.registry.get(integration.provider);
 		if (!supportsOAuth(provider)) throw new UnsupportedProviderOperationError(integration.provider, 'reconnect');
+		const registration = await this.registrations.resolveForIntegration(integration);
+		if (!registration) throw new UnsupportedProviderOperationError(integration.provider, 'reconnect (no registration)');
 
 		const { token } = await this.states.issue({
 			orgId: command.orgId,
@@ -26,7 +29,7 @@ export class ReconnectIntegrationUseCase {
 		});
 
 		return {
-			url: provider.buildConnectUrl({ stateToken: token, intent: 'reconnect', externalAccountId: integration.externalAccountId }),
+			url: provider.buildConnectUrl({ stateToken: token, intent: 'reconnect', externalAccountId: integration.externalAccountId }, registration),
 		};
 	}
 }

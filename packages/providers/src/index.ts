@@ -3,7 +3,7 @@ export type { ProviderManifest, ProviderCapabilities, ProviderCategory, Provider
 export { NO_CAPABILITIES, CURRENT_MANIFEST_VERSION, SUPPORTED_MANIFEST_VERSIONS, validateManifest } from './base/manifest.js';
 export type { Provider } from './base/provider.js';
 export { supportsOAuth, supportsWebhooks, supportsSync, supportsHealthCheck, supportsResourceBrowsing, supportsCitations, supportsByoa, supportsTools } from './base/provider.js';
-export type { VaultHandle, IntegrationContext, ConnectorContext } from './base/context.js';
+export type { VaultHandle, IntegrationContext, ConnectorContext, RegistrationContext } from './base/context.js';
 export type { OAuthCapable, ConnectInput, CallbackInput, ConnectResult, CredentialInput, CredentialRefresh } from './base/oauth.js';
 export type { WebhookCapable, RawWebhookRequest, WebhookDescriptor } from './base/webhook.js';
 export type { SyncCapable, SyncContext, SyncMode, SyncSummary, CursorStore } from './base/sync.js';
@@ -21,6 +21,8 @@ export { buildSourceRef, parseSourceRef } from './base/canonical.js';
 
 // Registry
 export { ProviderRegistry, manifestOnlyProvider } from './registry/provider-registry.js';
+export { ProviderRegistrationService } from './registry/provider-registration-service.js';
+export type { ManagedRegistration, RegistrationStore } from './registry/provider-registration-service.js';
 
 // Connector engine
 export { ConnectorEngine } from './engine/connector-engine.js';

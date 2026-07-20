@@ -1,7 +1,8 @@
 import type { Provider } from '../base/provider.js';
 import type { ProviderManifest } from '../base/manifest.js';
 import type { CallbackInput, ConnectInput, ConnectResult, OAuthCapable } from '../base/oauth.js';
-import type { IntegrationContext } from '../base/context.js';
+import type { IntegrationContext, RegistrationContext } from '../base/context.js';
+import type { GitHubAppSettings, GitHubAppTransport } from './deps.js';
 import type { SyncCapable, SyncContext } from '../base/sync.js';
 import type { KnowledgeSink } from '../base/knowledge.js';
 import { executeGitHubSync } from './sync.js';
@@ -62,32 +63,35 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 		this.now = deps.now ?? (() => new Date());
 	}
 
-	isConfigured(): boolean {
-		return this.deps.app !== null && this.deps.transport !== null;
+	/** Resolve GitHub App settings from the registration (uniform keys across managed and BYOA). */
+	private async appSettings(registration: RegistrationContext): Promise<GitHubAppSettings> {
+		const appId = strOf(registration.config.app_id);
+		const slug = strOf(registration.config.app_slug);
+		const privateKey = (await registration.secrets.get('app_private_key'))?.value;
+		const webhookSecret = (await registration.secrets.get('app_webhook_secret'))?.value ?? '';
+		if (!appId || !slug || !privateKey) {
+			throw new ProviderNotConfiguredError('github', `The GitHub app registration (${registration.mode}) is missing app_id, app_slug, or the private key`);
+		}
+		return { appId, slug, privateKey, webhookSecret };
 	}
 
-	private requireApp(): { slug: string; webhookSecret: string } {
-		if (!this.deps.app) throw new ProviderNotConfiguredError('github', 'No managed GitHub App is configured (GITHUB_APP_* env)');
-		return this.deps.app;
-	}
-
-	private requireTransport() {
-		if (!this.deps.transport) throw new ProviderNotConfiguredError('github', 'No managed GitHub App is configured (GITHUB_APP_* env)');
-		return this.deps.transport;
+	private async transport(registration: RegistrationContext): Promise<GitHubAppTransport> {
+		return this.deps.transportFactory(await this.appSettings(registration));
 	}
 
 	// --- OAuthCapable --------------------------------------------------------
 
-	buildConnectUrl(input: ConnectInput): string {
-		const { slug } = this.requireApp();
+	buildConnectUrl(input: ConnectInput, registration: RegistrationContext): string {
+		const slug = strOf(registration.config.app_slug);
+		if (!slug) throw new ProviderNotConfiguredError('github', `The GitHub app registration (${registration.mode}) is missing app_slug`);
 		// installations/new also short-circuits for already-installed accounts,
 		// bouncing straight back to the setup URL with state intact — which is
 		// how direct-from-GitHub installs get claimed safely.
 		return `https://github.com/apps/${slug}/installations/new?state=${encodeURIComponent(input.stateToken)}`;
 	}
 
-	async completeConnect(input: CallbackInput): Promise<ConnectResult> {
-		const transport = this.requireTransport();
+	async completeConnect(input: CallbackInput, registration: RegistrationContext): Promise<ConnectResult> {
+		const transport = await this.transport(registration);
 		const installationId = input.params.installation_id;
 		if (!installationId || !/^\d+$/.test(installationId)) {
 			throw new ProviderAuthError('GitHub callback is missing a valid installation_id');
@@ -130,11 +134,11 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 
 	// --- Token orchestration (shared by resources/health/sync) ---------------
 
-	/** DB-cached installation token: every worker/replica shares one token per installation via the vault. */
+	/** DB-cached installation token: every worker/replica shares one token per installation via the vault. Minted with the registration's app. */
 	async getInstallationToken(ctx: IntegrationContext): Promise<string> {
 		const cached = await ctx.vault.get(INSTALLATION_TOKEN_KIND, { minTtlMs: TOKEN_MIN_TTL_MS });
 		if (cached) return cached.value;
-		const transport = this.requireTransport();
+		const transport = await this.transport(ctx.registration);
 		const minted = await transport.createInstallationToken(this.installationIdOf(ctx));
 		await ctx.vault.put(INSTALLATION_TOKEN_KIND, minted.token, minted.expiresAt);
 		return minted.token;
@@ -156,7 +160,7 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 
 	async listResources(ctx: IntegrationContext, _cursor?: string): Promise<ResourcePage> {
 		const token = await this.getInstallationToken(ctx);
-		const repos = await this.requireTransport().listInstallationRepos(token);
+		const repos = await (await this.transport(ctx.registration)).listInstallationRepos(token);
 		return {
 			resources: repos.map((r) => ({
 				id: String(r.id),
@@ -171,9 +175,8 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 	// --- HealthCapable -------------------------------------------------------
 
 	async checkHealth(ctx: IntegrationContext): Promise<ProviderHealthReport> {
-		if (!this.isConfigured()) return { health: 'unknown', detail: { reason: 'provider not configured' } };
 		try {
-			const installation = await this.requireTransport().getInstallation(this.installationIdOf(ctx));
+			const installation = await (await this.transport(ctx.registration)).getInstallation(this.installationIdOf(ctx));
 			if (installation.suspendedAt) {
 				return { health: 'needs_reauthorization', detail: { suspendedAt: installation.suspendedAt } };
 			}
@@ -281,4 +284,8 @@ export class GitHubProvider implements Provider, OAuthCapable, WebhookCapable, H
 
 export function createGitHubProvider(deps: GitHubProviderDeps): GitHubProvider {
 	return new GitHubProvider(deps);
+}
+
+function strOf(value: unknown): string {
+	return typeof value === 'string' ? value : value == null ? '' : String(value);
 }

@@ -1,9 +1,10 @@
 import type { Integration } from '@meshify/data-access';
-import type { VaultHandle } from '../base/context.js';
+import type { VaultHandle, RegistrationContext } from '../base/context.js';
 import type { CredentialStore, StoredCredential, SecretCipher } from '../vault/credential-store.port.js';
 import type { PlatformEvent, PlatformEventBus, PlatformEventHandler, StampedPlatformEvent } from '../events/platform-events.js';
 import type { OAuthStateStore } from '../oauth/state-service.js';
 import type { OAuthState } from '@meshify/data-access';
+import type { ProviderRegistrationService } from '../registry/provider-registration-service.js';
 import type { GitHubAppTransport } from '../github/deps.js';
 import type { SlackTransport } from '../slack/deps.js';
 import type { GitHubInstallation, InstallationRepo } from '@meshify/github';
@@ -19,6 +20,7 @@ export function buildIntegration(overrides: Partial<Integration> = {}): Integrat
 		mode: 'managed',
 		externalAccountId: '12345',
 		externalAccountName: 'acme',
+		registrationId: null,
 		status: 'active',
 		health: 'unknown',
 		healthDetail: {},
@@ -63,6 +65,38 @@ export class InMemoryCredentialStore implements CredentialStore {
 	async deleteAllForIntegration(integrationId: string): Promise<void> {
 		for (const key of [...this.rows.keys()]) if (key.startsWith(`${integrationId}:`)) this.rows.delete(key);
 	}
+}
+
+/** A resolved registration context for tests: config + secret handle, managed by default. */
+export function fakeRegistration(
+	overrides: { provider?: string; mode?: 'managed' | 'byoa'; config?: Record<string, unknown>; secrets?: Record<string, string> } = {}
+): RegistrationContext {
+	return {
+		provider: overrides.provider ?? 'github',
+		mode: overrides.mode ?? 'managed',
+		config: overrides.config ?? { app_id: '77', app_slug: 'meshify-app', app_client_id: 'cid', app_redirect_uri: 'https://app.example.com/oauth/slack/callback' },
+		secrets: fakeVaultHandle(
+			Object.fromEntries(
+				Object.entries(
+					overrides.secrets ?? { app_private_key: '-----BEGIN PRIVATE KEY-----test', app_webhook_secret: 'wh-secret', app_client_secret: 'csecret', app_signing_secret: 'slack-signing' }
+				).map(([k, v]) => [k, { value: v }])
+			)
+		),
+	};
+}
+
+/** A stub ProviderRegistrationService that always resolves one (managed) registration — for unit tests. */
+export function fakeRegistrationService(
+	overrides: Parameters<typeof fakeRegistration>[0] = {}
+): ProviderRegistrationService {
+	const reg = fakeRegistration(overrides);
+	return {
+		resolve: async () => reg,
+		resolveForIntegration: async () => reg,
+		resolveById: async () => reg,
+		managedContext: () => reg,
+		isConfigured: async () => true,
+	} as unknown as ProviderRegistrationService;
 }
 
 /** Standalone vault handle over a plain map — for tests that don't exercise the CredentialVault itself. */

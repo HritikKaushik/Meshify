@@ -723,6 +723,7 @@ export class InMemoryIntegrationRepository implements IntegrationRepository {
 			mode: input.mode ?? 'managed',
 			externalAccountId: input.externalAccountId,
 			externalAccountName: input.externalAccountName ?? '',
+			registrationId: input.registrationId ?? null,
 			status: input.status ?? 'pending',
 			health: 'unknown',
 			healthDetail: {},

@@ -1,5 +1,5 @@
 import type { ProjectRepository } from '@meshify/data-access';
-import type { OAuthStateService, ProviderRegistry } from '@meshify/providers';
+import type { OAuthStateService, ProviderRegistrationService, ProviderRegistry } from '@meshify/providers';
 import { ProviderNotConfiguredError, supportsOAuth } from '@meshify/providers';
 import { UnsupportedProviderOperationError } from './integration-support.js';
 
@@ -28,13 +28,18 @@ export class ConnectProviderUseCase {
 	constructor(
 		private readonly registry: ProviderRegistry,
 		private readonly states: OAuthStateService,
-		private readonly projects: ProjectRepository
+		private readonly projects: ProjectRepository,
+		private readonly registrations: ProviderRegistrationService
 	) {}
 
 	async execute(command: ConnectProviderCommand): Promise<{ url: string }> {
 		const provider = this.registry.get(command.provider);
 		if (!supportsOAuth(provider)) throw new UnsupportedProviderOperationError(command.provider, 'connect');
-		if (provider.isConfigured?.() === false) throw new ProviderNotConfiguredError(command.provider);
+
+		// Resolve the org's registration (managed env or BYOA) — the app
+		// credentials must exist before an Integration does.
+		const registration = await this.registrations.resolve(command.orgId, command.provider);
+		if (!registration) throw new ProviderNotConfiguredError(command.provider);
 
 		if (command.projectId) {
 			const project = await this.projects.findById(command.projectId);
@@ -50,6 +55,6 @@ export class ConnectProviderUseCase {
 			createdByKeyId: command.createdByKeyId ?? null,
 		});
 
-		return { url: provider.buildConnectUrl({ stateToken: token, intent: 'connect' }) };
+		return { url: provider.buildConnectUrl({ stateToken: token, intent: 'connect' }, registration) };
 	}
 }

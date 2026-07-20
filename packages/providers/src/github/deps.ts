@@ -1,6 +1,6 @@
 import type { GitHubInstallation, InstallationRepo, InstallationToken } from '@meshify/github';
 
-/** Meshify's managed GitHub App (operator-configured once per deployment), or an org's BYOA app. */
+/** GitHub App settings resolved from a provider registration (managed env or BYOA row). */
 export interface GitHubAppSettings {
 	appId: string;
 	privateKey: string;
@@ -17,9 +17,8 @@ export interface GitHubAppTransport {
 }
 
 export interface GitHubProviderDeps {
-	/** null = deployment has no managed app configured → operations 503 via ProviderNotConfiguredError. */
-	app: GitHubAppSettings | null;
-	transport: GitHubAppTransport | null;
+	/** Builds a transport from app settings resolved per-operation from the registration (managed or BYOA). */
+	transportFactory: (settings: GitHubAppSettings) => GitHubAppTransport;
 	/** Content-sync wiring (detail ports + repo transport) — provided by the worker only. */
 	sync?: import('./sync.js').GitHubSyncDeps;
 	now?: () => Date;

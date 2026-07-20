@@ -17,7 +17,7 @@ import {
 } from '@meshify/testing';
 import { CredentialVault, ProviderRegistry, CURRENT_MANIFEST_VERSION, NO_CAPABILITIES } from '@meshify/providers';
 import type { Provider, ResourceBrowsingCapable } from '@meshify/providers';
-import { InMemoryCredentialStore, buildIntegration, fakeCipher } from '@meshify/providers/testing';
+import { InMemoryCredentialStore, buildIntegration, fakeCipher, fakeRegistrationService } from '@meshify/providers/testing';
 
 function pickerProvider(repos: Array<{ id: string; name: string; owner: string; shortName: string }>): Provider & ResourceBrowsingCapable {
 	return {
@@ -49,7 +49,7 @@ function harness(grantedRepos = [{ id: '42', name: 'acme/api', owner: 'acme', sh
 	const registry = new ProviderRegistry();
 	registry.register(pickerProvider(grantedRepos));
 	const vault = new CredentialVault(new InMemoryCredentialStore(), fakeCipher);
-	const listResources = new ListIntegrationResourcesUseCase(registry, integrations, resources, connectors, vault);
+	const listResources = new ListIntegrationResourcesUseCase(registry, integrations, resources, connectors, vault, fakeRegistrationService({ provider: 'github' }));
 	const enqueued: Array<{ name: string; payload: SourceSyncJobPayload; opts: { jobId?: string } }> = [];
 	const queue = { add: async (name: string, payload: SourceSyncJobPayload, opts: { jobId?: string }) => void enqueued.push({ name, payload, opts }) } as unknown as Queue<SourceSyncJobPayload>;
 	const useCase = new ConnectRepositoryFromIntegrationUseCase(integrations, resources, listResources, connectors, repositories, pipelineJobs, queue);

@@ -3,7 +3,7 @@ import { DisconnectIntegrationUseCase } from './disconnect-integration.usecase.j
 import { IntegrationNotFoundError } from './integration-support.js';
 import { InMemoryIntegrationRepository, InMemoryKnowledgeConnectorRepository } from '@meshify/testing';
 import { CredentialVault, ProviderRegistry } from '@meshify/providers';
-import { InMemoryCredentialStore, InMemoryPlatformEventBus, buildIntegration, fakeCipher } from '@meshify/providers/testing';
+import { InMemoryCredentialStore, InMemoryPlatformEventBus, buildIntegration, fakeCipher, fakeRegistrationService } from '@meshify/providers/testing';
 import { SLACK_MANIFEST, SlackProvider } from '@meshify/providers';
 import { FakeSlackTransport } from '@meshify/providers/testing';
 
@@ -11,7 +11,7 @@ function harness() {
 	const transport = new FakeSlackTransport();
 	const registry = new ProviderRegistry();
 	registry.register(
-		new SlackProvider({ app: { clientId: 'c', clientSecret: 's', signingSecret: 'sig', redirectUri: 'https://x/cb' }, transport })
+		new SlackProvider({ transportFactory: () => transport })
 	);
 	const integration = buildIntegration({ id: 'int-slack', provider: SLACK_MANIFEST.id, orgId: 'org-1', externalAccountId: 'T111', status: 'active' });
 	const integrations = new InMemoryIntegrationRepository([integration]);
@@ -19,7 +19,7 @@ function harness() {
 	const store = new InMemoryCredentialStore();
 	const vault = new CredentialVault(store, fakeCipher);
 	const events = new InMemoryPlatformEventBus();
-	const useCase = new DisconnectIntegrationUseCase(registry, integrations, connectors, vault, events);
+	const useCase = new DisconnectIntegrationUseCase(registry, integrations, connectors, vault, events, fakeRegistrationService({ provider: 'slack' }));
 	return { transport, integrations, connectors, store, vault, events, useCase };
 }
 

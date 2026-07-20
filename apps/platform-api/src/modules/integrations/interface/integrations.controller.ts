@@ -11,7 +11,7 @@ import type { CompleteConnectUseCase } from '../application/complete-connect.use
 import type { ReconnectIntegrationUseCase } from '../application/reconnect-integration.usecase.js';
 import type { DisconnectIntegrationUseCase } from '../application/disconnect-integration.usecase.js';
 import type { ListIntegrationResourcesUseCase } from '../application/list-integration-resources.usecase.js';
-import type { ConfigureByoaUseCase, DescribeByoaConfigUseCase } from '../application/configure-byoa.usecase.js';
+import type { ConfigureRegistrationUseCase, DescribeRegistrationUseCase } from '../application/configure-registration.usecase.js';
 import type { IntegrationEventHub } from '../infrastructure/integration-event-hub.js';
 import { IntegrationNotFoundError, InvalidOAuthStateError, UnsupportedProviderOperationError } from '../application/integration-support.js';
 import { ProviderConfigError } from '@meshify/providers';
@@ -76,16 +76,17 @@ export function createIntegrationsController(deps: {
 	reconnectIntegration: ReconnectIntegrationUseCase;
 	disconnectIntegration: DisconnectIntegrationUseCase;
 	listIntegrationResources: ListIntegrationResourcesUseCase;
-	describeByoaConfig: DescribeByoaConfigUseCase;
-	configureByoa: ConfigureByoaUseCase;
+	describeRegistration: DescribeRegistrationUseCase;
+	configureRegistration: ConfigureRegistrationUseCase;
 	integrationEvents: IntegrationEventHub;
 }): Router {
 	const router = Router();
 	const configSchema = z.object({ values: z.record(z.string(), z.string()) });
 
-	// The marketplace catalog: manifests only, no tenant data.
-	router.get('/v1/providers', (_req, res) => {
-		res.status(200).json(deps.listProviders.execute().map((entry) => ({ ...entry.manifest, configured: entry.configured })));
+	// The marketplace catalog: provider manifests + whether THIS org can operate each.
+	router.get('/v1/providers', async (req, res) => {
+		const entries = await deps.listProviders.execute(req.auth!.orgId);
+		res.status(200).json(entries.map((entry) => ({ ...entry.manifest, configured: entry.configured })));
 	});
 
 	router.get('/v1/integrations', async (req, res) => {
@@ -181,25 +182,26 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	// Enterprise BYOA config: describe the provider's form (secrets never
-	// echoed — only whether they're set) and store submitted app credentials.
-	router.get('/v1/integrations/:integrationId/config', async (req, res) => {
+	// Organization Provider Registration (enterprise BYOA): describe the
+	// provider's app-registration form (secrets never echoed — only whether
+	// they're set) and store the org's own app credentials.
+	router.get('/v1/providers/:provider/registration', async (req, res) => {
 		try {
-			const result = await deps.describeByoaConfig.execute({ orgId: req.auth!.orgId, integrationId: req.params.integrationId! });
+			const result = await deps.describeRegistration.execute({ orgId: req.auth!.orgId, provider: req.params.provider! });
 			res.status(200).json(result);
 		} catch (err) {
 			mapError(err, res, req.log);
 		}
 	});
 
-	router.put('/v1/integrations/:integrationId/config', async (req, res) => {
+	router.put('/v1/providers/:provider/registration', async (req, res) => {
 		const parsed = configSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
 			return;
 		}
 		try {
-			const result = await deps.configureByoa.execute({ orgId: req.auth!.orgId, integrationId: req.params.integrationId!, values: parsed.data.values });
+			const result = await deps.configureRegistration.execute({ orgId: req.auth!.orgId, provider: req.params.provider!, values: parsed.data.values });
 			res.status(200).json(result);
 		} catch (err) {
 			mapError(err, res, req.log);

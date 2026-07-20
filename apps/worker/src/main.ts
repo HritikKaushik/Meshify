@@ -21,6 +21,8 @@ import {
 	PostgresSyncCursorRepository,
 	PostgresWebhookEventRepository,
 	PostgresOAuthStateRepository,
+	PostgresProviderRegistrationRepository,
+	PostgresProviderRegistrationCredentialRepository,
 	encryptSecret,
 	decryptSecret,
 } from '@meshify/data-access';
@@ -61,6 +63,7 @@ import {
 	CredentialVault,
 	ProviderNotConfiguredError,
 	ProviderRegistry,
+	ProviderRegistrationService,
 	RedisPlatformEventBus,
 	createGitHubProvider,
 	createGitHubTransport,
@@ -68,7 +71,8 @@ import {
 	createSlackTransport,
 	type ContentLedger,
 } from '@meshify/providers';
-import type { KnowledgeConnector } from '@meshify/data-access';
+import type { Integration, KnowledgeConnector } from '@meshify/data-access';
+import type { ManagedRegistration } from '@meshify/providers';
 import { processSourceSyncJob } from './processors/source-sync.processor.js';
 import { processWebhookEventJob } from './processors/webhook-event.processor.js';
 import { processMaintenanceJob } from './processors/integration-maintenance.processor.js';
@@ -77,6 +81,25 @@ import { createGitHubContentLedger, createSlackContentLedger } from './processor
 
 const DOCUMENT_CHUNK_SIZE = 768; // prose default per ROCKETRIDE_PIPELINE_RULES.md (512-1024 chars)
 const CODE_CHUNK_SIZE = 384; // code default per ROCKETRIDE_PIPELINE_RULES.md (256-512 chars)
+
+
+/** Build the deployment's managed provider registrations from env (uniform config/secret keys). */
+function buildManagedRegistrations(env: ReturnType<typeof loadEnv>): Map<string, ManagedRegistration> {
+	const managed = new Map<string, ManagedRegistration>();
+	if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY && env.GITHUB_APP_SLUG) {
+		managed.set('github', {
+			config: { app_id: env.GITHUB_APP_ID, app_slug: env.GITHUB_APP_SLUG },
+			secrets: { app_private_key: env.GITHUB_APP_PRIVATE_KEY, ...(env.GITHUB_APP_WEBHOOK_SECRET ? { app_webhook_secret: env.GITHUB_APP_WEBHOOK_SECRET } : {}) },
+		});
+	}
+	if (env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET && env.SLACK_REDIRECT_URI) {
+		managed.set('slack', {
+			config: { app_client_id: env.SLACK_CLIENT_ID, app_redirect_uri: env.SLACK_REDIRECT_URI },
+			secrets: { app_client_secret: env.SLACK_CLIENT_SECRET, ...(env.SLACK_SIGNING_SECRET ? { app_signing_secret: env.SLACK_SIGNING_SECRET } : {}) },
+		});
+	}
+	return managed;
+}
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -173,20 +196,19 @@ async function bootstrap(): Promise<void> {
 		decrypt: (ciphertext) => decryptSecret(requireIntegrationKey(), ciphertext),
 	});
 
-	const githubAppSettings =
-		env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY && env.GITHUB_APP_SLUG && env.GITHUB_APP_WEBHOOK_SECRET
-			? { appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY, slug: env.GITHUB_APP_SLUG, webhookSecret: env.GITHUB_APP_WEBHOOK_SECRET }
-			: null;
-	const slackAppSettings =
-		env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET && env.SLACK_REDIRECT_URI && env.SLACK_SIGNING_SECRET
-			? { clientId: env.SLACK_CLIENT_ID, clientSecret: env.SLACK_CLIENT_SECRET, redirectUri: env.SLACK_REDIRECT_URI, signingSecret: env.SLACK_SIGNING_SECRET }
-			: null;
+	// The Provider Registration layer: every org has a virtual managed
+	// registration from deployment env; BYOA registrations (DB) override it.
+	const managedRegistrations = buildManagedRegistrations(env);
+	const registrationVault = new CredentialVault(new PostgresProviderRegistrationCredentialRepository(pgPool), {
+		encrypt: (plaintext) => encryptSecret(requireIntegrationKey(), plaintext),
+		decrypt: (ciphertext) => decryptSecret(requireIntegrationKey(), ciphertext),
+	});
+	const registrationService = new ProviderRegistrationService(new PostgresProviderRegistrationRepository(pgPool), registrationVault, managedRegistrations);
 
 	// The repo transport closes over the provider instance (declared below) so
 	// sync fetches ride the vault-cached installation token, not per-repo discovery.
 	const githubProvider = createGitHubProvider({
-		app: githubAppSettings,
-		transport: githubAppSettings ? createGitHubTransport(githubAppSettings) : null,
+		transportFactory: createGitHubTransport,
 		sync: {
 			repos: repositories,
 			files,
@@ -195,8 +217,7 @@ async function bootstrap(): Promise<void> {
 		},
 	});
 	const slackProvider = createSlackProvider({
-		app: slackAppSettings,
-		transport: slackAppSettings ? createSlackTransport(slackAppSettings) : null,
+		transportFactory: createSlackTransport,
 		sync: {
 			workspaces: slackWorkspaces,
 			channels: slackChannels,
@@ -223,6 +244,7 @@ async function bootstrap(): Promise<void> {
 		pipelineJobs,
 		syncCursors,
 		vault: credentialVault,
+		registrations: registrationService,
 		jobEvents,
 		ledgers,
 		writerFor: async (projectId: string) => {
@@ -254,6 +276,7 @@ async function bootstrap(): Promise<void> {
 		pipelineJobs,
 		sourceSyncQueue,
 		vault: credentialVault,
+		registrations: registrationService,
 		bus: platformEventBus,
 	};
 
@@ -276,6 +299,7 @@ async function bootstrap(): Promise<void> {
 		webhookEvents: webhookEventRepository,
 		sourceSyncQueue,
 		vault: credentialVault,
+		registrations: registrationService,
 		bus: platformEventBus,
 		logger,
 	};

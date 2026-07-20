@@ -4,7 +4,7 @@ import { InvalidOAuthStateError } from './integration-support.js';
 import { InMemoryIntegrationRepository, InMemoryIntegrationResourceRepository } from '@meshify/testing';
 import { CredentialVault, OAuthStateService, ProviderRegistry, CURRENT_MANIFEST_VERSION, NO_CAPABILITIES } from '@meshify/providers';
 import type { Provider, OAuthCapable, ResourceBrowsingCapable } from '@meshify/providers';
-import { InMemoryCredentialStore, InMemoryOAuthStateStore, InMemoryPlatformEventBus, fakeCipher } from '@meshify/providers/testing';
+import { InMemoryCredentialStore, InMemoryOAuthStateStore, InMemoryPlatformEventBus, fakeCipher, fakeRegistrationService } from '@meshify/providers/testing';
 
 /** A minimal OAuth+resources provider — the platform must work for ANY conformant provider. */
 function fakeProvider(): Provider & OAuthCapable & ResourceBrowsingCapable {
@@ -45,7 +45,8 @@ function harness() {
 	const credentialStore = new InMemoryCredentialStore();
 	const vault = new CredentialVault(credentialStore, fakeCipher);
 	const events = new InMemoryPlatformEventBus();
-	const useCase = new CompleteConnectUseCase(registry, states, integrations, resources, vault, events);
+	const registrations = fakeRegistrationService({ provider: 'fakehub', mode: 'managed' });
+	const useCase = new CompleteConnectUseCase(registry, states, integrations, resources, vault, events, registrations);
 	return { registry, states, integrations, resources, credentialStore, vault, events, useCase };
 }
 

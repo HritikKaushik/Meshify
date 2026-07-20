@@ -3,6 +3,8 @@ export {
 	buildIntegration,
 	fakeCipher,
 	fakeVaultHandle,
+	fakeRegistration,
+	fakeRegistrationService,
 	InMemoryCredentialStore,
 	InMemoryPlatformEventBus,
 	InMemoryOAuthStateStore,

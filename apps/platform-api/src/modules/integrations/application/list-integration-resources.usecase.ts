@@ -1,5 +1,5 @@
 import type { IntegrationRepository, IntegrationResourceRepository, KnowledgeConnectorRepository } from '@meshify/data-access';
-import type { CredentialVault, ProviderRegistry } from '@meshify/providers';
+import type { CredentialVault, ProviderRegistrationService, ProviderRegistry } from '@meshify/providers';
 import { supportsResourceBrowsing } from '@meshify/providers';
 import { UnsupportedProviderOperationError, loadIntegrationForOrg } from './integration-support.js';
 
@@ -25,15 +25,18 @@ export class ListIntegrationResourcesUseCase {
 		private readonly integrations: IntegrationRepository,
 		private readonly resources: IntegrationResourceRepository,
 		private readonly connectors: KnowledgeConnectorRepository,
-		private readonly vault: CredentialVault
+		private readonly vault: CredentialVault,
+		private readonly registrations: ProviderRegistrationService
 	) {}
 
 	async execute(command: { orgId: string; integrationId: string; cursor?: string }): Promise<{ resources: BrowsableResource[]; nextCursor?: string }> {
 		const integration = await loadIntegrationForOrg(this.integrations, command.integrationId, command.orgId);
 		const provider = this.registry.get(integration.provider);
 		if (!supportsResourceBrowsing(provider)) throw new UnsupportedProviderOperationError(integration.provider, 'resource listing');
+		const registration = await this.registrations.resolveForIntegration(integration);
+		if (!registration) throw new UnsupportedProviderOperationError(integration.provider, 'resource listing (no registration)');
 
-		const page = await provider.listResources({ integration, vault: this.vault.forIntegration(integration.id) }, command.cursor);
+		const page = await provider.listResources({ integration, vault: this.vault.forIntegration(integration.id), registration }, command.cursor);
 
 		await this.resources.upsertMany(
 			page.resources.map((r) => ({

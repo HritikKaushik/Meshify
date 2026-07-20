@@ -1,6 +1,6 @@
 import type { Integration, IntegrationRepository, IntegrationResourceRepository } from '@meshify/data-access';
-import type { CredentialVault, OAuthStateService, PlatformEventBus, ProviderRegistry } from '@meshify/providers';
-import { supportsOAuth, supportsResourceBrowsing } from '@meshify/providers';
+import type { CredentialVault, OAuthStateService, PlatformEventBus, ProviderRegistrationService, ProviderRegistry } from '@meshify/providers';
+import { ProviderNotConfiguredError, supportsOAuth, supportsResourceBrowsing } from '@meshify/providers';
 import { InvalidOAuthStateError, UnsupportedProviderOperationError } from './integration-support.js';
 
 export interface CompleteConnectCommand {
@@ -32,7 +32,8 @@ export class CompleteConnectUseCase {
 		private readonly integrations: IntegrationRepository,
 		private readonly resources: IntegrationResourceRepository,
 		private readonly vault: CredentialVault,
-		private readonly events: PlatformEventBus
+		private readonly events: PlatformEventBus,
+		private readonly registrations: ProviderRegistrationService
 	) {}
 
 	async execute(command: CompleteConnectCommand): Promise<CompleteConnectResult> {
@@ -44,7 +45,13 @@ export class CompleteConnectUseCase {
 			throw new InvalidOAuthStateError();
 		}
 
-		const result = await provider.completeConnect({ params: command.params });
+		// Resolve the registration the org connects through (managed or BYOA);
+		// its app credentials verify the callback and back the integration.
+		const registration = await this.registrations.resolve(command.orgId, command.provider);
+		if (!registration) throw new ProviderNotConfiguredError(command.provider);
+
+		const result = await provider.completeConnect({ params: command.params }, registration);
+		const registrationId = registration.mode === 'byoa' ? registration.registrationId ?? null : null;
 
 		let integration = await this.integrations.findByOrgProviderAccount(command.orgId, command.provider, result.externalAccountId);
 		if (integration) {
@@ -53,14 +60,17 @@ export class CompleteConnectUseCase {
 				metadata: result.metadata,
 			});
 			await this.integrations.updateStatus(integration.id, 'active', null);
+			await this.integrations.updateMode(integration.id, registration.mode);
 		} else {
 			integration = await this.integrations.create({
 				orgId: command.orgId,
 				provider: command.provider,
 				externalAccountId: result.externalAccountId,
 				externalAccountName: result.externalAccountName,
-				metadata: result.metadata,
+				registrationId,
+				mode: registration.mode,
 				status: 'active',
+				metadata: result.metadata,
 			});
 		}
 
@@ -72,7 +82,7 @@ export class CompleteConnectUseCase {
 		// first paint. Best-effort: a listing hiccup must not fail the connect.
 		if (supportsResourceBrowsing(provider)) {
 			try {
-				const page = await provider.listResources({ integration, vault: this.vault.forIntegration(integration.id) });
+				const page = await provider.listResources({ integration, vault: this.vault.forIntegration(integration.id), registration });
 				await this.resources.upsertMany(
 					page.resources.map((r) => ({
 						integrationId: integration.id,

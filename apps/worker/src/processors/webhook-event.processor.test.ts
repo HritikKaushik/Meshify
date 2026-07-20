@@ -12,7 +12,7 @@ import {
 } from '@meshify/testing';
 import { CredentialVault, ProviderRegistry, CURRENT_MANIFEST_VERSION, NO_CAPABILITIES } from '@meshify/providers';
 import type { PlatformEvent, Provider, WebhookCapable } from '@meshify/providers';
-import { InMemoryCredentialStore, InMemoryPlatformEventBus, buildIntegration, fakeCipher } from '@meshify/providers/testing';
+import { InMemoryCredentialStore, InMemoryPlatformEventBus, buildIntegration, fakeCipher, fakeRegistration } from '@meshify/providers/testing';
 
 /** Provider whose normalizeWebhook is scripted per event type — dispatch must be provider-blind. */
 function scriptedProvider(script: Record<string, (base: { provider: string; integrationId: string; orgId: string }) => PlatformEvent[]>): Provider & WebhookCapable {
@@ -52,6 +52,7 @@ function harness(script: Parameters<typeof scriptedProvider>[0]) {
 			add: async (_n: string, payload: unknown, opts: unknown) => void enqueued.push({ payload, opts }),
 		} as never,
 		vault: new CredentialVault(new InMemoryCredentialStore(), fakeCipher),
+		registrations: { resolveForIntegration: async () => fakeRegistration() } as never,
 		bus: new InMemoryPlatformEventBus(),
 		contentDebounceMs: 1000,
 	};

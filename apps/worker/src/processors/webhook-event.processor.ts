@@ -12,7 +12,7 @@ import type {
 } from '@meshify/data-access';
 import type { Queue } from 'bullmq';
 import type { SourceSyncJobPayload, WebhookEventJobPayload } from '@meshify/queues';
-import type { CredentialVault, PlatformEvent, PlatformEventBus, ProviderRegistry } from '@meshify/providers';
+import type { CredentialVault, PlatformEvent, PlatformEventBus, ProviderRegistrationService, ProviderRegistry } from '@meshify/providers';
 import { supportsWebhooks } from '@meshify/providers';
 
 export interface WebhookEventProcessorDeps {
@@ -25,6 +25,7 @@ export interface WebhookEventProcessorDeps {
 	pipelineJobs: PipelineJobRepository;
 	sourceSyncQueue: Queue<SourceSyncJobPayload>;
 	vault: CredentialVault;
+	registrations: ProviderRegistrationService;
 	bus: PlatformEventBus;
 	/** Burst coalescing for chat-style activity (content.changed) — one sync per quiet window. */
 	contentDebounceMs?: number;
@@ -62,9 +63,14 @@ export async function processWebhookEventJob(job: Job<WebhookEventJobPayload>, d
 			return;
 		}
 
+		const registration = await deps.registrations.resolveForIntegration(integration);
+		if (!registration) {
+			await deps.webhookEvents.markStatus(event.id, 'skipped', `No provider registration resolves for ${integration.provider}`);
+			return;
+		}
 		const platformEvents = await provider.normalizeWebhook(
 			{ eventType: event.eventType, payload: event.payload },
-			{ integration, vault: deps.vault.forIntegration(integration.id) }
+			{ integration, vault: deps.vault.forIntegration(integration.id), registration }
 		);
 
 		for (const platformEvent of platformEvents) {

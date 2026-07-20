@@ -20,9 +20,8 @@ export interface SlackTransport {
 }
 
 export interface SlackProviderDeps {
-	/** null = deployment has no managed Slack app configured → operations 503 via ProviderNotConfiguredError. */
-	app: SlackAppSettings | null;
-	transport: SlackTransport | null;
+	/** Builds a transport from app settings resolved per-operation from the registration (managed or BYOA). */
+	transportFactory: (settings: SlackAppSettings) => SlackTransport;
 	/** Content-sync wiring (detail ports + Slack read client) — provided by the worker only. */
 	sync?: import('./sync.js').SlackSyncDeps;
 	now?: () => Date;

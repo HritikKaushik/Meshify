@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { executeGitHubSync, type GitHubRepoTransport, type GitHubSyncDeps } from './sync.js';
 import { ConnectorEngine, type ContentLedger, type KnowledgeItem, type KnowledgeWriter, type SyncContext } from '../index.js';
-import { buildIntegration, fakeVaultHandle } from '../testing/fakes.js';
+import { buildIntegration, fakeVaultHandle, fakeRegistration } from '../testing/fakes.js';
 import type { Repository } from '@meshify/data-access';
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -57,6 +57,7 @@ function syncCtx(mode: 'full' | 'incremental'): SyncContext {
 		mode,
 		integration: buildIntegration({ externalAccountId: '12345' }),
 		vault: fakeVaultHandle(),
+		registration: fakeRegistration({ provider: 'github' }),
 		connector: {
 			id: 'conn-1',
 			projectId: 'proj-1',

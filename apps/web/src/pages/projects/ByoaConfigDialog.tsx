@@ -21,14 +21,14 @@ export function ByoaConfigDialog({ integration, onClose, onSaved }: { integratio
 	const [saving, setSaving] = useState(false);
 
 	useEffect(() => {
-		config.run(() => api.describeByoaConfig(integration.id));
+		config.run(() => api.describeRegistration(integration.provider));
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [integration.id]);
+	}, [integration.provider]);
 
 	async function save() {
 		setSaving(true);
 		try {
-			const { webhookPath } = await api.configureByoa(integration.id, values);
+			const { webhookPath } = await api.configureRegistration(integration.provider, values);
 			setWebhookUrl(`${window.location.origin}/api${webhookPath}`);
 			toast.success('Enterprise app configured');
 			onSaved();

@@ -1,5 +1,5 @@
 import type { IntegrationRepository, KnowledgeConnectorRepository } from '@meshify/data-access';
-import type { CredentialVault, PlatformEventBus, ProviderRegistry } from '@meshify/providers';
+import type { CredentialVault, PlatformEventBus, ProviderRegistrationService, ProviderRegistry } from '@meshify/providers';
 import { supportsOAuth } from '@meshify/providers';
 import { loadIntegrationForOrg } from './integration-support.js';
 
@@ -16,16 +16,18 @@ export class DisconnectIntegrationUseCase {
 		private readonly integrations: IntegrationRepository,
 		private readonly connectors: KnowledgeConnectorRepository,
 		private readonly vault: CredentialVault,
-		private readonly events: PlatformEventBus
+		private readonly events: PlatformEventBus,
+		private readonly registrations: ProviderRegistrationService
 	) {}
 
 	async execute(command: { orgId: string; integrationId: string }): Promise<void> {
 		const integration = await loadIntegrationForOrg(this.integrations, command.integrationId, command.orgId);
 		const provider = this.registry.find(integration.provider);
 
-		if (provider && supportsOAuth(provider) && provider.revokeAccess) {
+		const registration = provider ? await this.registrations.resolveForIntegration(integration) : undefined;
+		if (provider && registration && supportsOAuth(provider) && provider.revokeAccess) {
 			try {
-				await provider.revokeAccess({ integration, vault: this.vault.forIntegration(integration.id) });
+				await provider.revokeAccess({ integration, vault: this.vault.forIntegration(integration.id), registration });
 			} catch {
 				/* revocation is best-effort; the credential purge below is what we guarantee */
 			}

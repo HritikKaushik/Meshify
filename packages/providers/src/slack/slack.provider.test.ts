@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createSlackProvider } from './slack.provider.js';
 import type { SlackProviderDeps } from './deps.js';
 import { providerContractTests } from '../testing/contract-tests.js';
-import { FakeSlackTransport, buildIntegration, fakeVaultHandle } from '../testing/fakes.js';
+import { FakeSlackTransport, buildIntegration, fakeVaultHandle, fakeRegistration } from '../testing/fakes.js';
 import { ProviderAuthError, ProviderNotConfiguredError } from '../base/errors.js';
 import type { RawWebhookRequest } from '../base/webhook.js';
 
@@ -17,14 +17,16 @@ function signedSlackRequest(payload: Record<string, unknown>, at: Date = NOW): R
 	return { rawBody, headers: { 'x-slack-signature': signature, 'x-slack-request-timestamp': timestamp } };
 }
 
-function deps(overrides: Partial<SlackProviderDeps> = {}): SlackProviderDeps {
-	return {
-		app: { clientId: 'cid', clientSecret: 'csecret', signingSecret: SIGNING_SECRET, redirectUri: 'https://app.example.com/oauth/slack/callback' },
-		transport: new FakeSlackTransport(),
-		now: () => NOW,
-		...overrides,
-	};
+function deps(overrides: { transport?: FakeSlackTransport } = {}): SlackProviderDeps {
+	const transport = overrides.transport ?? new FakeSlackTransport();
+	return { transportFactory: () => transport, now: () => NOW };
 }
+
+const REG = fakeRegistration({
+	provider: 'slack',
+	config: { app_client_id: 'cid', app_redirect_uri: 'https://app.example.com/oauth/slack/callback' },
+	secrets: { app_client_secret: 'csecret', app_signing_secret: SIGNING_SECRET },
+});
 
 const messageEnvelope = {
 	type: 'event_callback',
@@ -38,6 +40,7 @@ providerContractTests('slack', () => ({
 	fixtures: {
 		integration: { provider: 'slack', externalAccountId: 'T111', metadata: { botUserId: 'U-bot' } },
 		vault: fakeVaultHandle({ access_token: { value: 'xoxb-live' } }),
+		registration: fakeRegistration({ provider: 'slack', config: { app_client_id: 'cid', app_redirect_uri: 'https://app.example.com/oauth/slack/callback' }, secrets: { app_client_secret: 'csecret', app_signing_secret: SIGNING_SECRET } }),
 		oauth: {
 			validCallback: { params: { code: 'valid-code' } },
 			invalidCallback: { params: { error: 'access_denied' } },
@@ -88,7 +91,7 @@ describe('SlackProvider specifics', () => {
 			},
 		});
 		const provider = createSlackProvider(deps({ transport }));
-		const result = await provider.completeConnect({ params: { code: 'valid-code' } });
+		const result = await provider.completeConnect({ params: { code: 'valid-code' } }, REG);
 		expect(result.credentials).toEqual([
 			{ kind: 'access_token', value: 'xoxe-access', expiresAt: new Date(NOW.getTime() + 43200 * 1000) },
 			{ kind: 'refresh_token', value: 'xoxe-refresh', expiresAt: null },
@@ -100,9 +103,9 @@ describe('SlackProvider specifics', () => {
 		const provider = createSlackProvider(deps({ transport }));
 		const integration = buildIntegration({ provider: 'slack', externalAccountId: 'T111' });
 
-		expect(await provider.refreshCredentials({ integration, vault: fakeVaultHandle() })).toBeNull();
+		expect(await provider.refreshCredentials({ integration, vault: fakeVaultHandle(), registration: REG })).toBeNull();
 
-		const rotated = await provider.refreshCredentials({ integration, vault: fakeVaultHandle({ refresh_token: { value: 'xoxe-old' } }) });
+		const rotated = await provider.refreshCredentials({ integration, vault: fakeVaultHandle({ refresh_token: { value: 'xoxe-old' } }), registration: REG });
 		expect(rotated?.credentials.map((c) => c.kind)).toEqual(['access_token', 'refresh_token']);
 		expect(transport.refreshCalls).toBe(1);
 	});
@@ -111,14 +114,14 @@ describe('SlackProvider specifics', () => {
 		const transport = new FakeSlackTransport();
 		const provider = createSlackProvider(deps({ transport }));
 		const integration = buildIntegration({ provider: 'slack', externalAccountId: 'T111' });
-		await provider.revokeAccess({ integration, vault: fakeVaultHandle({ access_token: { value: 'xoxb-live' } }) });
+		await provider.revokeAccess({ integration, vault: fakeVaultHandle({ access_token: { value: 'xoxb-live' } }), registration: REG });
 		expect(transport.revoked).toEqual(['xoxb-live']);
 	});
 
 	it('treats only the bot joining a channel as a grant change', async () => {
 		const provider = createSlackProvider(deps());
 		const integration = buildIntegration({ provider: 'slack', externalAccountId: 'T111', metadata: { botUserId: 'U-bot' } });
-		const ctx = { integration, vault: fakeVaultHandle() };
+		const ctx = { integration, vault: fakeVaultHandle(), registration: REG };
 		const botJoin = await provider.normalizeWebhook(
 			{ eventType: 'member_joined_channel', payload: { event: { type: 'member_joined_channel', user: 'U-bot', channel: 'C9' } } },
 			ctx
@@ -134,22 +137,21 @@ describe('SlackProvider specifics', () => {
 	it('maps token state to health', async () => {
 		const provider = createSlackProvider(deps());
 		const integration = buildIntegration({ provider: 'slack', externalAccountId: 'T111' });
-		expect((await provider.checkHealth({ integration, vault: fakeVaultHandle() })).health).toBe('needs_reauthorization');
+		expect((await provider.checkHealth({ integration, vault: fakeVaultHandle(), registration: REG })).health).toBe('needs_reauthorization');
 		expect(
-			(await provider.checkHealth({ integration, vault: fakeVaultHandle({ refresh_token: { value: 'xoxe' } }) })).health
+			(await provider.checkHealth({ integration, vault: fakeVaultHandle({ refresh_token: { value: 'xoxe' } }), registration: REG })).health
 		).toBe('token_expired');
 
 		const failing = createSlackProvider(deps({ transport: new FakeSlackTransport({ authTestFails: 'invalid_auth' }) }));
 		expect(
-			(await failing.checkHealth({ integration, vault: fakeVaultHandle({ access_token: { value: 'xoxb-dead' } }) })).health
+			(await failing.checkHealth({ integration, vault: fakeVaultHandle({ access_token: { value: 'xoxb-dead' } }), registration: REG })).health
 		).toBe('needs_reauthorization');
 	});
 
 	it('rejects a callback missing its code with ProviderAuthError and 503s when unconfigured', async () => {
 		const provider = createSlackProvider(deps());
-		await expect(provider.completeConnect({ params: {} })).rejects.toBeInstanceOf(ProviderAuthError);
-		const unconfigured = createSlackProvider({ app: null, transport: null });
-		expect(unconfigured.isConfigured()).toBe(false);
-		expect(() => unconfigured.buildConnectUrl({ stateToken: 't', intent: 'connect' })).toThrow(ProviderNotConfiguredError);
+		await expect(provider.completeConnect({ params: {} }, REG)).rejects.toBeInstanceOf(ProviderAuthError);
+		const emptyReg = fakeRegistration({ provider: 'slack', config: {} });
+		expect(() => provider.buildConnectUrl({ stateToken: 't', intent: 'connect' }, emptyReg)).toThrow(ProviderNotConfiguredError);
 	});
 });
