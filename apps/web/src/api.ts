@@ -657,6 +657,12 @@ export class MeshifyApi {
 		);
 	}
 
+	/** Remove the org's BYOA registration for a provider (revert to managed). Throws (409) if integrations still use it. */
+	async deleteRegistration(provider: string): Promise<void> {
+		const res = await fetch(this.url(`/api/v1/providers/${provider}/registration`), { method: 'DELETE', credentials: 'include' });
+		if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `Failed to remove ${provider} app`);
+	}
+
 	/** Org-scoped SSE stream of integration events (connects, revocations, health changes). */
 	integrationsStreamUrl(): string {
 		return this.url('/api/v1/integrations/stream');

@@ -1,7 +1,15 @@
-import type { ProviderRegistrationRepository } from '@meshify/data-access';
+import type { IntegrationRepository, ProviderRegistrationRepository } from '@meshify/data-access';
 import type { ByoaConfigField, CredentialVault, ProviderRegistry } from '@meshify/providers';
 import { ProviderNotFoundError, supportsByoa } from '@meshify/providers';
 import { UnsupportedProviderOperationError } from './integration-support.js';
+
+/** A BYOA registration can't be removed while integrations were connected through it (app-bound grants). */
+export class RegistrationInUseError extends Error {
+	constructor(provider: string, count: number) {
+		super(`Disconnect the ${count} ${provider} integration${count === 1 ? '' : 's'} connected through this app before removing it.`);
+		this.name = 'RegistrationInUseError';
+	}
+}
 
 /** Whether a field name is a secret (stored in the registration vault) — provider-declared. */
 function secretKinds(fields: ByoaConfigField[]): Set<string> {
@@ -104,6 +112,32 @@ export class ConfigureRegistrationUseCase {
 		}
 
 		return { webhookPath: `/v1/integrations/webhooks/${command.provider}/${registration.id}` };
+	}
+}
+
+/**
+ * Remove an org's BYOA Provider Registration: purge its app credentials from
+ * the registration vault and delete the row, reverting the org to the managed
+ * app for FUTURE connects. Refused while integrations were connected through it
+ * — those grants are app-bound and would break; disconnect them first.
+ * Idempotent when no registration exists.
+ */
+export class DeleteRegistrationUseCase {
+	constructor(
+		private readonly registrations: ProviderRegistrationRepository,
+		private readonly registrationVault: CredentialVault,
+		private readonly integrations: IntegrationRepository
+	) {}
+
+	async execute(command: { orgId: string; provider: string }): Promise<void> {
+		const existing = await this.registrations.findByOrgAndProvider(command.orgId, command.provider);
+		if (!existing) return;
+
+		const dependents = (await this.integrations.listByOrg(command.orgId)).filter((i) => i.registrationId === existing.id);
+		if (dependents.length > 0) throw new RegistrationInUseError(command.provider, dependents.length);
+
+		await this.registrationVault.purge(existing.id); // explicit; the row's FK also cascades
+		await this.registrations.delete(command.orgId, command.provider);
 	}
 }
 

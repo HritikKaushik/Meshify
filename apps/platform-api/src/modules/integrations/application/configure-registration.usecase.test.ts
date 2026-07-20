@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { ConfigureRegistrationUseCase, DescribeRegistrationUseCase } from './configure-registration.usecase.js';
+import { ConfigureRegistrationUseCase, DescribeRegistrationUseCase, DeleteRegistrationUseCase, RegistrationInUseError } from './configure-registration.usecase.js';
 import { UnsupportedProviderOperationError } from './integration-support.js';
 import { CredentialVault, ProviderConfigError, ProviderRegistry, GitHubProvider, SlackProvider } from '@meshify/providers';
-import type { ProviderRegistration, ProviderRegistrationRepository } from '@meshify/data-access';
+import type { Integration, IntegrationRepository, ProviderRegistration, ProviderRegistrationRepository } from '@meshify/data-access';
 import { InMemoryCredentialStore, FakeGitHubTransport, FakeSlackTransport, fakeCipher } from '@meshify/providers/testing';
+
+/** Minimal IntegrationRepository stub — only listByOrg is exercised by the delete guard. */
+function fakeIntegrationRepo(integrations: Array<Pick<Integration, 'id' | 'registrationId'>> = []): IntegrationRepository {
+	return { listByOrg: async () => integrations as Integration[] } as unknown as IntegrationRepository;
+}
 
 /** In-memory provider_registrations repo. */
 function fakeRegistrationRepo(): ProviderRegistrationRepository & { rows: Map<string, ProviderRegistration> } {
@@ -113,5 +118,41 @@ describe('ConfigureRegistrationUseCase', () => {
 		expect(result.webhookPath).toBe(`/v1/integrations/webhooks/slack/${reg!.id}`);
 		expect((await h.vault.get(reg!.id, 'app_signing_secret'))?.value).toBe('sig');
 		expect(reg!.config.app_client_id).toBe('cid');
+	});
+});
+
+describe('DeleteRegistrationUseCase', () => {
+	async function seeded() {
+		const h = harness();
+		await h.configure.execute({
+			orgId: 'org-1',
+			provider: 'github',
+			values: { app_id: '999', app_slug: 'acme', app_client_id: 'Iv1.cid', app_private_key: '-----BEGIN PRIVATE KEY-----k', app_client_secret: 'csec', app_webhook_secret: 'wh' },
+		});
+		const reg = (await h.registrations.findByOrgAndProvider('org-1', 'github'))!;
+		return { h, reg };
+	}
+
+	it('removes the registration and purges its vault credentials', async () => {
+		const { h, reg } = await seeded();
+		const del = new DeleteRegistrationUseCase(h.registrations, h.vault, fakeIntegrationRepo());
+		await del.execute({ orgId: 'org-1', provider: 'github' });
+		expect(await h.registrations.findByOrgAndProvider('org-1', 'github')).toBeUndefined();
+		expect(await h.vault.get(reg.id, 'app_private_key')).toBeUndefined();
+	});
+
+	it('refuses to remove a registration that integrations were connected through', async () => {
+		const { h, reg } = await seeded();
+		const del = new DeleteRegistrationUseCase(h.registrations, h.vault, fakeIntegrationRepo([{ id: 'int-1', registrationId: reg.id }]));
+		await expect(del.execute({ orgId: 'org-1', provider: 'github' })).rejects.toBeInstanceOf(RegistrationInUseError);
+		// The registration and its secrets survive the refusal.
+		expect(await h.registrations.findByOrgAndProvider('org-1', 'github')).toBeDefined();
+		expect((await h.vault.get(reg.id, 'app_private_key'))?.value).toBe('-----BEGIN PRIVATE KEY-----k');
+	});
+
+	it('is a no-op when no registration exists', async () => {
+		const h = harness();
+		const del = new DeleteRegistrationUseCase(h.registrations, h.vault, fakeIntegrationRepo());
+		await expect(del.execute({ orgId: 'org-1', provider: 'github' })).resolves.toBeUndefined();
 	});
 });

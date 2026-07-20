@@ -11,7 +11,8 @@ import type { CompleteConnectUseCase } from '../application/complete-connect.use
 import type { ReconnectIntegrationUseCase } from '../application/reconnect-integration.usecase.js';
 import type { DisconnectIntegrationUseCase } from '../application/disconnect-integration.usecase.js';
 import type { ListIntegrationResourcesUseCase } from '../application/list-integration-resources.usecase.js';
-import type { ConfigureRegistrationUseCase, DescribeRegistrationUseCase } from '../application/configure-registration.usecase.js';
+import type { ConfigureRegistrationUseCase, DescribeRegistrationUseCase, DeleteRegistrationUseCase } from '../application/configure-registration.usecase.js';
+import { RegistrationInUseError } from '../application/configure-registration.usecase.js';
 import type { IntegrationEventHub } from '../infrastructure/integration-event-hub.js';
 import { IntegrationNotFoundError, InvalidOAuthStateError, UnsupportedProviderOperationError } from '../application/integration-support.js';
 import { ProviderConfigError } from '@meshify/providers';
@@ -65,6 +66,8 @@ function mapError(err: unknown, res: import('express').Response, log?: { error: 
 		res.status(400).json({ error: err.message });
 	} else if (err instanceof ProjectNotInOrgError) {
 		res.status(404).json({ error: err.message });
+	} else if (err instanceof RegistrationInUseError) {
+		res.status(409).json({ error: err.message });
 	} else {
 		log?.error({ err }, 'integrations request failed');
 		res.status(502).json({ error: 'Integration operation failed — see server logs' });
@@ -81,6 +84,7 @@ export function createIntegrationsController(deps: {
 	listIntegrationResources: ListIntegrationResourcesUseCase;
 	describeRegistration: DescribeRegistrationUseCase;
 	configureRegistration: ConfigureRegistrationUseCase;
+	deleteRegistration: DeleteRegistrationUseCase;
 	integrationEvents: IntegrationEventHub;
 }): Router {
 	const router = Router();
@@ -206,6 +210,16 @@ export function createIntegrationsController(deps: {
 		try {
 			const result = await deps.configureRegistration.execute({ orgId: req.auth!.orgId, provider: req.params.provider!, values: parsed.data.values });
 			res.status(200).json(result);
+		} catch (err) {
+			mapError(err, res, req.log);
+		}
+	});
+
+	// Remove the org's BYOA registration for a provider (revert to managed). 409 if integrations still use it.
+	router.delete('/v1/providers/:provider/registration', async (req, res) => {
+		try {
+			await deps.deleteRegistration.execute({ orgId: req.auth!.orgId, provider: req.params.provider! });
+			res.status(204).end();
 		} catch (err) {
 			mapError(err, res, req.log);
 		}

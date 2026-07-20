@@ -109,7 +109,7 @@ import { CompleteConnectUseCase } from './modules/integrations/application/compl
 import { ReconnectIntegrationUseCase } from './modules/integrations/application/reconnect-integration.usecase.js';
 import { DisconnectIntegrationUseCase } from './modules/integrations/application/disconnect-integration.usecase.js';
 import { ListIntegrationResourcesUseCase } from './modules/integrations/application/list-integration-resources.usecase.js';
-import { ConfigureRegistrationUseCase, DescribeRegistrationUseCase } from './modules/integrations/application/configure-registration.usecase.js';
+import { ConfigureRegistrationUseCase, DescribeRegistrationUseCase, DeleteRegistrationUseCase } from './modules/integrations/application/configure-registration.usecase.js';
 import { IntegrationEventHub } from './modules/integrations/infrastructure/integration-event-hub.js';
 import { createIntegrationsController } from './modules/integrations/interface/integrations.controller.js';
 import { createWebhooksController } from './modules/integrations/interface/webhooks.controller.js';
@@ -271,6 +271,7 @@ async function bootstrap(): Promise<void> {
 	const listIntegrationResources = new ListIntegrationResourcesUseCase(providerRegistry, integrationRepository, integrationResourceRepository, knowledgeConnectorRepository, credentialVault, providerRegistrationService);
 	const describeRegistration = new DescribeRegistrationUseCase(providerRegistry, providerRegistrationRepository, registrationVault);
 	const configureRegistration = new ConfigureRegistrationUseCase(providerRegistry, providerRegistrationRepository, registrationVault);
+	const deleteRegistration = new DeleteRegistrationUseCase(providerRegistrationRepository, registrationVault, integrationRepository);
 
 	// Webhook receipt: deliveries are recorded + enqueued here and processed in
 	// the worker; secret verification resolves via the registration layer.
@@ -373,6 +374,7 @@ async function bootstrap(): Promise<void> {
 			listIntegrationResources,
 			describeRegistration,
 			configureRegistration,
+			deleteRegistration,
 			integrationEvents: integrationEventHub,
 		})
 	);
