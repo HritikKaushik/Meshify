@@ -11,6 +11,7 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
+		"@meshify/ai": "workspace:*",
 		"@meshify/config": "workspace:*",
 		"@meshify/data-access": "workspace:*",
 		"@meshify/embeddings": "workspace:*",

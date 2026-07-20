@@ -82,9 +82,23 @@ import {
 	PostgresWebhookEventRepository,
 	PostgresProviderRegistrationRepository,
 	PostgresProviderRegistrationCredentialRepository,
+	PostgresLlmProviderConfigurationRepository,
+	PostgresActiveLlmProviderRepository,
+	PostgresLlmProviderCredentialRepository,
 	encryptSecret,
 	decryptSecret,
 } from '@meshify/data-access';
+import { createBuiltInLlmRegistry } from '@meshify/ai';
+import { ListLlmProvidersUseCase } from './modules/llm-providers/application/list-llm-providers.usecase.js';
+import { GetLlmProviderUseCase } from './modules/llm-providers/application/get-llm-provider.usecase.js';
+import { ConnectLlmProviderUseCase } from './modules/llm-providers/application/connect-llm-provider.usecase.js';
+import { TestLlmProviderUseCase } from './modules/llm-providers/application/test-llm-provider.usecase.js';
+import { ActivateLlmProviderUseCase } from './modules/llm-providers/application/activate-llm-provider.usecase.js';
+import { DisconnectLlmProviderUseCase } from './modules/llm-providers/application/disconnect-llm-provider.usecase.js';
+import { ListLlmModelsUseCase } from './modules/llm-providers/application/list-llm-models.usecase.js';
+import { LlmResolutionService } from './modules/llm-providers/infrastructure/llm-resolution.service.js';
+import { InProcessLlmProviderChangeNotifier } from './modules/llm-providers/infrastructure/in-process-llm-provider-change-notifier.js';
+import { createLlmProvidersController } from './modules/llm-providers/interface/llm-providers.controller.js';
 import {
 	COMING_SOON_PROVIDERS,
 	CredentialVault,
@@ -289,6 +303,16 @@ async function bootstrap(): Promise<void> {
 		sourceSyncQueue
 	);
 
+	// --- AI Providers subsystem (org-configurable LLMs) --------------------
+	// A first-class subsystem parallel to the Integrations platform. Reuses the
+	// vault primitive + cipher; its own registry, tables, and resolution layer.
+	const llmProviderConfigRepository = new PostgresLlmProviderConfigurationRepository(pgPool);
+	const activeLlmProviderRepository = new PostgresActiveLlmProviderRepository(pgPool);
+	const llmCredentialVault = new CredentialVault(new PostgresLlmProviderCredentialRepository(pgPool), secretCipher);
+	const llmRegistry = createBuiltInLlmRegistry();
+	// Makes RocketRide vendor-blind: resolves an org's active provider → node config.
+	const llmResolutionService = new LlmResolutionService(llmRegistry, llmProviderConfigRepository, llmCredentialVault);
+
 	// Chat is the one synchronous RocketRide path in the API: questions run
 	// against each project's persistent chat pipeline (useExisting semantics
 	// in PipelineRegistry), so the process holds one pooled client. Retrieval
@@ -298,11 +322,24 @@ async function bootstrap(): Promise<void> {
 	const rocketridePool = new RocketRideClientPool(env, logger);
 	const pipelineRegistry = new PipelineRegistry(rocketridePool);
 	const ragService = new RocketRideRagService(rocketridePool);
-	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry);
+	// The resolver consults the active LLM provider; falls back to managed OpenAI when none is active.
+	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry, llmResolutionService);
 	const chatContextRetriever = new VectorSearchContextRetriever(embeddingProviderFactory, qdrantSearchClient);
 	const chatRepository = new PostgresChatRepository(pgPool);
 	const slackCitationEnricher = new SlackCitationEnricher(slackConversationRepository);
 	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver, chatContextRetriever, slackCitationEnricher);
+
+	// AI Providers use cases. The change notifier invalidates the resolution cache
+	// and the org's cached chat pipelines on connect/activate/disconnect, so a
+	// provider switch takes effect on the next chat turn with no restart.
+	const llmChangeNotifier = new InProcessLlmProviderChangeNotifier(llmResolutionService, projectRepository, chatPipelineResolver, logger);
+	const listLlmProviders = new ListLlmProvidersUseCase(llmRegistry, llmProviderConfigRepository, activeLlmProviderRepository);
+	const getLlmProvider = new GetLlmProviderUseCase(llmRegistry, llmProviderConfigRepository, activeLlmProviderRepository, llmCredentialVault);
+	const connectLlmProvider = new ConnectLlmProviderUseCase(llmRegistry, llmProviderConfigRepository, llmCredentialVault, llmChangeNotifier);
+	const testLlmProvider = new TestLlmProviderUseCase(llmRegistry, llmProviderConfigRepository, llmCredentialVault);
+	const activateLlmProvider = new ActivateLlmProviderUseCase(llmRegistry, llmProviderConfigRepository, activeLlmProviderRepository, llmCredentialVault, llmChangeNotifier);
+	const disconnectLlmProvider = new DisconnectLlmProviderUseCase(llmProviderConfigRepository, llmCredentialVault, llmChangeNotifier);
+	const listLlmModels = new ListLlmModelsUseCase(llmRegistry, llmProviderConfigRepository, llmCredentialVault);
 
 		const listConversations = new ListConversationsUseCase(chatRepository);
 		const updateConversation = new UpdateConversationUseCase(chatRepository);
@@ -368,6 +405,17 @@ async function bootstrap(): Promise<void> {
 			configureRegistration,
 			deleteRegistration,
 			integrationEvents: integrationEventHub,
+		})
+	);
+	app.use(
+		createLlmProvidersController({
+			listLlmProviders,
+			getLlmProvider,
+			connectLlmProvider,
+			testLlmProvider,
+			activateLlmProvider,
+			disconnectLlmProvider,
+			listLlmModels,
 		})
 	);
 	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, attachWorkspace: attachSlackWorkspace, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));

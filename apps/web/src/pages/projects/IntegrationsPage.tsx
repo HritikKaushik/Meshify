@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { toast } from 'sonner';
@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { ByoaConfigDialog } from './ByoaConfigDialog';
-import { ProviderBrandIcon, COLORED_BRAND_ICON_KEYS, DARK_BRAND_ICON_KEYS } from '@/components/ProviderBrandIcon';
+import { AiModelsSection } from './AiModelsSection';
+import { ProviderBrandIcon } from '@/components/ProviderBrandIcon';
 import { cn } from '@/lib/utils';
 
 const HEALTH_PRESENTATION: Record<IntegrationHealth, { label: string; color: DotColor }> = {
@@ -35,20 +36,6 @@ function HealthPill({ health }: { health: IntegrationHealth }) {
 			{view.label}
 		</span>
 	);
-}
-
-/**
- * Chip presentation per provider, so every mark reads as its real brand icon:
- * full-color brands on a neutral chip; dark/desaturated brands as a white mark
- * on a solid brand chip; everything else as the brand-colored mark on a faint
- * brand-tinted chip.
- */
-function iconChip(provider: ProviderCatalogEntry): { className: string; style?: CSSProperties } {
-	const base = 'flex h-9 w-9 flex-none items-center justify-center rounded-xl';
-	if (COLORED_BRAND_ICON_KEYS.has(provider.iconKey)) return { className: `${base} border border-mc-border bg-mc-text/5` };
-	const color = provider.brandColor ?? '#5f6368';
-	if (DARK_BRAND_ICON_KEYS.has(provider.iconKey)) return { className: `${base} text-white`, style: { backgroundColor: color } };
-	return { className: `${base} border`, style: { color, backgroundColor: `${color}1A`, borderColor: `${color}33` } };
 }
 
 /** A collapsible segment grouping provider cards (Connected vs Available). */
@@ -182,7 +169,7 @@ export function IntegrationsPage() {
 			<GlassCard key={provider.id} className="flex flex-col gap-4 p-5">
 				<div className="flex items-start justify-between gap-4">
 					<div className="flex min-w-0 items-start gap-3">
-						<span {...iconChip(provider)}>
+						<span className="flex h-9 w-9 flex-none items-center justify-center rounded-xl border border-mc-border bg-mc-text/[.05] text-mc-text">
 							<ProviderBrandIcon iconKey={provider.iconKey} size={18} />
 						</span>
 						<div className="min-w-0">
@@ -287,6 +274,8 @@ export function IntegrationsPage() {
 			{catalog.state.status === 'error' && <p className="text-sm text-mc-danger">{catalog.state.error.message}</p>}
 
 			<div className="space-y-6">
+				<AiModelsSection />
+
 				<CollapsibleSection title="Connected" count={connectedProviders.length} defaultOpen>
 					{connectedProviders.length ? (
 						<div className="grid gap-4 sm:grid-cols-2">{connectedProviders.map(renderCard)}</div>
