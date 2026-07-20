@@ -11,6 +11,7 @@ interface PipelineJobRow {
 	attempts: number;
 	last_error: string | null;
 	payload: Record<string, unknown>;
+	dedupe_key: string | null;
 	progress: number | null;
 	stage: string | null;
 	created_at: Date;
@@ -28,6 +29,7 @@ function toDomain(row: PipelineJobRow): PipelineJob {
 		attempts: row.attempts,
 		lastError: row.last_error,
 		payload: row.payload,
+		dedupeKey: row.dedupe_key,
 		progress: row.progress,
 		stage: row.stage,
 		createdAt: row.created_at,
@@ -41,12 +43,32 @@ export class PostgresPipelineJobRepository implements PipelineJobRepository {
 
 	async create(input: CreatePipelineJobInput): Promise<PipelineJob> {
 		const { rows } = await this.pool.query<PipelineJobRow>(
-			`insert into pipeline_jobs (id, project_id, job_type, payload) values ($1, $2, $3, $4) returning *`,
-			[input.id, input.projectId, input.jobType, input.payload]
+			`insert into pipeline_jobs (id, project_id, job_type, payload, dedupe_key) values ($1, $2, $3, $4, $5) returning *`,
+			[input.id, input.projectId, input.jobType, input.payload, input.dedupeKey ?? null]
 		);
 		const row = rows[0];
 		if (!row) throw new Error('Insert into pipeline_jobs returned no row');
 		return toDomain(row);
+	}
+
+	async createDeduped(input: CreatePipelineJobInput & { dedupeKey: string }): Promise<{ job: PipelineJob; created: boolean }> {
+		// Conflict target matches the partial unique index on (dedupe_key) where status = 'queued'.
+		const { rows } = await this.pool.query<PipelineJobRow>(
+			`insert into pipeline_jobs (id, project_id, job_type, payload, dedupe_key)
+			 values ($1, $2, $3, $4, $5)
+			 on conflict (dedupe_key) where status = 'queued' do nothing
+			 returning *`,
+			[input.id, input.projectId, input.jobType, input.payload, input.dedupeKey]
+		);
+		const row = rows[0];
+		if (row) return { job: toDomain(row), created: true };
+		const { rows: existing } = await this.pool.query<PipelineJobRow>(
+			`select * from pipeline_jobs where dedupe_key = $1 and status = 'queued'`,
+			[input.dedupeKey]
+		);
+		const survivor = existing[0];
+		if (!survivor) throw new Error(`Deduped pipeline job insert conflicted but no queued job found for key "${input.dedupeKey}"`);
+		return { job: toDomain(survivor), created: false };
 	}
 
 	async findById(id: string): Promise<PipelineJob | undefined> {
@@ -76,6 +98,11 @@ export class PostgresPipelineJobRepository implements PipelineJobRepository {
 
 	async listRecentByProject(projectId: string, limit: number): Promise<PipelineJob[]> {
 		const { rows } = await this.pool.query<PipelineJobRow>('select * from pipeline_jobs where project_id = $1 order by updated_at desc limit $2', [projectId, limit]);
+		return rows.map(toDomain);
+	}
+
+	async listStuckQueued(before: Date): Promise<PipelineJob[]> {
+		const { rows } = await this.pool.query<PipelineJobRow>("select * from pipeline_jobs where status = 'queued' and created_at < $1 order by created_at limit 500", [before]);
 		return rows.map(toDomain);
 	}
 

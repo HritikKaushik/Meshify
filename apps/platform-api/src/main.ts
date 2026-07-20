@@ -30,7 +30,7 @@ import { JobEventHub } from './modules/jobs/infrastructure/job-event-hub.js';
 import { createJobsController } from './modules/jobs/interface/jobs.controller.js';
 import { JobEventSubscriber } from '@meshify/queues';
 import { PostgresRepositoryRepository, PostgresFileRepository } from '@meshify/data-access';
-import { createRepoIngestQueue, createRepoSyncQueue } from '@meshify/queues';
+import { createRepoIngestQueue, createRepoSyncQueue, createSourceSyncQueue, createWebhookEventsQueue } from '@meshify/queues';
 import { ConnectGitHubRepositoryUseCase } from './modules/repositories/application/connect-github-repository.usecase.js';
 import { UploadRepositoryZipUseCase } from './modules/repositories/application/upload-repository-zip.usecase.js';
 import { SyncRepositoryUseCase } from './modules/repositories/application/sync-repository.usecase.js';
@@ -77,6 +77,46 @@ import { rateLimitGuard } from './modules/security/interface/rate-limit.guard.js
 import { auditLogMiddleware } from './modules/security/interface/audit-log.middleware.js';
 import { RunEvaluationUseCase } from './modules/evaluation/application/run-evaluation.usecase.js';
 import { createEvaluationController } from './modules/evaluation/interface/evaluation.controller.js';
+import {
+	PostgresIntegrationRepository,
+	PostgresIntegrationCredentialRepository,
+	PostgresIntegrationResourceRepository,
+	PostgresOAuthStateRepository,
+	PostgresWebhookEventRepository,
+	PostgresProviderRegistrationRepository,
+	PostgresProviderRegistrationCredentialRepository,
+	encryptSecret,
+	decryptSecret,
+} from '@meshify/data-access';
+import {
+	COMING_SOON_PROVIDERS,
+	CredentialVault,
+	OAuthStateService,
+	ProviderNotConfiguredError,
+	ProviderRegistry,
+	ProviderRegistrationService,
+	RedisPlatformEventBus,
+	buildManagedRegistrations,
+	createGitHubProvider,
+	createGitHubTransport,
+	createSlackProvider,
+	createSlackTransport,
+} from '@meshify/providers';
+import { ListProvidersUseCase } from './modules/integrations/application/list-providers.usecase.js';
+import { ListIntegrationsUseCase } from './modules/integrations/application/list-integrations.usecase.js';
+import { ConnectProviderUseCase } from './modules/integrations/application/connect-provider.usecase.js';
+import { CompleteConnectUseCase } from './modules/integrations/application/complete-connect.usecase.js';
+import { ReconnectIntegrationUseCase } from './modules/integrations/application/reconnect-integration.usecase.js';
+import { DisconnectIntegrationUseCase } from './modules/integrations/application/disconnect-integration.usecase.js';
+import { ListIntegrationResourcesUseCase } from './modules/integrations/application/list-integration-resources.usecase.js';
+import { ConfigureRegistrationUseCase, DescribeRegistrationUseCase, DeleteRegistrationUseCase } from './modules/integrations/application/configure-registration.usecase.js';
+import { IntegrationEventHub } from './modules/integrations/infrastructure/integration-event-hub.js';
+import { createIntegrationsController } from './modules/integrations/interface/integrations.controller.js';
+import { createWebhooksController } from './modules/integrations/interface/webhooks.controller.js';
+import { AttachSlackWorkspaceUseCase } from './modules/slack/application/attach-slack-workspace.usecase.js';
+import { ConnectRepositoryFromIntegrationUseCase } from './modules/repositories/application/connect-repository-from-integration.usecase.js';
+
+
 
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
@@ -128,9 +168,10 @@ async function bootstrap(): Promise<void> {
 		const fileRepository = new PostgresFileRepository(pgPool);
 	const repoIngestQueue = createRepoIngestQueue(bullRedis);
 	const repoSyncQueue = createRepoSyncQueue(bullRedis);
+	const sourceSyncQueue = createSourceSyncQueue(bullRedis);
 	const connectGitHub = new ConnectGitHubRepositoryUseCase(knowledgeConnectorRepository, repositoryRepository, pipelineJobRepository, repoIngestQueue);
 	const uploadZip = new UploadRepositoryZipUseCase(knowledgeConnectorRepository, repositoryRepository, pipelineJobRepository, objectStorage, repoIngestQueue);
-	const syncRepository = new SyncRepositoryUseCase(repositoryRepository, pipelineJobRepository, repoSyncQueue);
+	const syncRepository = new SyncRepositoryUseCase(repositoryRepository, knowledgeConnectorRepository, pipelineJobRepository, repoSyncQueue, sourceSyncQueue);
 	const listRepositories = new ListRepositoriesUseCase(repositoryRepository);
 
 	const qdrantSearchClient = new QdrantSearchClient(env.QDRANT_URL, env.QDRANT_API_KEY);
@@ -179,8 +220,77 @@ async function bootstrap(): Promise<void> {
 	const startSlackOAuth = new StartSlackOAuthUseCase(slackRuntimeConfig);
 	const completeSlackOAuth = new CompleteSlackOAuthUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, slackClient, slackRuntimeConfig);
 	const listSlackChannels = new ListSlackChannelsUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository);
-	const selectSlackChannels = new SelectSlackChannelsUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, pipelineJobRepository, slackIngestQueue);
-	const syncSlack = new SyncSlackUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, pipelineJobRepository, slackSyncQueue);
+	const selectSlackChannels = new SelectSlackChannelsUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, pipelineJobRepository, slackIngestQueue, sourceSyncQueue);
+	const syncSlack = new SyncSlackUseCase(knowledgeConnectorRepository, slackWorkspaceRepository, pipelineJobRepository, slackSyncQueue, sourceSyncQueue);
+
+	// --- Provider Platform: registry, registrations, vault, state, events ----
+	const integrationRepository = new PostgresIntegrationRepository(pgPool);
+	const integrationCredentialRepository = new PostgresIntegrationCredentialRepository(pgPool);
+	const integrationResourceRepository = new PostgresIntegrationResourceRepository(pgPool);
+	const providerRegistrationRepository = new PostgresProviderRegistrationRepository(pgPool);
+
+	// The vault's cipher: refuses (503) instead of failing boot when no key is set.
+	const integrationKey = env.INTEGRATION_ENCRYPTION_KEY ?? env.ORG_KEY_ENCRYPTION_KEY;
+	const requireIntegrationKey = (): string => {
+		if (!integrationKey) throw new ProviderNotConfiguredError('platform', 'Set INTEGRATION_ENCRYPTION_KEY (or ORG_KEY_ENCRYPTION_KEY) to use integrations');
+		return integrationKey;
+	};
+	const secretCipher = {
+		encrypt: (plaintext: string) => encryptSecret(requireIntegrationKey(), plaintext),
+		decrypt: (ciphertext: string) => decryptSecret(requireIntegrationKey(), ciphertext),
+	};
+	const credentialVault = new CredentialVault(integrationCredentialRepository, secretCipher);
+	const registrationVault = new CredentialVault(new PostgresProviderRegistrationCredentialRepository(pgPool), secretCipher);
+
+	// The Provider Registration layer: virtual managed registrations from
+	// deployment env, BYOA registrations from the DB. App credentials resolve
+	// here — before an Integration exists — dissolving the OAuth circular dep.
+	const managedRegistrations = buildManagedRegistrations(env);
+	const providerRegistrationService = new ProviderRegistrationService(providerRegistrationRepository, registrationVault, managedRegistrations);
+
+	const providerRegistry = new ProviderRegistry();
+	providerRegistry.register(createGitHubProvider({ transportFactory: createGitHubTransport }));
+	providerRegistry.register(createSlackProvider({ transportFactory: createSlackTransport }));
+	for (const comingSoon of COMING_SOON_PROVIDERS) providerRegistry.register(comingSoon);
+
+	const oauthStates = new OAuthStateService(new PostgresOAuthStateRepository(pgPool));
+
+	// Platform events ride Redis Pub/Sub: publish on the shared command
+	// connection, subscribe on a DEDICATED connection (subscribe mode).
+	const platformEventsRedis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+	const platformEventBus = new RedisPlatformEventBus(redis, platformEventsRedis);
+	const integrationEventHub = new IntegrationEventHub(platformEventBus);
+	integrationEventHub.start();
+
+	const listProviders = new ListProvidersUseCase(providerRegistry, providerRegistrationService);
+	const listIntegrations = new ListIntegrationsUseCase(integrationRepository, knowledgeConnectorRepository);
+	const connectProvider = new ConnectProviderUseCase(providerRegistry, oauthStates, projectRepository, providerRegistrationService);
+	const completeConnect = new CompleteConnectUseCase(providerRegistry, oauthStates, integrationRepository, integrationResourceRepository, credentialVault, platformEventBus, providerRegistrationService);
+	const reconnectIntegration = new ReconnectIntegrationUseCase(providerRegistry, oauthStates, integrationRepository, providerRegistrationService);
+	const disconnectIntegration = new DisconnectIntegrationUseCase(providerRegistry, integrationRepository, knowledgeConnectorRepository, credentialVault, platformEventBus, providerRegistrationService);
+	const listIntegrationResources = new ListIntegrationResourcesUseCase(providerRegistry, integrationRepository, integrationResourceRepository, knowledgeConnectorRepository, credentialVault, providerRegistrationService);
+	const describeRegistration = new DescribeRegistrationUseCase(providerRegistry, providerRegistrationRepository, registrationVault);
+	const configureRegistration = new ConfigureRegistrationUseCase(providerRegistry, providerRegistrationRepository, registrationVault);
+	const deleteRegistration = new DeleteRegistrationUseCase(providerRegistrationRepository, registrationVault, integrationRepository);
+
+	// Webhook receipt: deliveries are recorded + enqueued here and processed in
+	// the worker; secret verification resolves via the registration layer.
+	const webhookEventRepository = new PostgresWebhookEventRepository(pgPool);
+	const webhookEventsQueue = createWebhookEventsQueue(bullRedis);
+	// Webhooks are pre-auth, so the per-key limiter can't apply — use a
+	// per-provider fixed window generous enough for bursty pushes.
+	const webhookLimiter = new RedisRateLimiter(redis, 600, 60);
+
+	const attachSlackWorkspace = new AttachSlackWorkspaceUseCase(integrationRepository, knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, credentialVault, slackClient);
+	const connectRepositoryFromIntegration = new ConnectRepositoryFromIntegrationUseCase(
+		integrationRepository,
+		integrationResourceRepository,
+		listIntegrationResources,
+		knowledgeConnectorRepository,
+		repositoryRepository,
+		pipelineJobRepository,
+		sourceSyncQueue
+	);
 
 	// Chat is the one synchronous RocketRide path in the API: questions run
 	// against each project's persistent chat pipeline (useExisting semantics
@@ -222,6 +332,21 @@ async function bootstrap(): Promise<void> {
 	// load balancer / ingress). Rate limits key on the API key, not the IP.
 	app.set('trust proxy', true);
 	app.use(pinoHttp({ logger }));
+
+	// Public webhook receiver — MUST precede express.json(): provider
+	// signatures cover the exact raw bytes, so nothing may parse the body first.
+	app.use(
+		createWebhooksController({
+			registry: providerRegistry,
+			integrations: integrationRepository,
+			webhookEvents: webhookEventRepository,
+			webhookQueue: webhookEventsQueue,
+			registrations: providerRegistrationService,
+			limiter: webhookLimiter,
+			logger,
+		})
+	);
+
 	app.use(express.json());
 
 	// Public: health/readiness probes must answer without credentials.
@@ -236,9 +361,24 @@ async function bootstrap(): Promise<void> {
 	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
 	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument }));
 	app.use(createJobsController({ getProject, getJobStatus, listProjectJobs, jobEventStream: jobEventHub }));
-	app.use(createRepositoriesController({ getProject, connectGitHub, uploadZip, syncRepository, listRepositories, deleteRepository }));
+	app.use(createRepositoriesController({ getProject, connectGitHub, connectFromIntegration: connectRepositoryFromIntegration, uploadZip, syncRepository, listRepositories, deleteRepository }));
 	app.use(createConnectorsController({ getProject, listConnectors, deleteConnector }));
-	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
+	app.use(
+		createIntegrationsController({
+			listProviders,
+			listIntegrations,
+			connectProvider,
+			completeConnect,
+			reconnectIntegration,
+			disconnectIntegration,
+			listIntegrationResources,
+			describeRegistration,
+			configureRegistration,
+			deleteRegistration,
+			integrationEvents: integrationEventHub,
+		})
+	);
+	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, attachWorkspace: attachSlackWorkspace, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
 	app.use(createChatController({ getProject, askQuestion, listConversations, updateConversation, deleteConversation, getConversationMessages }));
 	app.use(createSearchController({ getProject, search }));
 	app.use(createEvaluationController({ getProject, runEvaluation }));
@@ -250,11 +390,12 @@ async function bootstrap(): Promise<void> {
 	const shutdown = async (signal: string) => {
 		logger.info({ signal }, 'shutting down');
 		server.close();
-		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close()]);
+		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close(), sourceSyncQueue.close(), webhookEventsQueue.close()]);
 		await rocketridePool.shutdown();
 		await redis.quit();
 		await bullRedis.quit();
 		await jobEventsRedis.quit();
+		await platformEventsRedis.quit();
 		await pgPool.end();
 		process.exit(0);
 	};

@@ -6,11 +6,12 @@ interface SlackWorkspaceRow {
 	id: string;
 	connector_id: string;
 	project_id: string;
+	integration_id: string | null;
 	team_id: string;
 	team_name: string | null;
 	bot_user_id: string | null;
 	scope: string | null;
-	encrypted_access_token: string;
+	encrypted_access_token: string | null;
 	created_at: Date;
 	updated_at: Date;
 }
@@ -20,6 +21,7 @@ function toDomain(row: SlackWorkspaceRow): SlackWorkspace {
 		id: row.id,
 		connectorId: row.connector_id,
 		projectId: row.project_id,
+		integrationId: row.integration_id,
 		teamId: row.team_id,
 		teamName: row.team_name,
 		botUserId: row.bot_user_id,
@@ -35,9 +37,19 @@ export class PostgresSlackWorkspaceRepository implements SlackWorkspaceRepositor
 
 	async create(input: CreateSlackWorkspaceInput): Promise<SlackWorkspace> {
 		const { rows } = await this.pool.query<SlackWorkspaceRow>(
-			`insert into slack_workspaces (id, connector_id, project_id, team_id, team_name, bot_user_id, scope, encrypted_access_token)
-			 values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
-			[input.id, input.connectorId, input.projectId, input.teamId, input.teamName ?? null, input.botUserId ?? null, input.scope ?? null, input.encryptedAccessToken]
+			`insert into slack_workspaces (id, connector_id, project_id, integration_id, team_id, team_name, bot_user_id, scope, encrypted_access_token)
+			 values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+			[
+				input.id,
+				input.connectorId,
+				input.projectId,
+				input.integrationId ?? null,
+				input.teamId,
+				input.teamName ?? null,
+				input.botUserId ?? null,
+				input.scope ?? null,
+				input.encryptedAccessToken ?? null,
+			]
 		);
 		const row = rows[0];
 		if (!row) throw new Error('Insert into slack_workspaces returned no row');
@@ -64,6 +76,11 @@ export class PostgresSlackWorkspaceRepository implements SlackWorkspaceRepositor
 
 	async listByProject(projectId: string): Promise<SlackWorkspace[]> {
 		const { rows } = await this.pool.query<SlackWorkspaceRow>('select * from slack_workspaces where project_id = $1 order by created_at', [projectId]);
+		return rows.map(toDomain);
+	}
+
+	async listByIntegrationId(integrationId: string): Promise<SlackWorkspace[]> {
+		const { rows } = await this.pool.query<SlackWorkspaceRow>('select * from slack_workspaces where integration_id = $1 order by created_at', [integrationId]);
 		return rows.map(toDomain);
 	}
 

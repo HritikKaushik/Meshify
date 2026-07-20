@@ -126,6 +126,12 @@ export class PostgresSlackConversationRepository implements SlackConversationRep
 		return rows.map((r) => r.source_path);
 	}
 
+	async findBySourcePaths(projectId: string, sourcePaths: string[]): Promise<SlackConversation[]> {
+		if (sourcePaths.length === 0) return [];
+		const { rows } = await this.pool.query<SlackConversationRow>('select * from slack_conversations where project_id = $1 and source_path = any($2)', [projectId, sourcePaths]);
+		return rows.map(toDomain);
+	}
+
 	async updateStatus(id: string, status: SlackConversationStatus): Promise<void> {
 		await this.pool.query('update slack_conversations set status = $2, updated_at = now() where id = $1', [id, status]);
 	}

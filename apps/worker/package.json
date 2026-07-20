@@ -15,6 +15,7 @@
 		"@meshify/data-access": "workspace:*",
 		"@meshify/github": "workspace:*",
 		"@meshify/object-storage": "workspace:*",
+		"@meshify/providers": "workspace:*",
 		"@meshify/queues": "workspace:*",
 		"@meshify/rocketride-gateway": "workspace:*",
 		"@meshify/shared": "workspace:*",

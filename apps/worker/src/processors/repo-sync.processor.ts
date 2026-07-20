@@ -5,7 +5,7 @@ import type { FileRepository, PipelineJobRepository, ProjectRepository, Reposito
 import type { GitHubRepoClient } from '@meshify/github';
 import type { JobEventPublisher, RepoSyncJobPayload } from '@meshify/queues';
 import type { PipelineRegistry, RagPort } from '@meshify/rocketride-gateway';
-import { detectLanguage, hashContent, isBinaryBuffer, isDeniedPath } from '../repo/repo-scanner.js';
+import { detectLanguage, hashContent, isBinaryBuffer, isDeniedPath } from '@meshify/providers';
 import { JobProgress } from './job-progress.js';
 
 export interface RepoSyncProcessorDeps {

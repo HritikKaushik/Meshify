@@ -1,4 +1,4 @@
-import { FileText, FolderGit2, MessagesSquare, Loader, type LucideIcon } from 'lucide-react';
+import { FileText, FolderGit2, MessagesSquare, Loader, type LucideIcon, RefreshCw } from 'lucide-react';
 import type { JobEvent, JobPhase } from '@/api';
 
 /** The generic view model every JobCard renders — one shape for Documents, GitHub, Slack, and any future source. */
@@ -83,6 +83,7 @@ const PRESENTATION: Record<string, JobPresentation> = {
 	sync_repo: { label: 'Repository sync', icon: FolderGit2 },
 	slack_ingest: { label: 'Slack ingestion', icon: MessagesSquare },
 	slack_sync: { label: 'Slack sync', icon: MessagesSquare },
+	source_sync: { label: 'Source sync', icon: RefreshCw },
 };
 
 export function jobPresentation(jobType: string): JobPresentation {

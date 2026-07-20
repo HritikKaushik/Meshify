@@ -19,6 +19,8 @@ const EvaluationPage = lazy(() => import('./pages/projects/EvaluationPage').then
 const RepositoriesPage = lazy(() => import('./pages/projects/RepositoriesPage').then((m) => ({ default: m.RepositoriesPage })));
 const SlackPage = lazy(() => import('./pages/projects/SlackPage').then((m) => ({ default: m.SlackPage })));
 const SlackCallbackPage = lazy(() => import('./pages/oauth/SlackCallbackPage').then((m) => ({ default: m.SlackCallbackPage })));
+const ProviderCallbackPage = lazy(() => import('./pages/oauth/ProviderCallbackPage').then((m) => ({ default: m.ProviderCallbackPage })));
+const IntegrationsPage = lazy(() => import('./pages/projects/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
 const SettingsPage = lazy(() => import('./pages/projects/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 
 /** Gates its children behind a Clerk session; sends anonymous visitors to sign-in. */
@@ -72,6 +74,7 @@ export function App() {
 						<Route path="repository" element={<RepositoriesPage />} />
 						<Route path="documents" element={<DocumentsPage />} />
 						<Route path="slack" element={<SlackPage />} />
+						<Route path="integrations" element={<IntegrationsPage />} />
 						<Route path="search" element={<SearchPage />} />
 						<Route path="evaluation" element={<EvaluationPage />} />
 						<Route path="settings" element={<SettingsPage />} />
@@ -83,6 +86,16 @@ export function App() {
 						element={
 							<Protected>
 								<SlackCallbackPage />
+							</Protected>
+						}
+					/>
+
+					{/* Generic provider redirect target — static route above wins for Slack's legacy flow. */}
+					<Route
+						path="/oauth/:provider/callback"
+						element={
+							<Protected>
+								<ProviderCallbackPage />
 							</Protected>
 						}
 					/>

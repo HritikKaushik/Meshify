@@ -6,8 +6,7 @@ import type { ObjectStorageClient } from '@meshify/object-storage';
 import type { GitHubRepoClient } from '@meshify/github';
 import type { JobEventPublisher, RepoIngestJobPayload } from '@meshify/queues';
 import type { IngestFile, PipelineRegistry, RagPort } from '@meshify/rocketride-gateway';
-import { scanExtractedRepo, type ScannedFile } from '../repo/repo-scanner.js';
-import { withExtractedArchive } from '../repo/archive-extractor.js';
+import { scanExtractedRepo, withExtractedArchive, type ScannedFile } from '@meshify/providers';
 import { JobProgress } from './job-progress.js';
 
 export interface RepoIngestProcessorDeps {

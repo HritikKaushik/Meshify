@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { KnowledgeConnectorRepository, PipelineJobRepository, SlackChannelRepository, SlackWorkspaceRepository } from '@meshify/data-access';
 import type { Queue } from 'bullmq';
-import type { SlackIngestJobPayload } from '@meshify/queues';
+import type { SlackIngestJobPayload, SourceSyncJobPayload } from '@meshify/queues';
 import { loadSlackWorkspace } from './slack-support.js';
 
 /**
@@ -15,13 +15,34 @@ export class SelectSlackChannelsUseCase {
 		private readonly workspaces: SlackWorkspaceRepository,
 		private readonly channels: SlackChannelRepository,
 		private readonly pipelineJobs: PipelineJobRepository,
-		private readonly ingestQueue: Queue<SlackIngestJobPayload>
+		private readonly ingestQueue: Queue<SlackIngestJobPayload>,
+		private readonly sourceSyncQueue: Queue<SourceSyncJobPayload>
 	) {}
 
 	async execute(command: { projectId: string; connectorId: string; channelIds: string[] }): Promise<{ jobId: string; selectedCount: number }> {
 		const { workspace } = await loadSlackWorkspace(this.connectors, this.workspaces, command.projectId, command.connectorId);
 
 		await this.channels.setSelected(workspace.id, command.channelIds);
+
+		// Integration-linked workspaces ride the provider platform's generic lane
+		// (a selection change warrants a full pull of the newly-selected channels).
+		if (workspace.integrationId) {
+			const { job, created } = await this.pipelineJobs.createDeduped({
+				id: randomUUID(),
+				projectId: command.projectId,
+				jobType: 'source_sync',
+				payload: { connectorId: command.connectorId, mode: 'full' },
+				dedupeKey: `source_sync:${command.connectorId}:full`,
+			});
+			if (created) {
+				await this.sourceSyncQueue.add(
+					'ingest',
+					{ pipelineJobId: job.id, connectorId: command.connectorId, projectId: command.projectId, mode: 'full' },
+					{ jobId: job.id }
+				);
+			}
+			return { jobId: job.id, selectedCount: command.channelIds.length };
+		}
 
 		const pipelineJobId = randomUUID();
 		await this.pipelineJobs.create({

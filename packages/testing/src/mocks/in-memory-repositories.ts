@@ -41,6 +41,21 @@ import type {
 	UpsertFileInput,
 	UpsertSlackChannelInput,
 	UpsertSlackConversationInput,
+	Integration,
+	CreateIntegrationInput,
+	IntegrationStatus,
+	IntegrationHealth,
+	IntegrationRepository,
+	IntegrationResource,
+	IntegrationResourceRepository,
+	UpsertIntegrationResourceInput,
+	IntegrationCredential,
+	IntegrationCredentialRepository,
+	UpsertIntegrationCredentialInput,
+	WebhookEvent,
+	WebhookEventStatus,
+	WebhookEventRepository,
+	RecordWebhookEventInput,
 } from '@meshify/data-access';
 import { TEST_EPOCH } from '../factories/entities.js';
 
@@ -188,6 +203,10 @@ export class InMemoryRepositoryRepository implements RepositoryRepository {
 			lastSyncedCommit: null,
 			syncStatus: 'pending',
 			archiveObjectKey: input.archiveObjectKey ?? null,
+			githubRepoId: input.githubRepoId ?? null,
+			owner: input.owner ?? null,
+			name: input.name ?? null,
+			lastSyncedAt: null,
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
 		};
@@ -221,7 +240,28 @@ export class InMemoryRepositoryRepository implements RepositoryRepository {
 
 	async markSynced(id: string, commitSha: string | null, defaultBranch: string | null): Promise<void> {
 		const r = this.repos.get(id);
-		if (r) this.repos.set(id, { ...r, syncStatus: 'synced', lastSyncedCommit: commitSha ?? r.lastSyncedCommit, defaultBranch: defaultBranch ?? r.defaultBranch });
+		if (r) this.repos.set(id, { ...r, syncStatus: 'synced', lastSyncedCommit: commitSha ?? r.lastSyncedCommit, defaultBranch: defaultBranch ?? r.defaultBranch, lastSyncedAt: TEST_EPOCH });
+	}
+
+	async findByGitHubRepoId(githubRepoId: string): Promise<Repository[]> {
+		return [...this.repos.values()].filter((r) => r.githubRepoId === githubRepoId);
+	}
+
+	async findByOwnerAndName(owner: string, name: string): Promise<Repository[]> {
+		return [...this.repos.values()].filter((r) => r.owner?.toLowerCase() === owner.toLowerCase() && r.name?.toLowerCase() === name.toLowerCase());
+	}
+
+	async updateGitHubIdentity(id: string, input: { githubRepoId?: string; owner?: string; name?: string; remoteUrl?: string }): Promise<void> {
+		const r = this.repos.get(id);
+		if (r) {
+			this.repos.set(id, {
+				...r,
+				githubRepoId: input.githubRepoId ?? r.githubRepoId,
+				owner: input.owner ?? r.owner,
+				name: input.name ?? r.name,
+				remoteUrl: input.remoteUrl ?? r.remoteUrl,
+			});
+		}
 	}
 
 	async delete(id: string): Promise<void> {
@@ -262,6 +302,14 @@ export class InMemoryFileRepository implements FileRepository {
 
 	async updateStatusByRepository(repositoryId: string, from: FileStatus, to: FileStatus): Promise<void> {
 		this.files = this.files.map((f) => (f.repositoryId === repositoryId && f.status === from ? { ...f, status: to } : f));
+	}
+
+	async findByRepositoryAndPaths(repositoryId: string, paths: string[]): Promise<RepoFile[]> {
+		return this.files.filter((f) => f.repositoryId === repositoryId && paths.includes(f.path));
+	}
+
+	async updateStatusForPaths(repositoryId: string, paths: string[], status: FileStatus): Promise<void> {
+		this.files = this.files.map((f) => (f.repositoryId === repositoryId && paths.includes(f.path) ? { ...f, status } : f));
 	}
 
 	async markDeleted(repositoryId: string, paths: string[]): Promise<void> {
@@ -317,6 +365,8 @@ export class InMemoryKnowledgeConnectorRepository implements KnowledgeConnectorR
 			displayName: input.displayName,
 			status: input.status ?? 'connecting',
 			config: input.config ?? {},
+			integrationId: input.integrationId ?? null,
+			syncPolicy: input.syncPolicy ?? { trigger: 'event' },
 			lastError: null,
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
@@ -335,6 +385,29 @@ export class InMemoryKnowledgeConnectorRepository implements KnowledgeConnectorR
 
 	async findByProjectAndType(projectId: string, type: ConnectorType): Promise<KnowledgeConnector | undefined> {
 		return [...this.connectors.values()].find((c) => c.projectId === projectId && c.type === type);
+	}
+
+	async listByIntegration(integrationId: string): Promise<KnowledgeConnector[]> {
+		return [...this.connectors.values()].filter((c) => c.integrationId === integrationId);
+	}
+
+	async listEventTriggeredStale(before: Date): Promise<KnowledgeConnector[]> {
+		return [...this.connectors.values()].filter(
+			(c) => c.integrationId !== null && c.status === 'active' && c.syncPolicy.trigger === 'event' && c.updatedAt < before
+		);
+	}
+
+	async listIntervalDue(now: Date): Promise<KnowledgeConnector[]> {
+		return [...this.connectors.values()].filter((c) => {
+			if (c.integrationId === null || c.status !== 'active' || c.syncPolicy.trigger !== 'interval') return false;
+			const intervalMs = (c.syncPolicy.intervalMinutes ?? 60) * 60 * 1000;
+			return c.updatedAt.getTime() < now.getTime() - intervalMs;
+		});
+	}
+
+	async setIntegration(id: string, integrationId: string | null): Promise<void> {
+		const c = this.connectors.get(id);
+		if (c) this.connectors.set(id, { ...c, integrationId });
 	}
 
 	async updateStatus(id: string, status: ConnectorStatus, lastError?: string | null): Promise<void> {
@@ -364,11 +437,12 @@ export class InMemorySlackWorkspaceRepository implements SlackWorkspaceRepositor
 			id: input.id,
 			connectorId: input.connectorId,
 			projectId: input.projectId,
+			integrationId: input.integrationId ?? null,
 			teamId: input.teamId,
 			teamName: input.teamName ?? null,
 			botUserId: input.botUserId ?? null,
 			scope: input.scope ?? null,
-			encryptedAccessToken: input.encryptedAccessToken,
+			encryptedAccessToken: input.encryptedAccessToken ?? null,
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
 		};
@@ -390,6 +464,10 @@ export class InMemorySlackWorkspaceRepository implements SlackWorkspaceRepositor
 
 	async listByProject(projectId: string): Promise<SlackWorkspace[]> {
 		return [...this.workspaces.values()].filter((w) => w.projectId === projectId);
+	}
+
+	async listByIntegrationId(integrationId: string): Promise<SlackWorkspace[]> {
+		return [...this.workspaces.values()].filter((w) => w.integrationId === integrationId);
 	}
 
 	async updateAccessToken(id: string, encryptedAccessToken: string, meta?: { scope?: string | null; botUserId?: string | null }): Promise<void> {
@@ -506,6 +584,10 @@ export class InMemorySlackConversationRepository implements SlackConversationRep
 		this.conversations = this.conversations.map((c) => (c.id === id ? { ...c, status } : c));
 	}
 
+	async findBySourcePaths(projectId: string, sourcePaths: string[]): Promise<SlackConversation[]> {
+		return this.conversations.filter((c) => c.projectId === projectId && sourcePaths.includes(c.sourcePath));
+	}
+
 	async statsByWorkspace(workspaceId: string): Promise<{ total: number; embedded: number; lastUpdatedAt: Date | null }> {
 		const rows = this.conversations.filter((c) => c.workspaceId === workspaceId);
 		const embedded = rows.filter((c) => c.status === 'embedded').length;
@@ -531,6 +613,7 @@ export class InMemoryPipelineJobRepository implements PipelineJobRepository {
 			attempts: 0,
 			lastError: null,
 			payload: input.payload,
+			dedupeKey: input.dedupeKey ?? null,
 			progress: null,
 			stage: null,
 			createdAt: TEST_EPOCH,
@@ -539,6 +622,12 @@ export class InMemoryPipelineJobRepository implements PipelineJobRepository {
 		};
 		this.jobs.set(job.id, job);
 		return job;
+	}
+
+	async createDeduped(input: CreatePipelineJobInput & { dedupeKey: string }): Promise<{ job: PipelineJob; created: boolean }> {
+		const existing = [...this.jobs.values()].find((j) => j.dedupeKey === input.dedupeKey && j.status === 'queued');
+		if (existing) return { job: existing, created: false };
+		return { job: await this.create(input), created: true };
 	}
 
 	async findById(id: string): Promise<PipelineJob | undefined> {
@@ -558,6 +647,10 @@ export class InMemoryPipelineJobRepository implements PipelineJobRepository {
 
 	async listRecentByProject(projectId: string, limit: number): Promise<PipelineJob[]> {
 		return [...this.jobs.values()].filter((j) => j.projectId === projectId).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, limit);
+	}
+
+	async listStuckQueued(before: Date): Promise<PipelineJob[]> {
+		return [...this.jobs.values()].filter((j) => j.status === 'queued' && j.createdAt < before);
 	}
 
 	async markRunning(id: string): Promise<void> {
@@ -614,5 +707,244 @@ export class InMemorySlackSyncStateRepository implements SlackSyncStateRepositor
 		};
 		this.states.set(input.slackChannelId, state);
 		return state;
+	}
+}
+
+export class InMemoryIntegrationRepository implements IntegrationRepository {
+	private readonly integrations = new Map<string, Integration>();
+	private seq = 0;
+
+	constructor(seed: Integration[] = []) {
+		for (const i of seed) this.integrations.set(i.id, i);
+	}
+
+	async create(input: CreateIntegrationInput): Promise<Integration> {
+		this.seq += 1;
+		const integration: Integration = {
+			id: input.id ?? `int-${this.seq}`,
+			orgId: input.orgId,
+			provider: input.provider,
+			mode: input.mode ?? 'managed',
+			externalAccountId: input.externalAccountId,
+			externalAccountName: input.externalAccountName ?? '',
+			registrationId: input.registrationId ?? null,
+			status: input.status ?? 'pending',
+			health: 'unknown',
+			healthDetail: {},
+			healthCheckedAt: null,
+			metadata: input.metadata ?? {},
+			lastError: null,
+			createdAt: TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+		};
+		this.integrations.set(integration.id, integration);
+		return integration;
+	}
+
+	async findById(id: string): Promise<Integration | undefined> {
+		return this.integrations.get(id);
+	}
+
+	async findByIdForOrg(id: string, orgId: string): Promise<Integration | undefined> {
+		const integration = this.integrations.get(id);
+		return integration && integration.orgId === orgId ? integration : undefined;
+	}
+
+	async findByOrgProviderAccount(orgId: string, provider: string, externalAccountId: string): Promise<Integration | undefined> {
+		return [...this.integrations.values()].find((i) => i.orgId === orgId && i.provider === provider && i.externalAccountId === externalAccountId);
+	}
+
+	async findByProviderAccount(provider: string, externalAccountId: string): Promise<Integration[]> {
+		return [...this.integrations.values()].filter((i) => i.provider === provider && i.externalAccountId === externalAccountId);
+	}
+
+	async listByOrg(orgId: string): Promise<Integration[]> {
+		return [...this.integrations.values()].filter((i) => i.orgId === orgId);
+	}
+
+	async listActiveByProvider(provider: string): Promise<Integration[]> {
+		return [...this.integrations.values()].filter((i) => i.provider === provider && i.status === 'active');
+	}
+
+	async updateStatus(id: string, status: IntegrationStatus, lastError?: string | null): Promise<void> {
+		const i = this.integrations.get(id);
+		if (i) this.integrations.set(id, { ...i, status, lastError: lastError ?? null });
+	}
+
+	async updateMode(id: string, mode: 'managed' | 'byoa'): Promise<void> {
+		const i = this.integrations.get(id);
+		if (i) this.integrations.set(id, { ...i, mode });
+	}
+
+	async updateHealth(id: string, health: IntegrationHealth, detail?: Record<string, unknown>): Promise<void> {
+		const i = this.integrations.get(id);
+		if (i) this.integrations.set(id, { ...i, health, healthDetail: detail ?? i.healthDetail, healthCheckedAt: TEST_EPOCH });
+	}
+
+	async updateAccountInfo(id: string, input: { externalAccountName?: string; metadata?: Record<string, unknown> }): Promise<void> {
+		const i = this.integrations.get(id);
+		if (i) {
+			this.integrations.set(id, {
+				...i,
+				externalAccountName: input.externalAccountName ?? i.externalAccountName,
+				metadata: { ...i.metadata, ...(input.metadata ?? {}) },
+			});
+		}
+	}
+
+	async delete(id: string): Promise<void> {
+		this.integrations.delete(id);
+	}
+}
+
+export class InMemoryIntegrationResourceRepository implements IntegrationResourceRepository {
+	private readonly resources = new Map<string, IntegrationResource>();
+	private seq = 0;
+
+	private key(integrationId: string, resourceId: string): string {
+		return `${integrationId}:${resourceId}`;
+	}
+
+	async upsertMany(inputs: UpsertIntegrationResourceInput[]): Promise<void> {
+		for (const input of inputs) {
+			const existing = this.resources.get(this.key(input.integrationId, input.resourceId));
+			this.seq += 1;
+			this.resources.set(this.key(input.integrationId, input.resourceId), {
+				id: existing?.id ?? `res-${this.seq}`,
+				integrationId: input.integrationId,
+				workspaceId: input.workspaceId ?? null,
+				resourceId: input.resourceId,
+				kind: input.kind,
+				name: input.name,
+				private: input.private ?? false,
+				metadata: input.metadata ?? {},
+				discoveredAt: existing?.discoveredAt ?? TEST_EPOCH,
+				updatedAt: TEST_EPOCH,
+				removedAt: null,
+			});
+		}
+	}
+
+	async listByIntegration(integrationId: string, opts?: { includeRemoved?: boolean }): Promise<IntegrationResource[]> {
+		return [...this.resources.values()].filter((r) => r.integrationId === integrationId && (opts?.includeRemoved || r.removedAt === null));
+	}
+
+	async findByResourceId(integrationId: string, resourceId: string): Promise<IntegrationResource | undefined> {
+		return this.resources.get(this.key(integrationId, resourceId));
+	}
+
+	async markRemoved(integrationId: string, resourceIds: string[]): Promise<void> {
+		for (const resourceId of resourceIds) {
+			const r = this.resources.get(this.key(integrationId, resourceId));
+			if (r) this.resources.set(this.key(integrationId, resourceId), { ...r, removedAt: TEST_EPOCH });
+		}
+	}
+
+	async rename(integrationId: string, resourceId: string, name: string): Promise<void> {
+		const r = this.resources.get(this.key(integrationId, resourceId));
+		if (r) this.resources.set(this.key(integrationId, resourceId), { ...r, name });
+	}
+
+	async deleteAllForIntegration(integrationId: string): Promise<void> {
+		for (const key of [...this.resources.keys()]) if (key.startsWith(`${integrationId}:`)) this.resources.delete(key);
+	}
+}
+
+export class InMemoryWebhookEventRepository implements WebhookEventRepository {
+	readonly events = new Map<string, WebhookEvent>();
+	private seq = 0;
+
+	async recordIfNew(input: RecordWebhookEventInput): Promise<WebhookEvent | undefined> {
+		const duplicate = [...this.events.values()].some((e) => e.provider === input.provider && e.deliveryId === input.deliveryId);
+		if (duplicate) return undefined;
+		this.seq += 1;
+		const event: WebhookEvent = {
+			id: `wh-${this.seq}`,
+			provider: input.provider,
+			deliveryId: input.deliveryId,
+			eventType: input.eventType,
+			integrationId: input.integrationId ?? null,
+			payload: input.payload,
+			status: 'received',
+			error: null,
+			receivedAt: TEST_EPOCH,
+			processedAt: null,
+		};
+		this.events.set(event.id, event);
+		return event;
+	}
+
+	async findById(id: string): Promise<WebhookEvent | undefined> {
+		return this.events.get(id);
+	}
+
+	async markStatus(id: string, status: WebhookEventStatus, error?: string | null): Promise<void> {
+		const e = this.events.get(id);
+		if (e) this.events.set(id, { ...e, status, error: error ?? null, processedAt: ['processed', 'skipped', 'failed'].includes(status) ? TEST_EPOCH : e.processedAt });
+	}
+
+	async listReprocessable(before: Date): Promise<WebhookEvent[]> {
+		return [...this.events.values()].filter((e) => (e.status === 'received' || e.status === 'queued') && e.receivedAt < before);
+	}
+
+	async listRecentByIntegration(integrationId: string, limit: number): Promise<WebhookEvent[]> {
+		return [...this.events.values()].filter((e) => e.integrationId === integrationId).slice(0, limit);
+	}
+
+	async deleteTerminalBefore(_before: Date): Promise<number> {
+		let removed = 0;
+		for (const [id, e] of [...this.events]) {
+			if (['processed', 'skipped', 'failed'].includes(e.status)) {
+				this.events.delete(id);
+				removed += 1;
+			}
+		}
+		return removed;
+	}
+}
+
+export class InMemoryIntegrationCredentialRepository implements IntegrationCredentialRepository {
+	readonly credentials = new Map<string, IntegrationCredential>();
+	private seq = 0;
+
+	private key(integrationId: string, kind: string): string {
+		return `${integrationId}:${kind}`;
+	}
+
+	async upsert(input: UpsertIntegrationCredentialInput): Promise<IntegrationCredential> {
+		const existing = this.credentials.get(this.key(input.integrationId, input.kind));
+		this.seq += 1;
+		const credential: IntegrationCredential = {
+			id: existing?.id ?? `cred-${this.seq}`,
+			integrationId: input.integrationId,
+			kind: input.kind,
+			encryptedValue: input.encryptedValue,
+			expiresAt: input.expiresAt ?? null,
+			rotatedAt: existing ? TEST_EPOCH : null,
+			createdAt: existing?.createdAt ?? TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+		};
+		this.credentials.set(this.key(input.integrationId, input.kind), credential);
+		return credential;
+	}
+
+	async findByIntegrationAndKind(integrationId: string, kind: string): Promise<IntegrationCredential | undefined> {
+		return this.credentials.get(this.key(integrationId, kind));
+	}
+
+	async listByIntegration(integrationId: string): Promise<IntegrationCredential[]> {
+		return [...this.credentials.values()].filter((c) => c.integrationId === integrationId);
+	}
+
+	async listExpiringBefore(before: Date): Promise<IntegrationCredential[]> {
+		return [...this.credentials.values()].filter((c) => c.expiresAt !== null && c.expiresAt < before);
+	}
+
+	async delete(integrationId: string, kind: string): Promise<void> {
+		this.credentials.delete(this.key(integrationId, kind));
+	}
+
+	async deleteAllForIntegration(integrationId: string): Promise<void> {
+		for (const key of [...this.credentials.keys()]) if (key.startsWith(`${integrationId}:`)) this.credentials.delete(key);
 	}
 }
