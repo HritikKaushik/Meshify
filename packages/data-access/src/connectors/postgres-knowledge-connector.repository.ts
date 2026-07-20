@@ -80,6 +80,32 @@ export class PostgresKnowledgeConnectorRepository implements KnowledgeConnectorR
 		return rows.map(toDomain);
 	}
 
+	async listEventTriggeredStale(before: Date): Promise<KnowledgeConnector[]> {
+		const { rows } = await this.pool.query<ConnectorRow>(
+			`select * from knowledge_connectors
+			 where integration_id is not null
+			   and status = 'active'
+			   and sync_policy->>'trigger' = 'event'
+			   and updated_at < $1
+			 order by updated_at`,
+			[before]
+		);
+		return rows.map(toDomain);
+	}
+
+	async listIntervalDue(now: Date): Promise<KnowledgeConnector[]> {
+		const { rows } = await this.pool.query<ConnectorRow>(
+			`select * from knowledge_connectors
+			 where integration_id is not null
+			   and status = 'active'
+			   and sync_policy->>'trigger' = 'interval'
+			   and updated_at < $1::timestamptz - make_interval(mins => coalesce((sync_policy->>'intervalMinutes')::int, 60))
+			 order by updated_at`,
+			[now]
+		);
+		return rows.map(toDomain);
+	}
+
 	async setIntegration(id: string, integrationId: string | null): Promise<void> {
 		await this.pool.query('update knowledge_connectors set integration_id = $2, updated_at = now() where id = $1', [id, integrationId]);
 	}

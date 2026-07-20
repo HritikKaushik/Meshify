@@ -12,3 +12,5 @@ export { SOURCE_SYNC_QUEUE, createSourceSyncQueue } from './source-sync.queue.js
 export type { SourceSyncJobPayload } from './source-sync.queue.js';
 export { WEBHOOK_EVENTS_QUEUE, createWebhookEventsQueue } from './webhook-events.queue.js';
 export type { WebhookEventJobPayload } from './webhook-events.queue.js';
+export { INTEGRATION_MAINTENANCE_QUEUE, MAINTENANCE_SCHEDULES, createIntegrationMaintenanceQueue } from './integration-maintenance.queue.js';
+export type { IntegrationMaintenanceJobPayload, MaintenanceTask } from './integration-maintenance.queue.js';

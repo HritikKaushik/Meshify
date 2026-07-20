@@ -19,6 +19,10 @@ export interface KnowledgeConnectorRepository {
 	findByProjectAndType(projectId: string, type: ConnectorType): Promise<KnowledgeConnector | undefined>;
 	/** Every project connector drawing on an org integration — the disconnect fan-out list. */
 	listByIntegration(integrationId: string): Promise<KnowledgeConnector[]>;
+	/** Event-triggered, integration-linked, active connectors idle since `before` — the webhook-miss safety net. */
+	listEventTriggeredStale(before: Date): Promise<KnowledgeConnector[]>;
+	/** Interval-policy connectors whose interval has elapsed — data-driven scheduled sync. */
+	listIntervalDue(now: Date): Promise<KnowledgeConnector[]>;
 	/** Bind a pre-platform connector to an org integration (the "upgrade to managed" path). */
 	setIntegration(id: string, integrationId: string | null): Promise<void>;
 	updateStatus(id: string, status: ConnectorStatus, lastError?: string | null): Promise<void>;

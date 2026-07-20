@@ -20,6 +20,7 @@ import {
 	PostgresIntegrationResourceRepository,
 	PostgresSyncCursorRepository,
 	PostgresWebhookEventRepository,
+	PostgresOAuthStateRepository,
 	encryptSecret,
 	decryptSecret,
 } from '@meshify/data-access';
@@ -32,6 +33,9 @@ import {
 	SLACK_SYNC_QUEUE,
 	SOURCE_SYNC_QUEUE,
 	WEBHOOK_EVENTS_QUEUE,
+	INTEGRATION_MAINTENANCE_QUEUE,
+	MAINTENANCE_SCHEDULES,
+	createIntegrationMaintenanceQueue,
 	createSourceSyncQueue,
 	JobEventPublisher,
 	type DocumentIngestJobPayload,
@@ -41,6 +45,7 @@ import {
 	type SlackSyncJobPayload,
 	type SourceSyncJobPayload,
 	type WebhookEventJobPayload,
+	type IntegrationMaintenanceJobPayload,
 } from '@meshify/queues';
 import { GitHubAppAuth, GitHubRepoClient } from '@meshify/github';
 import { HttpSlackClient } from '@meshify/slack';
@@ -66,6 +71,7 @@ import {
 import type { KnowledgeConnector } from '@meshify/data-access';
 import { processSourceSyncJob } from './processors/source-sync.processor.js';
 import { processWebhookEventJob } from './processors/webhook-event.processor.js';
+import { processMaintenanceJob } from './processors/integration-maintenance.processor.js';
 import { ProjectKnowledgeWriter } from './processors/knowledge-writer.js';
 import { createGitHubContentLedger, createSlackContentLedger } from './processors/content-ledgers.js';
 
@@ -251,6 +257,29 @@ async function bootstrap(): Promise<void> {
 		bus: platformEventBus,
 	};
 
+	// Platform upkeep: BullMQ Job Schedulers drive the recurring sweeps; the
+	// scheduler upsert is idempotent across worker replicas and restarts.
+	const maintenanceQueue = createIntegrationMaintenanceQueue(bullRedis);
+	for (const schedule of MAINTENANCE_SCHEDULES) {
+		await maintenanceQueue.upsertJobScheduler(`maintenance-${schedule.task}`, { every: schedule.everyMs }, {
+			name: schedule.task,
+			data: { task: schedule.task },
+		});
+	}
+	const maintenanceDeps = {
+		registry: providerRegistry,
+		integrations,
+		credentials: integrationCredentials,
+		connectors,
+		pipelineJobs,
+		oauthStates: new PostgresOAuthStateRepository(pgPool),
+		webhookEvents: webhookEventRepository,
+		sourceSyncQueue,
+		vault: credentialVault,
+		bus: platformEventBus,
+		logger,
+	};
+
 	const documentWorker = new Worker<DocumentIngestJobPayload>(
 		DOCUMENT_INGEST_QUEUE,
 		(job) =>
@@ -320,8 +349,9 @@ async function bootstrap(): Promise<void> {
 	// above remain only to drain in-flight jobs enqueued before the cutover.
 	const sourceSyncWorker = new Worker<SourceSyncJobPayload>(SOURCE_SYNC_QUEUE, (job) => processSourceSyncJob(job, sourceSyncDeps), { connection: bullRedis, concurrency: 3 });
 	const webhookEventsWorker = new Worker<WebhookEventJobPayload>(WEBHOOK_EVENTS_QUEUE, (job) => processWebhookEventJob(job, webhookDeps), { connection: bullRedis, concurrency: 5 });
+	const maintenanceWorker = new Worker<IntegrationMaintenanceJobPayload>(INTEGRATION_MAINTENANCE_QUEUE, (job) => processMaintenanceJob(job, maintenanceDeps), { connection: bullRedis, concurrency: 1 });
 
-	const workers = [documentWorker, repoIngestWorker, repoSyncWorker, slackIngestWorker, slackSyncWorker, sourceSyncWorker, webhookEventsWorker];
+	const workers = [documentWorker, repoIngestWorker, repoSyncWorker, slackIngestWorker, slackSyncWorker, sourceSyncWorker, webhookEventsWorker, maintenanceWorker];
 	for (const worker of workers) {
 		worker.on('completed', (job) => logger.info({ queue: worker.name, jobId: job.id }, 'job completed'));
 		worker.on('failed', (job, err) => logger.error({ queue: worker.name, jobId: job?.id, err: err.message }, 'job failed'));
@@ -333,6 +363,7 @@ async function bootstrap(): Promise<void> {
 		logger.info({ signal }, 'shutting down');
 		await Promise.all(workers.map((w) => w.close()));
 		await sourceSyncQueue.close();
+		await maintenanceQueue.close();
 		await clientPool.shutdown();
 		await bullRedis.quit();
 		await pgPool.end();

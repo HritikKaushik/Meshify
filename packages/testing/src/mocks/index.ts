@@ -13,4 +13,5 @@ export {
 	InMemoryIntegrationRepository,
 	InMemoryIntegrationResourceRepository,
 	InMemoryWebhookEventRepository,
+	InMemoryIntegrationCredentialRepository,
 } from './in-memory-repositories.js';

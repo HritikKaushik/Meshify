@@ -49,6 +49,9 @@ import type {
 	IntegrationResource,
 	IntegrationResourceRepository,
 	UpsertIntegrationResourceInput,
+	IntegrationCredential,
+	IntegrationCredentialRepository,
+	UpsertIntegrationCredentialInput,
 	WebhookEvent,
 	WebhookEventStatus,
 	WebhookEventRepository,
@@ -386,6 +389,20 @@ export class InMemoryKnowledgeConnectorRepository implements KnowledgeConnectorR
 
 	async listByIntegration(integrationId: string): Promise<KnowledgeConnector[]> {
 		return [...this.connectors.values()].filter((c) => c.integrationId === integrationId);
+	}
+
+	async listEventTriggeredStale(before: Date): Promise<KnowledgeConnector[]> {
+		return [...this.connectors.values()].filter(
+			(c) => c.integrationId !== null && c.status === 'active' && c.syncPolicy.trigger === 'event' && c.updatedAt < before
+		);
+	}
+
+	async listIntervalDue(now: Date): Promise<KnowledgeConnector[]> {
+		return [...this.connectors.values()].filter((c) => {
+			if (c.integrationId === null || c.status !== 'active' || c.syncPolicy.trigger !== 'interval') return false;
+			const intervalMs = (c.syncPolicy.intervalMinutes ?? 60) * 60 * 1000;
+			return c.updatedAt.getTime() < now.getTime() - intervalMs;
+		});
 	}
 
 	async setIntegration(id: string, integrationId: string | null): Promise<void> {
@@ -869,5 +886,51 @@ export class InMemoryWebhookEventRepository implements WebhookEventRepository {
 			}
 		}
 		return removed;
+	}
+}
+
+export class InMemoryIntegrationCredentialRepository implements IntegrationCredentialRepository {
+	readonly credentials = new Map<string, IntegrationCredential>();
+	private seq = 0;
+
+	private key(integrationId: string, kind: string): string {
+		return `${integrationId}:${kind}`;
+	}
+
+	async upsert(input: UpsertIntegrationCredentialInput): Promise<IntegrationCredential> {
+		const existing = this.credentials.get(this.key(input.integrationId, input.kind));
+		this.seq += 1;
+		const credential: IntegrationCredential = {
+			id: existing?.id ?? `cred-${this.seq}`,
+			integrationId: input.integrationId,
+			kind: input.kind,
+			encryptedValue: input.encryptedValue,
+			expiresAt: input.expiresAt ?? null,
+			rotatedAt: existing ? TEST_EPOCH : null,
+			createdAt: existing?.createdAt ?? TEST_EPOCH,
+			updatedAt: TEST_EPOCH,
+		};
+		this.credentials.set(this.key(input.integrationId, input.kind), credential);
+		return credential;
+	}
+
+	async findByIntegrationAndKind(integrationId: string, kind: string): Promise<IntegrationCredential | undefined> {
+		return this.credentials.get(this.key(integrationId, kind));
+	}
+
+	async listByIntegration(integrationId: string): Promise<IntegrationCredential[]> {
+		return [...this.credentials.values()].filter((c) => c.integrationId === integrationId);
+	}
+
+	async listExpiringBefore(before: Date): Promise<IntegrationCredential[]> {
+		return [...this.credentials.values()].filter((c) => c.expiresAt !== null && c.expiresAt < before);
+	}
+
+	async delete(integrationId: string, kind: string): Promise<void> {
+		this.credentials.delete(this.key(integrationId, kind));
+	}
+
+	async deleteAllForIntegration(integrationId: string): Promise<void> {
+		for (const key of [...this.credentials.keys()]) if (key.startsWith(`${integrationId}:`)) this.credentials.delete(key);
 	}
 }
