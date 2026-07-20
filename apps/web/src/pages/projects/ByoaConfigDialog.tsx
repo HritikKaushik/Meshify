@@ -147,7 +147,7 @@ export function ByoaConfigDialog({
 											autoCapitalize="off"
 											autoCorrect="off"
 											placeholder={field.configured ? '•••••••• (leave blank to keep)' : field.placeholder}
-											className="w-full resize-y rounded-lg border border-mc-line bg-mc-surface px-3 py-2 font-mono text-[12px] text-mc-text"
+											className="w-full resize-y rounded-lg border border-mc-border bg-mc-surface px-3 py-2 font-mono text-[12px] text-mc-text"
 											onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
 										/>
 									) : (
@@ -158,7 +158,7 @@ export function ByoaConfigDialog({
 											autoCapitalize="off"
 											autoCorrect="off"
 											placeholder={field.secret && field.configured ? '•••••••• (leave blank to keep)' : field.placeholder}
-											className="w-full rounded-lg border border-mc-line bg-mc-surface px-3 py-2 text-[13px] text-mc-text"
+											className="w-full rounded-lg border border-mc-border bg-mc-surface px-3 py-2 text-[13px] text-mc-text"
 											onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
 										/>
 									)}

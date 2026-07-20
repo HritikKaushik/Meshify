@@ -25,7 +25,7 @@ export function JobCard({ view, now }: { view: JobView; now: number }) {
 	const accent = failed ? 'bg-mc-danger' : done ? 'bg-mc-success' : retry ? 'bg-mc-amber' : 'bg-mc-accent';
 
 	return (
-		<div className="rounded-xl border border-black/[.06] bg-white/95 p-3 shadow-[0_1px_3px_rgba(16,24,40,.05)]">
+		<div className="rounded-xl border border-mc-border bg-mc-surface p-3 shadow-e1">
 			<button onClick={() => setExpanded((v) => !v)} className="flex w-full items-start gap-2.5 text-left">
 				<span className={cn('mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-lg', failed ? 'bg-mc-danger/10 text-mc-danger' : done ? 'bg-mc-success/10 text-mc-success' : 'bg-mc-accent/10 text-mc-accent')}>
 					{done ? <Check className="h-3.5 w-3.5" /> : failed ? <TriangleAlert className="h-3.5 w-3.5" /> : retry ? <RotateCw className="h-3.5 w-3.5" /> : <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -65,7 +65,7 @@ export function JobCard({ view, now }: { view: JobView; now: number }) {
 			</div>
 
 			{expanded && (
-				<div className="mt-2 flex flex-col gap-1 rounded-lg border border-black/[.05] bg-mc-surface p-2 font-mono text-[10.5px] text-mc-text-3">
+				<div className="mt-2 flex flex-col gap-1 rounded-lg border border-mc-hairline bg-mc-raised p-2 font-mono text-[10.5px] text-mc-text-3">
 					<div className="flex justify-between gap-3">
 						<span className="text-mc-muted">Stage</span>
 						<span className="truncate">{view.stage ?? '—'}</span>

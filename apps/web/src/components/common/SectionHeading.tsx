@@ -21,7 +21,7 @@ export function SectionHeading({
 	return (
 		<div className={cn('flex items-center gap-3', className)}>
 			<span className="font-mono text-[10px] uppercase tracking-[.11em] text-mc-muted-2">{children}</span>
-			{divider && <div className="h-px flex-1 bg-black/[.07]" />}
+			{divider && <div className="h-px flex-1 bg-mc-border" />}
 			{action}
 		</div>
 	);

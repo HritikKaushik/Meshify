@@ -133,7 +133,7 @@ export function SlackPage() {
 				<button
 					onClick={startConnect}
 					disabled={starting}
-					className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
+					className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2 text-[12.5px] font-semibold text-white shadow-glow-accent transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
 				>
 					{starting ? 'Redirecting…' : 'Add to Slack'}
 				</button>
@@ -165,7 +165,7 @@ export function SlackPage() {
 									onClick={() => setSelectedConnectorId(c.id)}
 									className={cn(
 										'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors',
-										i > 0 && 'border-t border-black/[.05]',
+										i > 0 && 'border-t border-mc-hairline',
 										isSel ? 'bg-mc-accent/[.06]' : 'hover:bg-mc-surface'
 									)}
 								>
@@ -182,7 +182,7 @@ export function SlackPage() {
 											e.stopPropagation();
 											void doSync(c.id);
 										}}
-										className="flex items-center gap-1.5 rounded-lg border border-black/[.09] bg-white px-2.5 py-1.5 text-[11.5px] text-mc-text-3 shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-colors hover:text-mc-text"
+										className="flex items-center gap-1.5 rounded-lg border border-mc-border bg-mc-card px-2.5 py-1.5 text-[11.5px] text-mc-text-3 shadow-e1 transition-colors hover:text-mc-text"
 									>
 										<RefreshCw className="h-3 w-3" /> Sync
 									</button>
@@ -192,7 +192,7 @@ export function SlackPage() {
 											setPendingDelete(c);
 										}}
 										title="Disconnect workspace"
-										className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-black/[.09] bg-white text-mc-muted shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-colors hover:border-mc-danger/30 hover:text-mc-danger"
+										className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-mc-border bg-mc-card text-mc-muted shadow-e1 transition-colors hover:border-mc-danger/30 hover:text-mc-danger"
 									>
 										<Trash2 className="h-3.5 w-3.5" />
 									</button>
@@ -209,7 +209,7 @@ export function SlackPage() {
 								<button
 									onClick={saveSelection}
 									disabled={saving || channels.state.status === 'pending'}
-									className="rounded-full bg-mc-accent px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
+									className="rounded-full bg-mc-accent px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-glow-accent transition-colors hover:bg-mc-accent-hi disabled:opacity-50"
 								>
 									{saving ? 'Saving…' : 'Save & ingest'}
 								</button>
@@ -233,7 +233,7 @@ export function SlackPage() {
 
 				{/* Right rail — Mesh guidance + selected workspace details */}
 				<div className="flex flex-col gap-4">
-					<BeamCard className="bg-gradient-to-br from-[#F4F7FF] to-[#F6F5FF] p-4">
+					<BeamCard className="bg-gradient-to-br from-mc-accent/[.08] to-mc-purple/[.08] p-4">
 						<div className="flex flex-col gap-2.5">
 							<div className="flex items-center gap-2">
 								<MeshAvatar size={22} breathe />
@@ -266,7 +266,7 @@ export function SlackPage() {
 			</div>
 
 			<Dialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
-				<DialogContent className="border-black/[.08] bg-white">
+				<DialogContent className="border-mc-border bg-mc-card">
 					<DialogHeader>
 						<DialogTitle>Disconnect this Slack workspace?</DialogTitle>
 						<DialogDescription>

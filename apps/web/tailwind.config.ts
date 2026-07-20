@@ -7,7 +7,7 @@ export default {
 		extend: {
 			fontFamily: {
 				sans: ['Geist', 'system-ui', '-apple-system', 'sans-serif'],
-				mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+				mono: ['Geist Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',
@@ -43,37 +43,83 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))',
 				},
-				// Meshify light palette — used directly by bespoke components.
-				// Actions are Google Blue; "Mesh" (the AI) is indigo. Neutrals run
-				// ink → muted on a calm light canvas.
+				// shadcn Sidebar palette (theme-aware via CSS variables).
+				sidebar: {
+					DEFAULT: 'hsl(var(--sidebar))',
+					foreground: 'hsl(var(--sidebar-foreground))',
+					primary: 'hsl(var(--sidebar-primary))',
+					'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+					accent: 'hsl(var(--sidebar-accent))',
+					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+					border: 'hsl(var(--sidebar-border))',
+					ring: 'hsl(var(--sidebar-ring))',
+				},
+				// Meshify semantic palette — theme-aware via CSS variables. Dark-first;
+				// `.light` overrides in index.css. Actions/Mesh identity are indigo→iris;
+				// neutrals run ink → muted. `-lo` shades are on-tint text colors.
 				mc: {
-					bg: '#F7F8FB',
-					card: '#FFFFFF',
-					surface: '#F4F6FA',
-					raised: '#EEF1F7',
-					accent: '#1A73E8', // Google Blue — primary action / active
-					'accent-hi': '#4F8DFB', // lightened blue (hover / on-dark)
-					'accent-lo': '#1A56C8', // deep blue (pressed / on-tint text)
-					success: '#1E9E6A',
-					indexing: '#4F8DFB', // processing / indexing
-					danger: '#E5484D',
-					purple: '#6366F1', // Indigo — the knowledge node / Mesh identity
-					teal: '#1A73E8', // code-file accent (kept blue for cohesion)
-					amber: '#E8A33D', // warning
-					text: '#12141A',
-					'text-2': '#28303F',
-					'text-3': '#5A6072',
-					muted: '#8A90A0',
-					'muted-2': '#9AA0B0',
-					// Hairline border tokens (dark-on-light).
-					border: 'rgba(16,24,40,0.08)',
-					hairline: 'rgba(16,24,40,0.06)',
+					bg: 'hsl(var(--mc-bg) / <alpha-value>)',
+					card: 'hsl(var(--mc-card) / <alpha-value>)',
+					surface: 'hsl(var(--mc-surface) / <alpha-value>)',
+					raised: 'hsl(var(--mc-raised) / <alpha-value>)',
+					accent: 'hsl(var(--mc-accent) / <alpha-value>)',
+					'accent-hi': 'hsl(var(--mc-accent-hi) / <alpha-value>)',
+					'accent-lo': 'hsl(var(--mc-accent-lo) / <alpha-value>)',
+					success: 'hsl(var(--mc-success) / <alpha-value>)',
+					'success-lo': 'hsl(var(--mc-success-lo) / <alpha-value>)',
+					indexing: 'hsl(var(--mc-indexing) / <alpha-value>)',
+					danger: 'hsl(var(--mc-danger) / <alpha-value>)',
+					'danger-lo': 'hsl(var(--mc-danger-lo) / <alpha-value>)',
+					purple: 'hsl(var(--mc-purple) / <alpha-value>)',
+					'purple-lo': 'hsl(var(--mc-purple-lo) / <alpha-value>)',
+					teal: 'hsl(var(--mc-teal) / <alpha-value>)',
+					amber: 'hsl(var(--mc-amber) / <alpha-value>)',
+					'amber-lo': 'hsl(var(--mc-amber-lo) / <alpha-value>)',
+					text: 'hsl(var(--mc-text) / <alpha-value>)',
+					'text-2': 'hsl(var(--mc-text-2) / <alpha-value>)',
+					'text-3': 'hsl(var(--mc-text-3) / <alpha-value>)',
+					muted: 'hsl(var(--mc-muted) / <alpha-value>)',
+					'muted-2': 'hsl(var(--mc-muted-2) / <alpha-value>)',
+					// Hairline borders carry their own alpha.
+					border: 'var(--mc-border)',
+					hairline: 'var(--mc-hairline)',
 				},
 			},
 			borderRadius: {
-				lg: 'var(--radius)',
-				md: 'calc(var(--radius) - 2px)',
 				sm: 'calc(var(--radius) - 4px)',
+				md: 'calc(var(--radius) - 2px)',
+				lg: 'var(--radius)',
+				xl: 'calc(var(--radius) + 4px)',
+				'2xl': 'calc(var(--radius) + 10px)',
+				'3xl': 'calc(var(--radius) + 18px)',
+			},
+			// Elevation — theme-aware via CSS variables (see index.css).
+			boxShadow: {
+				e1: 'var(--e1)',
+				e2: 'var(--e2)',
+				e3: 'var(--e3)',
+				e4: 'var(--e4)',
+				'glow-accent': 'var(--glow-accent)',
+				'glow-accent-lg': 'var(--glow-accent-lg)',
+				'glow-purple': 'var(--glow-purple)',
+				'glow-purple-lg': 'var(--glow-purple-lg)',
+			},
+			// Type scale — a calm, tight-tracked SaaS ramp (Linear/Vercel feel).
+			fontSize: {
+				micro: ['10px', { lineHeight: '14px', letterSpacing: '.02em' }],
+				label: ['11px', { lineHeight: '15px', letterSpacing: '.08em' }],
+				caption: ['12px', { lineHeight: '17px' }],
+				sm2: ['13px', { lineHeight: '19px' }],
+				body: ['14px', { lineHeight: '22px' }],
+				lead: ['15px', { lineHeight: '24px' }],
+				h3: ['18px', { lineHeight: '26px', letterSpacing: '-.01em' }],
+				h2: ['22px', { lineHeight: '29px', letterSpacing: '-.02em' }],
+				h1: ['30px', { lineHeight: '36px', letterSpacing: '-.028em' }],
+				display: ['46px', { lineHeight: '1.04', letterSpacing: '-.035em' }],
+				'display-lg': ['74px', { lineHeight: '1.0', letterSpacing: '-.04em' }],
+			},
+			transitionTimingFunction: {
+				'out-expo': 'cubic-bezier(.22,1,.36,1)',
 			},
 			keyframes: {
 				meshpulse: { '0%,100%': { opacity: '1' }, '50%': { opacity: '.35' } },
@@ -81,14 +127,13 @@ export default {
 				beam: { '0%': { transform: 'translateX(-120%)' }, '100%': { transform: 'translateX(320%)' } },
 				twinkle: { '0%,100%': { opacity: '.2' }, '50%': { opacity: '.9' } },
 				float: { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-6px)' } },
-				// Landing / HeroGeometric motion (design 3a). Kept subtle per the design brief.
 				rise: { '0%': { opacity: '0', transform: 'translateY(46px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
 				textin: { '0%': { opacity: '0', filter: 'blur(14px)', transform: 'translateY(16px)' }, '100%': { opacity: '1', filter: 'blur(0)', transform: 'translateY(0)' } },
 				drift: { '0%,100%': { transform: 'translate(0,0)' }, '50%': { transform: 'translate(10px,-22px)' } },
 				lamp: { '0%,100%': { opacity: '.45' }, '50%': { opacity: '.8' } },
 				dash: { to: { strokeDashoffset: '-240' } },
-				// Subtle route/content transition — a small fade+lift, nothing flashy.
 				fade: { '0%': { opacity: '0', transform: 'translateY(4px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+				shimmer: { '100%': { transform: 'translateX(100%)' } },
 			},
 			animation: {
 				meshpulse: 'meshpulse 1.6s infinite',
@@ -102,6 +147,7 @@ export default {
 				lamp: 'lamp 6s ease-in-out infinite',
 				dash: 'dash 9s linear infinite',
 				fade: 'fade .22s ease-out both',
+				shimmer: 'shimmer 1.6s infinite',
 			},
 		},
 	},

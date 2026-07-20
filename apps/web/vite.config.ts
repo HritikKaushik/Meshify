@@ -19,6 +19,12 @@ export default defineConfig({
 			'@': fileURLToPath(new URL('./src', import.meta.url)),
 		},
 	},
+	// pdf.js must NOT be esbuild-pre-bundled by Vite's dep optimizer — doing so
+	// breaks its worker / import.meta.url handling at runtime (thumbnails silently
+	// fail in dev while the production Rollup build works). Serve it as raw ESM.
+	optimizeDeps: {
+		exclude: ['pdfjs-dist'],
+	},
 	server: {
 		port: 5174,
 		proxy: {

@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { App } from './App';
 import { Toaster } from '@/components/ui/sonner';
+import { ThemeProvider } from '@/components/theme/ThemeProvider';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import './index.css';
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -13,11 +15,15 @@ const root = document.getElementById('root');
 if (!root) throw new Error('#root not found');
 createRoot(root).render(
 	<StrictMode>
-		<ClerkProvider publishableKey={clerkPublishableKey} afterSignOutUrl="/">
-			<BrowserRouter>
-				<App />
-				<Toaster />
-			</BrowserRouter>
-		</ClerkProvider>
+		<ThemeProvider>
+			<ClerkProvider publishableKey={clerkPublishableKey} afterSignOutUrl="/">
+				<BrowserRouter>
+					<TooltipProvider>
+						<App />
+						<Toaster />
+					</TooltipProvider>
+				</BrowserRouter>
+			</ClerkProvider>
+		</ThemeProvider>
 	</StrictMode>
 );

@@ -6,7 +6,7 @@ export function SuggestionChip({ children, onClick }: { children: string; onClic
 	return (
 		<button
 			onClick={onClick}
-			className="rounded-full border border-black/[.08] bg-white px-3 py-1.5 text-xs text-mc-text-3 shadow-[0_1px_3px_rgba(16,24,40,.04)] transition-colors hover:border-mc-accent/40 hover:text-mc-accent-lo"
+			className="rounded-full border border-mc-border bg-mc-card px-3 py-1.5 text-xs text-mc-text-3 shadow-e1 transition-colors hover:border-mc-accent/40 hover:text-mc-accent-lo"
 		>
 			{children}
 		</button>

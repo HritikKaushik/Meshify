@@ -1,7 +1,7 @@
 import type { Project } from '@meshify/data-access';
 import type { QdrantSearchClient } from '@meshify/vector-store';
-import type { EmbeddingProviderFactory } from '../../search/application/search.usecase.js';
-import { mergeAndRank } from '../../search/domain/search-result.js';
+import type { EmbeddingProviderFactory } from '../../retrieval/application/embedding-provider.port.js';
+import { mergeAndRank } from '../../retrieval/domain/retrieval-result.js';
 import type { ChatContextRetriever } from '../application/chat-context-retriever.port.js';
 import type { RetrievedChunk } from '../domain/build-rag-prompt.js';
 
