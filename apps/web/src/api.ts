@@ -226,6 +226,85 @@ export interface HealthReport {
 	dependencies?: Array<{ name: string; status: string; latencyMs: number }>;
 }
 
+// --- Provider platform (org-scoped integrations) ---
+
+export interface ProviderCapabilitiesDto {
+	oauth: boolean;
+	webhooks: boolean;
+	fullSync: boolean;
+	incrementalSync: boolean;
+	realtimeEvents: boolean;
+	manualSync: boolean;
+	scheduledSync: boolean;
+	resourcePicker: boolean;
+	healthCheck: boolean;
+	byoa: boolean;
+	permissions: boolean;
+	tools: boolean;
+}
+
+/** One marketplace catalog entry — a provider manifest + whether this deployment can operate it. */
+export interface ProviderCatalogEntry {
+	id: string;
+	providerVersion: string;
+	displayName: string;
+	category: 'code' | 'chat' | 'docs' | 'tickets' | 'storage' | 'crm';
+	availability: 'available' | 'coming_soon';
+	capabilities: ProviderCapabilitiesDto;
+	auth: { type: string; scopes?: string[] };
+	iconKey: string;
+	brandColor?: string;
+	summary: string;
+	configured: boolean;
+}
+
+export type IntegrationHealth =
+	| 'unknown'
+	| 'healthy'
+	| 'syncing'
+	| 'token_expired'
+	| 'permission_changed'
+	| 'webhook_broken'
+	| 'needs_reauthorization'
+	| 'partially_connected'
+	| 'disconnected';
+
+/** An org-level provider connection (a GitHub installation, a Slack workspace install). */
+export interface Integration {
+	id: string;
+	provider: string;
+	mode: 'managed' | 'byoa';
+	externalAccountId: string;
+	externalAccountName: string;
+	status: 'pending' | 'active' | 'error' | 'revoked' | 'disconnected';
+	health: IntegrationHealth;
+	healthCheckedAt: string | null;
+	accountType: string | null;
+	avatarUrl: string | null;
+	lastError: string | null;
+	createdAt: string;
+	updatedAt: string;
+	connectorCount: number;
+	connectedProjectIds: string[];
+}
+
+/** A selectable resource of a connected grant, with its already-attached flag. */
+export interface IntegrationResource {
+	id: string;
+	name: string;
+	kind: string;
+	private: boolean;
+	connected: boolean;
+	extra?: Record<string, unknown>;
+}
+
+export interface CompleteConnectResponse {
+	integration: Integration;
+	returnPath: string | null;
+	projectId: string | null;
+	intent: 'connect' | 'reconnect';
+}
+
 export class MeshifyApi {
 	constructor(private cfg: ApiConfig) {}
 
@@ -465,6 +544,94 @@ export class MeshifyApi {
 	/** Queue an incremental Slack sync (only changed conversations are reprocessed). */
 	async syncSlack(projectId: string, connectorId: string): Promise<{ jobId: string }> {
 		return this.parse(await fetch(this.url(`/api/v1/projects/${projectId}/connectors/slack/${connectorId}/sync`), { method: 'POST', credentials: 'include' }));
+	}
+
+	// --- Provider platform (org-scoped integrations) ---
+
+	/** The marketplace catalog: every provider's manifest, available + coming soon. */
+	async listProviders(): Promise<ProviderCatalogEntry[]> {
+		return this.parse(await fetch(this.url('/api/v1/providers'), { credentials: 'include' }));
+	}
+
+	/** The org's provider connections with attachment summaries. */
+	async listIntegrations(): Promise<Integration[]> {
+		return this.parse(await fetch(this.url('/api/v1/integrations'), { credentials: 'include' }));
+	}
+
+	/** Begin an org-level connect — returns the provider consent/install URL to navigate to. */
+	async connectProvider(provider: string, opts: { projectId?: string; returnPath?: string } = {}): Promise<{ url: string }> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/integrations/${provider}/connect`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(opts),
+			})
+		);
+	}
+
+	/** Finish a connect from the generic /oauth/:provider/callback route — raw redirect params pass through verbatim. */
+	async completeProviderConnect(provider: string, state: string, params: Record<string, string>): Promise<CompleteConnectResponse> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/integrations/${provider}/callback`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ state, params }),
+			})
+		);
+	}
+
+	/** Re-run the consent flow for an existing integration (expired grants, scope changes). */
+	async reconnectIntegration(integrationId: string, returnPath?: string): Promise<{ url: string }> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/integrations/${integrationId}/reconnect`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ returnPath }),
+			})
+		);
+	}
+
+	/** Org-level disconnect: revokes best-effort, purges credentials, flags dependent project connectors. */
+	async disconnectIntegration(integrationId: string): Promise<void> {
+		const res = await fetch(this.url(`/api/v1/integrations/${integrationId}`), { method: 'DELETE', credentials: 'include' });
+		if (!res.ok && res.status !== 204) await this.parse(res);
+	}
+
+	/** Live resource listing for the picker (repos of an installation, channels of a workspace). */
+	async listIntegrationResources(integrationId: string): Promise<{ resources: IntegrationResource[]; nextCursor?: string }> {
+		return this.parse(await fetch(this.url(`/api/v1/integrations/${integrationId}/resources`), { credentials: 'include' }));
+	}
+
+	/** Bind an org Slack integration to a project — no second OAuth. */
+	async attachSlackWorkspace(projectId: string, integrationId: string): Promise<{ connectorId: string; workspaceId: string; teamName: string | null; channelCount: number; alreadyAttached: boolean }> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/projects/${projectId}/connectors/slack`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ integrationId }),
+			})
+		);
+	}
+
+	/** Picker-based repository connect via the org's installation. */
+	async connectRepoFromIntegration(projectId: string, integrationId: string, githubRepoId: string): Promise<{ repository: Repository; jobId: string }> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/projects/${projectId}/repositories`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ integrationId, githubRepoId }),
+			})
+		);
+	}
+
+	/** Org-scoped SSE stream of integration events (connects, revocations, health changes). */
+	integrationsStreamUrl(): string {
+		return this.url('/api/v1/integrations/stream');
 	}
 }
 

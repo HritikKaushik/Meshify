@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { Bell, Menu, LayoutDashboard, SearchCode, FlaskConical, Settings, MoreHorizontal, MessagesSquare } from 'lucide-react';
+import { Bell, Menu, LayoutDashboard, SearchCode, FlaskConical, Settings, MoreHorizontal, MessagesSquare, Blocks } from 'lucide-react';
 import { useOrganization, UserButton } from '@clerk/clerk-react';
 import { api } from '@/api-client';
 import type { Conversation, Project } from '@/api';
@@ -20,6 +20,7 @@ const PRIMARY_TABS = [
 	{ to: 'repository', label: 'Repository' },
 	{ to: 'slack', label: 'Slack', icon: MessagesSquare },
 	{ to: 'documents', label: 'Documents' },
+	{ to: 'integrations', label: 'Integrations', icon: Blocks },
 ] as const;
 
 // Everything else stays one click away in a "More" menu off the tab bar.
