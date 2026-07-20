@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Blocks, Lock, RefreshCw, Unplug, FolderGit2, MessagesSquare, FileText, Ticket, HardDrive, Users, type LucideIcon } from 'lucide-react';
+import { Lock, RefreshCw, Unplug, FolderGit2, MessagesSquare } from 'lucide-react';
 import { api } from '@/api-client';
 import type { Integration, IntegrationHealth, IntegrationResource, ProviderCatalogEntry } from '@/api';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -12,10 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { ByoaConfigDialog } from './ByoaConfigDialog';
 import { Building2 } from 'lucide-react';
-
-// lucide dropped brand marks — map providers onto the workspace's existing
-// category iconography (repo/chat/docs/…) with a generic fallback.
-const PROVIDER_ICONS: Record<string, LucideIcon> = { github: FolderGit2, gitlab: FolderGit2, bitbucket: FolderGit2, azuredevops: FolderGit2, slack: MessagesSquare, teams: MessagesSquare, discord: MessagesSquare, confluence: FileText, notion: FileText, sharepoint: FileText, jira: Ticket, linear: Ticket, zendesk: Ticket, googledrive: HardDrive, onedrive: HardDrive, salesforce: Users, hubspot: Users };
+import { ProviderBrandIcon } from '@/components/ProviderBrandIcon';
 
 const HEALTH_PRESENTATION: Record<IntegrationHealth, { label: string; color: DotColor }> = {
 	unknown: { label: 'Health unknown', color: 'muted' },
@@ -149,7 +146,6 @@ export function IntegrationsPage() {
 			<div className="grid gap-4 sm:grid-cols-2">
 				{providers.map((provider) => {
 					const integration = integrationsByProvider.get(provider.id);
-					const Icon = PROVIDER_ICONS[provider.iconKey] ?? Blocks;
 					const connected = integration && integration.status === 'active';
 					return (
 						<GlassCard key={provider.id} className="flex flex-col gap-3 p-5">
@@ -159,7 +155,7 @@ export function IntegrationsPage() {
 										className="flex h-9 w-9 items-center justify-center rounded-xl text-white"
 										style={{ backgroundColor: provider.brandColor ?? '#5f6368' }}
 									>
-										<Icon className="h-4.5 w-4.5" size={18} />
+										<ProviderBrandIcon iconKey={provider.iconKey} size={18} />
 									</span>
 									<div>
 										<div className="flex items-center gap-2 text-[14px] font-semibold text-mc-text">
