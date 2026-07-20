@@ -72,6 +72,22 @@ export function qdrantStoreNode(id: string, from: string, qdrant: QdrantTargetCo
 }
 
 export function llmNode(id: string, from: string, llm: LlmProviderConfig): RocketRideComponent {
+	// Resolved BYOA path: emit a `custom` profile with LITERAL values (no `${ENV}`
+	// substitution) so a per-org vault key is injected directly. The component id
+	// carries the vendor; the graph shape (questions → answers) is identical to
+	// the managed path, so existing pipelines keep working after a provider switch.
+	if (llm.mode === 'resolved') {
+		const custom: Record<string, unknown> = { model: llm.model, modelTotalTokens: llm.modelTotalTokens, ...(llm.extra ?? {}) };
+		if (llm.apiKey !== undefined) custom.apikey = llm.apiKey;
+		if (llm.baseUrl !== undefined) {
+			// llm_ollama names the endpoint `serverbase`; OpenAI-compatible uses `base_url`.
+			if (llm.component === 'llm_ollama') custom.serverbase = llm.baseUrl;
+			else custom.base_url = llm.baseUrl;
+		}
+		return { id, provider: llm.component, config: { profile: 'custom', custom, parameters: {} }, input: [{ lane: 'questions', from }] };
+	}
+
+	// Legacy managed path — unchanged output: named profile + `${ROCKETRIDE_*}`.
 	const provider = llm.provider === 'openai' ? 'llm_openai' : 'llm_gemini';
 	return {
 		id,

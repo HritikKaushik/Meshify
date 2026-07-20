@@ -98,3 +98,38 @@ describe('buildChatPipeline', () => {
 		expect(pipeline.source).toBe('chat_1');
 	});
 });
+
+describe('buildChatPipeline — resolved BYOA provider', () => {
+	it('emits a custom-profile llm_anthropic node with a LITERAL key/model, same graph shape', () => {
+		const pipeline = buildChatPipeline({
+			pipelineGuid: GUID,
+			llm: { mode: 'resolved', component: 'llm_anthropic', model: 'claude-sonnet-4', modelTotalTokens: 200_000, apiKey: 'sk-ant-live' },
+		});
+		// Graph shape is identical to the managed path — existing workflows are unaffected by a provider switch.
+		expect(pipeline.components.map((c) => c.id)).toEqual(['chat_1', 'llm_1', 'response_answers_1']);
+		const llm = componentById(pipeline, 'llm_1');
+		expect(llm.provider).toBe('llm_anthropic');
+		expect(llm.config).toMatchObject({ profile: 'custom', custom: { model: 'claude-sonnet-4', modelTotalTokens: 200_000, apikey: 'sk-ant-live' } });
+		// No `${ENV}` substitution on the resolved path.
+		expect(JSON.stringify(llm.config)).not.toContain('${');
+	});
+
+	it('maps a base_url onto llm_openai_api (OpenRouter/Azure)', () => {
+		const pipeline = buildChatPipeline({
+			pipelineGuid: GUID,
+			llm: { mode: 'resolved', component: 'llm_openai_api', model: 'openai/gpt-4.1', modelTotalTokens: 128_000, apiKey: 'sk-or', baseUrl: 'https://openrouter.ai/api/v1' },
+		});
+		expect(componentById(pipeline, 'llm_1').config).toMatchObject({ profile: 'custom', custom: { base_url: 'https://openrouter.ai/api/v1' } });
+	});
+
+	it('maps a keyless base_url onto llm_ollama serverbase with extras', () => {
+		const pipeline = buildChatPipeline({
+			pipelineGuid: GUID,
+			llm: { mode: 'resolved', component: 'llm_ollama', model: 'llama3.1', modelTotalTokens: 8_192, baseUrl: 'http://host:11434/v1', extra: { temperature: 0.7, reasoning_effort: 'medium' } },
+		});
+		const custom = (componentById(pipeline, 'llm_1').config as { custom: Record<string, unknown> }).custom;
+		expect(custom).toMatchObject({ serverbase: 'http://host:11434/v1', temperature: 0.7, reasoning_effort: 'medium' });
+		expect(custom).not.toHaveProperty('apikey');
+		expect(custom).not.toHaveProperty('base_url');
+	});
+});

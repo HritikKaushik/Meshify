@@ -263,6 +263,80 @@ export interface ByoaFieldView {
 	configured: boolean;
 }
 
+// --- AI Providers (LLM configuration) — a subsystem parallel to integrations ---
+
+export type LlmProviderStatus = 'connected' | 'error' | 'disconnected' | 'not_connected';
+
+/** One AI Models catalog entry: a provider manifest + this org's config/active state. */
+export interface LlmProviderCatalogEntry {
+	id: string;
+	displayName: string;
+	summary: string;
+	iconKey: string;
+	brandColor?: string;
+	docsUrl?: string;
+	auth: 'api_key' | 'none';
+	modelSource: 'static' | 'dynamic';
+	allowCustomModel: boolean;
+	status: LlmProviderStatus;
+	defaultModel: string | null;
+	configured: boolean;
+	active: boolean;
+	lastError: string | null;
+}
+
+/** One credential/config field for the connect form; secrets are write-only. */
+export interface LlmCredentialFieldView {
+	key: string;
+	label: string;
+	secret: boolean;
+	placeholder?: string;
+	multiline: boolean;
+	optional: boolean;
+	hint?: string;
+	/** Whether a value is already stored (secrets are never echoed back). */
+	configured: boolean;
+}
+
+export interface LlmModel {
+	id: string;
+	label: string;
+	contextTokens: number;
+	recommended: boolean;
+}
+
+/** Full provider detail for the manage dialog. */
+export interface LlmProviderDetail {
+	id: string;
+	displayName: string;
+	summary: string;
+	iconKey: string;
+	brandColor?: string;
+	docsUrl?: string;
+	auth: 'api_key' | 'none';
+	modelSource: 'static' | 'dynamic';
+	allowCustomModel: boolean;
+	fields: LlmCredentialFieldView[];
+	models: LlmModel[];
+	status: LlmProviderStatus;
+	defaultModel: string | null;
+	active: boolean;
+	configured: boolean;
+	lastError: string | null;
+	config?: Record<string, unknown>;
+	updatedAt?: string;
+}
+
+/** Result of a live connection test. */
+export interface LlmTestResult {
+	ok: boolean;
+	models?: LlmModel[];
+	latencyMs?: number;
+	region?: string;
+	error?: string;
+	errorCode?: string;
+}
+
 export class MeshifyApi {
 	constructor(private cfg: ApiConfig) {}
 
@@ -601,6 +675,62 @@ export class MeshifyApi {
 	/** Org-scoped SSE stream of integration events (connects, revocations, health changes). */
 	integrationsStreamUrl(): string {
 		return this.url('/api/v1/integrations/stream');
+	}
+
+	// --- AI Providers (LLM configuration) ---
+
+	/** The AI Models catalog: every provider + this org's config/active state. */
+	async listLlmProviders(): Promise<LlmProviderCatalogEntry[]> {
+		return this.parse(await fetch(this.url('/api/v1/providers/llm'), { credentials: 'include' }));
+	}
+
+	/** Full detail for one provider (masked credential fields, models, config). */
+	async getLlmProvider(provider: string): Promise<LlmProviderDetail> {
+		return this.parse(await fetch(this.url(`/api/v1/providers/llm/${provider}`), { credentials: 'include' }));
+	}
+
+	/** Available models (static catalog, or a live fetch for dynamic providers). */
+	async listLlmModels(provider: string): Promise<{ models: LlmModel[] }> {
+		return this.parse(await fetch(this.url(`/api/v1/providers/llm/${provider}/models`), { credentials: 'include' }));
+	}
+
+	/** Save credentials + config for a provider. Blank secret fields keep the stored value (rotation). */
+	async connectLlmProvider(
+		provider: string,
+		values: Record<string, string>,
+		defaultModel?: string
+	): Promise<{ provider: string; status: LlmProviderStatus; defaultModel: string | null }> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/providers/llm/${provider}/connect`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ values, defaultModel }),
+			})
+		);
+	}
+
+	/** Live connection test — returns models, latency, region, or an actionable error. Never throws on a failed test. */
+	async testLlmProvider(provider: string, opts: { values?: Record<string, string>; model?: string } = {}): Promise<LlmTestResult> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/providers/llm/${provider}/test`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(opts),
+			})
+		);
+	}
+
+	/** Make this provider the org's single active provider. */
+	async activateLlmProvider(provider: string): Promise<{ activeProvider: string; defaultModel: string }> {
+		return this.parse(await fetch(this.url(`/api/v1/providers/llm/${provider}/activate`), { method: 'POST', credentials: 'include' }));
+	}
+
+	/** Disconnect a provider — purges its credentials + config (and clears "active" if it was active). */
+	async disconnectLlmProvider(provider: string): Promise<void> {
+		const res = await fetch(this.url(`/api/v1/providers/llm/${provider}`), { method: 'DELETE', credentials: 'include' });
+		if (!res.ok && res.status !== 204) await this.parse(res);
 	}
 }
 

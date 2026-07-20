@@ -36,6 +36,15 @@ export type { IntegrationResource } from './integrations/integration-resource.en
 export type { IntegrationResourceRepository, UpsertIntegrationResourceInput } from './integrations/integration-resource.repository.js';
 export { PostgresIntegrationResourceRepository } from './integrations/postgres-integration-resource.repository.js';
 
+// AI Providers subsystem (parallel to, and independent of, the Integrations platform).
+export type { LLMProviderConfiguration, LlmProviderStatus } from './llm-providers/llm-provider-configuration.entity.js';
+export type { LlmProviderConfigurationRepository, UpsertLlmProviderConfigurationInput } from './llm-providers/llm-provider-configuration.repository.js';
+export { PostgresLlmProviderConfigurationRepository } from './llm-providers/postgres-llm-provider-configuration.repository.js';
+export type { ActiveLLMProvider } from './llm-providers/active-llm-provider.entity.js';
+export type { ActiveLlmProviderRepository } from './llm-providers/active-llm-provider.repository.js';
+export { PostgresActiveLlmProviderRepository } from './llm-providers/postgres-active-llm-provider.repository.js';
+export { PostgresLlmProviderCredentialRepository } from './llm-providers/postgres-llm-provider-credential.repository.js';
+
 export type { SlackWorkspace } from './slack/slack-workspace.entity.js';
 export type { SlackWorkspaceRepository, CreateSlackWorkspaceInput } from './slack/slack-workspace.repository.js';
 export { PostgresSlackWorkspaceRepository } from './slack/postgres-slack-workspace.repository.js';

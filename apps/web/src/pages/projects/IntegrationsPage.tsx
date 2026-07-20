@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { ByoaConfigDialog } from './ByoaConfigDialog';
+import { AiModelsSection } from './AiModelsSection';
 import { ProviderBrandIcon } from '@/components/ProviderBrandIcon';
 import { cn } from '@/lib/utils';
 
@@ -273,6 +274,8 @@ export function IntegrationsPage() {
 			{catalog.state.status === 'error' && <p className="text-sm text-mc-danger">{catalog.state.error.message}</p>}
 
 			<div className="space-y-6">
+				<AiModelsSection />
+
 				<CollapsibleSection title="Connected" count={connectedProviders.length} defaultOpen>
 					{connectedProviders.length ? (
 						<div className="grid gap-4 sm:grid-cols-2">{connectedProviders.map(renderCard)}</div>

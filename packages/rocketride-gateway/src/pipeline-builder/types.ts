@@ -2,13 +2,44 @@ export type LlmProvider = 'openai' | 'gemini';
 export type EmbeddingProvider = 'openai' | 'transformer';
 export type IngestTarget = 'documents' | 'code';
 
-export interface LlmProviderConfig {
+/** RocketRide LLM component ids the gateway can target. All share `questions → answers` lane wiring. */
+export type LlmComponent = 'llm_openai' | 'llm_anthropic' | 'llm_gemini' | 'llm_openai_api' | 'llm_ollama';
+
+/**
+ * The legacy "managed" LLM config: a named profile whose api key RocketRide
+ * substitutes from ITS OWN environment (`${ROCKETRIDE_*}`). This is the fallback
+ * used when no org-level active provider is configured, so existing OpenAI /
+ * Gemini workflows keep working byte-for-byte.
+ */
+export interface ManagedLlmConfig {
+	mode?: 'managed';
 	provider: LlmProvider;
 	/** Exact `profile` value from the RocketRide component catalog, e.g. "openai-5", "gemini-2_0-flash". */
 	profile: string;
 	/** `${ROCKETRIDE_*}` variable name holding the provider API key. */
 	apiKeyEnvVar: string;
 }
+
+/**
+ * A resolved BYOA config produced by the AI Provider subsystem's resolution
+ * layer: a chosen component + model and (for keyed providers) a LITERAL api key
+ * pulled from the vault. Emitted as a `custom`-profile component so RocketRide
+ * runs the org's chosen vendor without ever knowing which one it is.
+ */
+export interface ResolvedLlmConfig {
+	mode: 'resolved';
+	component: LlmComponent;
+	model: string;
+	modelTotalTokens: number;
+	/** Literal API key. Omitted for keyless providers (e.g. Ollama). */
+	apiKey?: string;
+	/** `base_url` (llm_openai_api) or `serverbase` (llm_ollama). */
+	baseUrl?: string;
+	/** Extra `custom`-profile fields, e.g. Gemini `outputTokens`, Ollama `temperature`/`reasoning_effort`. */
+	extra?: Record<string, unknown>;
+}
+
+export type LlmProviderConfig = ManagedLlmConfig | ResolvedLlmConfig;
 
 export interface EmbeddingProviderConfig {
 	provider: EmbeddingProvider;
