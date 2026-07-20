@@ -1,6 +1,6 @@
 import type { Integration, IntegrationRepository, IntegrationResourceRepository } from '@meshify/data-access';
 import type { CredentialVault, OAuthStateService, PlatformEventBus, ProviderRegistrationService, ProviderRegistry } from '@meshify/providers';
-import { ProviderNotConfiguredError, supportsOAuth, supportsResourceBrowsing } from '@meshify/providers';
+import { ProviderNotConfiguredError, supportsHealthCheck, supportsOAuth, supportsResourceBrowsing } from '@meshify/providers';
 import { InvalidOAuthStateError, UnsupportedProviderOperationError } from './integration-support.js';
 
 export interface CompleteConnectCommand {
@@ -95,6 +95,18 @@ export class CompleteConnectUseCase {
 				);
 			} catch {
 				/* inventory refresh is retried by listing and the maintenance sweep */
+			}
+		}
+
+		// Probe health now so a healthy connection reads "Healthy" immediately
+		// instead of "unknown" until the first hourly maintenance sweep.
+		// Best-effort: a probe hiccup must not fail the connect.
+		if (supportsHealthCheck(provider)) {
+			try {
+				const report = await provider.checkHealth({ integration, vault: this.vault.forIntegration(integration.id), registration });
+				await this.integrations.updateHealth(integration.id, report.health, report.detail);
+			} catch {
+				/* health is re-evaluated by the maintenance sweep */
 			}
 		}
 
