@@ -48,10 +48,15 @@ root). Keep secrets in the root `.env` (git-ignored); commit only `.env.example`
 | `ORG_KEY_ENCRYPTION_KEY` | bff, api, worker | Encrypts org API keys at rest; also signs Slack OAuth `state` + encrypts Slack tokens |
 | `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_SEC` | api | Per-key rate limiting |
 
-### GitHub App (repo ingestion)
+### GitHub App (managed provider registration)
+These form the deployment's **managed** GitHub registration. The managed provider is only offered when the full set (App ID, slug, private key, **and** OAuth client ID + secret) is present — without the client credentials, installation ownership can't be verified during connect, so the provider fails closed rather than expose an unverifiable flow. Orgs can instead register their own GitHub App (BYOA) with the same field set through the platform UI.
+
 | Variable | Used by | Notes |
 | --- | --- | --- |
-| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET` | worker | Cloning + webhook verification |
+| `GITHUB_APP_ID`, `GITHUB_APP_SLUG` | api, worker | App identity; slug drives the install URL |
+| `GITHUB_APP_PRIVATE_KEY` | api, worker | Installation-token signing (JWT) |
+| `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` | api | User-authorization OAuth; used to verify the connecting user actually owns the installation (anti cross-tenant claim) |
+| `GITHUB_APP_WEBHOOK_SECRET` | api, worker | HMAC verification of inbound webhook deliveries |
 
 ### Slack connector (conversation ingestion)
 | Variable | Used by | Notes |
