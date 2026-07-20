@@ -84,14 +84,14 @@ export function DashboardPage() {
 				<div className="flex-1" />
 				<button
 					onClick={openCreate}
-					className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_6px_16px_rgba(26,115,232,.28)] transition-colors hover:bg-mc-accent-hi"
+					className="flex items-center gap-2 rounded-full bg-mc-accent px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-glow-accent transition-colors hover:bg-mc-accent-hi"
 				>
 					<Plus className="h-3.5 w-3.5" /> New project
 				</button>
 			</div>
 
 			{/* Inline org stats */}
-			<div className="flex flex-wrap items-center gap-y-4 border-b border-black/[.07] pb-6">
+			<div className="flex flex-wrap items-center gap-y-4 border-b border-mc-border pb-6">
 				<InlineStat value={projects.length} label="Projects" first />
 				<Divider />
 				<InlineStat value={org.repositories} label="Repositories" />
@@ -111,7 +111,7 @@ export function DashboardPage() {
 			{/* All projects */}
 			<Section title={pinned.length > 0 ? 'All projects' : 'Projects'}>
 				{!loading && projects.length === 0 ? (
-					<div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-black/[.14] bg-white py-16 text-center">
+					<div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-mc-border bg-mc-card py-16 text-center">
 						<p className="text-sm text-mc-text-3">No projects yet.</p>
 						<button onClick={openCreate} className="flex items-center gap-1.5 text-sm font-medium text-mc-accent hover:text-mc-accent-lo">
 							<Plus className="h-3.5 w-3.5" /> Create your first project
@@ -136,7 +136,7 @@ function InlineStat({ value, label, accent, first }: { value: React.ReactNode; l
 }
 
 function Divider() {
-	return <div className="h-[38px] w-px bg-black/[.08]" />;
+	return <div className="h-[38px] w-px bg-mc-border" />;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

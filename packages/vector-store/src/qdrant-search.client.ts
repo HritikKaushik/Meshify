@@ -19,7 +19,7 @@ export interface SearchFilters {
 	sourcePathExact?: string;
 }
 
-// RocketRide stores each chunk's source path at payload.meta.parent (see search-result.ts and the
+// RocketRide stores each chunk's source path at payload.meta.parent (see retrieval-result.ts and the
 // collection provisioner) — NOT a top-level source_path — so every filter/delete keys on `meta.parent`.
 const SOURCE_PATH_KEY = 'meta.parent';
 

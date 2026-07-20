@@ -79,24 +79,24 @@ export function OrgShell() {
 		<div className="relative flex min-h-screen flex-col bg-mc-bg text-mc-text">
 			<Atmosphere />
 			{/* Top bar */}
-			<header className="relative z-10 flex flex-none items-center gap-3 border-b border-black/[.06] bg-white/85 px-4 py-2.5 backdrop-blur-[14px] sm:gap-4 sm:px-6">
+			<header className="relative z-10 flex flex-none items-center gap-3 border-b border-mc-hairline bg-mc-card/70 px-4 py-2.5 backdrop-blur-xl sm:gap-4 sm:px-6">
 				<Link to="/home" className="flex items-center gap-2.5">
 					<MeshLogo size={27} />
-					<span className="hidden text-[15px] font-semibold tracking-[-.01em] sm:inline">Meshify</span>
+					<span className="hidden text-[15px] font-semibold tracking-[-.01em] text-mc-text sm:inline">Meshify</span>
 				</Link>
-				<div className="h-5 w-px bg-black/10" />
+				<div className="h-5 w-px bg-mc-border" />
 				<button
 					onClick={() => setPaletteOpen(true)}
-					className="flex flex-1 items-center gap-2.5 rounded-xl border border-black/[.08] bg-white px-3 py-2 text-mc-muted-2 shadow-[0_1px_3px_rgba(16,24,40,.04)] transition-colors hover:border-black/15 sm:max-w-md"
+					className="flex flex-1 items-center gap-2.5 rounded-xl border border-mc-border bg-mc-card px-3 py-2 text-mc-muted shadow-e1 transition-colors hover:border-mc-text/15 sm:max-w-md"
 				>
 					<Search className="h-3.5 w-3.5" />
 					<span className="flex-1 truncate text-left text-[12.5px]">Search projects, repos, conversations…</span>
-					<kbd className="hidden rounded border border-black/[.12] px-1.5 py-0.5 font-mono text-[10px] sm:inline">⌘K</kbd>
+					<kbd className="hidden rounded border border-mc-border px-1.5 py-0.5 font-mono text-[10px] text-mc-muted-2 sm:inline">⌘K</kbd>
 				</button>
 				<div className="flex-1" />
-				<button className="relative hidden h-8 w-8 items-center justify-center rounded-lg border border-black/[.07] bg-white text-mc-text-3 shadow-[0_1px_3px_rgba(16,24,40,.04)] sm:flex" title="Notifications">
+				<button className="relative hidden h-8 w-8 items-center justify-center rounded-lg border border-mc-border bg-mc-card text-mc-text-3 shadow-e1 transition-colors hover:text-mc-text sm:flex" title="Notifications">
 					<Bell className="h-4 w-4" />
-					<span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full border-[1.5px] border-white bg-mc-danger" />
+					<span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full border-[1.5px] border-mc-card bg-mc-danger" />
 				</button>
 				<UserButton afterSignOutUrl="/" />
 			</header>
@@ -118,7 +118,7 @@ export function OrgShell() {
 			<CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} projects={list} onNewProject={() => setCreateOpen(true)} />
 
 			<Dialog open={createOpen} onOpenChange={setCreateOpen}>
-				<DialogContent className="border-black/[.08] bg-white">
+				<DialogContent className="border-mc-border bg-mc-card">
 					<DialogHeader>
 						<DialogTitle>Create a project</DialogTitle>
 						<DialogDescription>Provisions its own isolated Qdrant collections and RocketRide pipelines.</DialogDescription>

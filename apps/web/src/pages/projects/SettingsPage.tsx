@@ -54,7 +54,7 @@ export function SettingsPage() {
 							<Trash2 className="h-3.5 w-3.5" /> Delete project
 						</Button>
 					</DialogTrigger>
-					<DialogContent className="border-black/[.08] bg-white">
+					<DialogContent className="border-mc-border bg-mc-card">
 						<DialogHeader>
 							<DialogTitle>Delete “{project.name}”?</DialogTitle>
 							<DialogDescription>
@@ -65,7 +65,7 @@ export function SettingsPage() {
 							value={confirm}
 							onChange={(e) => setConfirm(e.target.value)}
 							placeholder={project.name}
-							className="h-9 rounded-lg border border-black/[.1] bg-mc-surface px-3 text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-danger/50"
+							className="h-9 rounded-lg border border-mc-border bg-mc-surface px-3 text-sm text-mc-text placeholder:text-mc-muted focus:outline-none focus:ring-1 focus:ring-mc-danger/50"
 						/>
 						{del.state.status === 'error' && <p className="text-sm text-mc-danger">{(del.state.error as Error).message}</p>}
 						<DialogFooter>

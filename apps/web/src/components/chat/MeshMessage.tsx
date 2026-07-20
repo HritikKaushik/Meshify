@@ -24,7 +24,7 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 						<div className="flex items-center gap-1.5">
 							<div className="flex gap-0.5">
 								{[0, 1, 2, 3].map((n) => (
-									<span key={n} className="h-1 w-3 rounded-sm" style={{ background: n < segments ? '#1E9E6A' : 'rgba(16,24,40,.1)' }} />
+									<span key={n} className="h-1 w-3 rounded-sm" style={{ background: n < segments ? 'hsl(var(--mc-success))' : 'hsl(var(--mc-muted) / 0.28)' }} />
 								))}
 							</div>
 							<span className="font-mono text-[10.5px] text-mc-muted">{confidenceLabel(turn.confidence)}</span>
@@ -44,7 +44,7 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 				)}
 
 				{citations.length > 0 && (
-					<div className="flex flex-col gap-2 rounded-xl border border-black/[.06] bg-mc-surface p-3">
+					<div className="flex flex-col gap-2 rounded-xl border border-mc-hairline bg-mc-surface p-3">
 						<span className="font-mono text-[11px] tracking-[0.06em] text-mc-muted-2">{citations.length} SOURCES</span>
 						<div className="flex flex-wrap gap-1.5">
 							{citations.map((c, j) => {
@@ -55,7 +55,7 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 										.filter(Boolean)
 										.join(' · ');
 									const chipClass =
-										'flex items-center gap-1.5 rounded-full border border-black/[.08] bg-white px-2.5 py-1 font-mono text-[11.5px] text-mc-text-2 shadow-[0_1px_3px_rgba(16,24,40,.04)]';
+										'flex items-center gap-1.5 rounded-full border border-mc-border bg-mc-raised px-2.5 py-1 font-mono text-[11.5px] text-mc-text-3 shadow-e1';
 									return c.slack.permalink ? (
 										<a key={j} href={c.slack.permalink} target="_blank" rel="noreferrer" title={title} className={cn(chipClass, 'transition-colors hover:text-mc-accent')}>
 											<MessagesSquare className="h-3 w-3 text-mc-accent-lo" />
@@ -73,7 +73,7 @@ export function MeshMessage({ turn, reveal }: { turn: Turn; reveal: boolean }) {
 									<span
 										key={j}
 										title={`score ${c.score.toFixed(3)}`}
-										className="flex items-center gap-1.5 rounded-full border border-black/[.08] bg-white px-2.5 py-1 font-mono text-[11.5px] text-mc-text-2 shadow-[0_1px_3px_rgba(16,24,40,.04)]"
+										className="flex items-center gap-1.5 rounded-full border border-mc-border bg-mc-raised px-2.5 py-1 font-mono text-[11.5px] text-mc-text-3 shadow-e1"
 									>
 										{code ? <FileCode2 className="h-3 w-3 text-mc-accent" /> : <FileText className="h-3 w-3 text-mc-purple" />}
 										{c.sourcePath.split('/').pop()}
@@ -103,7 +103,7 @@ export function AnswerBody({ text }: { text: string }) {
 		<div className="flex flex-col gap-2.5 text-[15px] leading-relaxed text-mc-text-2">
 			{parts.map((part, i) =>
 				i % 2 === 1 ? (
-					<pre key={i} className="overflow-x-auto rounded-xl border border-black/[.07] bg-mc-surface p-3.5 font-mono text-[12.5px] leading-relaxed text-mc-text-2 shadow-[0_1px_3px_rgba(16,24,40,.04)]">
+					<pre key={i} className="overflow-x-auto rounded-xl border border-mc-border bg-mc-surface p-3.5 font-mono text-[12.5px] leading-relaxed text-mc-text-2 shadow-e1">
 						{part.replace(/^[a-z]+\n/, '')}
 					</pre>
 				) : (

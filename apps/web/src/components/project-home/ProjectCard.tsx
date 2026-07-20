@@ -47,18 +47,18 @@ export function ProjectCard({
 			tabIndex={0}
 			onClick={open}
 			onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && open()}
-			className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-black/[.06] bg-white px-5 pt-5 pb-[70px] text-left shadow-[0_10px_30px_rgba(16,24,40,.06),0_1px_2px_rgba(16,24,40,.04)] transition-all hover:-translate-y-0.5 hover:border-mc-accent/25 hover:shadow-[0_16px_40px_rgba(26,115,232,.1)]"
+			className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-mc-border bg-mc-card px-5 pt-5 pb-[70px] text-left shadow-e2 transition-all hover:-translate-y-0.5 hover:border-mc-accent/25 hover:shadow-glow-accent"
 		>
 			{/* header */}
 			<div className="flex items-center gap-2.5">
 				<span className="h-[9px] w-[9px] flex-none rounded-sm" style={{ background: color }} />
 				<span className="flex-1 truncate text-[16px] font-semibold text-mc-text">{project.name}</span>
 				{indexing ? (
-					<span className="flex items-center gap-1.5 rounded-full bg-mc-accent/[.09] px-2.5 py-1 font-mono text-[10px] font-medium text-mc-accent">
+					<span className="flex items-center gap-1.5 rounded-full bg-mc-accent/[.12] px-2.5 py-1 font-mono text-[10px] font-medium text-mc-accent-lo">
 						<span className="h-[5px] w-[5px] animate-meshpulse rounded-full bg-mc-accent" /> INDEXING
 					</span>
 				) : (
-					<span className="flex items-center gap-1.5 rounded-full bg-mc-success/[.09] px-2.5 py-1 font-mono text-[10px] font-medium text-mc-success">
+					<span className="flex items-center gap-1.5 rounded-full bg-mc-success/[.12] px-2.5 py-1 font-mono text-[10px] font-medium text-mc-success-lo">
 						<span className="h-[5px] w-[5px] rounded-full bg-mc-success" /> AI HEALTHY
 					</span>
 				)}
@@ -90,10 +90,10 @@ export function ProjectCard({
 			</div>
 
 			{/* hover action overlay */}
-			<div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-2 items-center gap-2 border-t border-black/[.06] bg-gradient-to-t from-white to-white/75 px-4 py-3 opacity-0 backdrop-blur-sm transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
+			<div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-2 items-center gap-2 border-t border-mc-hairline bg-gradient-to-t from-mc-card to-mc-card/80 px-4 py-3 opacity-0 backdrop-blur-sm transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
 				<button
 					onClick={(e) => { e.stopPropagation(); open(); }}
-					className="flex-1 rounded-full bg-mc-accent py-2 text-[11.5px] font-semibold text-white shadow-[0_4px_12px_rgba(26,115,232,.26)] transition-colors hover:bg-mc-accent-hi"
+					className="flex-1 rounded-full bg-mc-accent py-2 text-[11.5px] font-semibold text-white shadow-glow-accent transition-colors hover:bg-mc-accent-hi"
 				>
 					Open Workspace
 				</button>
@@ -116,9 +116,9 @@ function CoverageRing({ pct, color }: { pct: number | null; color: string }) {
 	return (
 		<div
 			className="relative flex h-[62px] w-[62px] flex-none items-center justify-center rounded-full"
-			style={{ background: `conic-gradient(${color} 0% ${value}%, #E7EBF3 ${value}% 100%)` }}
+			style={{ background: `conic-gradient(${color} 0% ${value}%, hsl(var(--mc-border)) ${value}% 100%)` }}
 		>
-			<div className="absolute inset-[5px] flex items-center justify-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(16,24,40,.04)]">
+			<div className="absolute inset-[5px] flex items-center justify-center rounded-full bg-mc-card shadow-[inset_0_0_0_1px_hsl(var(--mc-border))]">
 				<span className="text-[15px] font-semibold text-mc-text">{pct === null ? '—' : `${pct}%`}</span>
 			</div>
 		</div>
@@ -141,7 +141,7 @@ function OverlayIcon({ children, title, onClick, accent }: { children: React.Rea
 			onClick={onClick}
 			className={cn(
 				'flex h-8 w-8 items-center justify-center rounded-full border transition-colors',
-				accent ? 'border-mc-purple/22 bg-white text-[#4F46E5] hover:bg-mc-purple/[.06]' : 'border-black/[.1] bg-white text-mc-text-3 hover:text-mc-text'
+				accent ? 'border-mc-purple/25 bg-mc-card text-mc-purple-lo hover:bg-mc-purple/[.1]' : 'border-mc-border bg-mc-card text-mc-text-3 hover:text-mc-text'
 			)}
 		>
 			{children}

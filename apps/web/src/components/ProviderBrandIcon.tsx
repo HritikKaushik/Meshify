@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Blocks } from 'lucide-react';
+import { Blocks, MessagesSquare } from 'lucide-react';
 
 /**
  * Full-color brand marks that render in their own official colors rather than
@@ -26,6 +26,13 @@ const COLORED_ICONS: Record<string, { viewBox: string; content: ReactNode }> = {
 
 /** Providers whose mark is full-color and wants a light chip instead of the brand color. */
 export const COLORED_BRAND_ICON_KEYS = new Set(Object.keys(COLORED_ICONS));
+
+/**
+ * Providers whose brand color is dark/desaturated — rendered as a white mark on
+ * a solid brand-color chip so the logo stays legible in both light and dark
+ * themes (the rest get their brand-colored mark on a faint brand-tinted chip).
+ */
+export const DARK_BRAND_ICON_KEYS = new Set(['github', 'notion', 'confluence', 'zendesk', 'sharepoint']);
 
 /**
  * Official brand marks for integration providers, keyed by the provider
@@ -79,7 +86,12 @@ export function ProviderBrandIcon({ iconKey, size = 18, className }: { iconKey: 
 		);
 	}
 	const path = BRAND_ICON_PATHS[iconKey];
-	if (!path) return <Blocks size={size} className={className} />;
+	if (!path) {
+		// No single-path mark bundled — use a category-appropriate glyph rather
+		// than a generic block (Teams is a chat provider).
+		const Fallback = iconKey === 'teams' ? MessagesSquare : Blocks;
+		return <Fallback size={size} className={className} />;
+	}
 	return (
 		<svg role="img" viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className} aria-hidden="true">
 			<path d={path} />

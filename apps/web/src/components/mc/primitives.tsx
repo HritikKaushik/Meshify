@@ -3,23 +3,24 @@ import { cn } from '@/lib/utils';
 
 export type DotColor = 'success' | 'indexing' | 'accent' | 'danger' | 'purple' | 'teal' | 'muted';
 
-const DOT_HEX: Record<DotColor, string> = {
-	success: '#1E9E6A',
-	indexing: '#4F8DFB',
-	accent: '#1A73E8',
-	danger: '#E5484D',
-	purple: '#6366F1',
-	teal: '#1A73E8',
-	muted: '#B4BAC8',
+// Theme-aware dot colors — resolve against the mc-* CSS variables (dark + light).
+const DOT_VAR: Record<DotColor, string> = {
+	success: 'var(--mc-success)',
+	indexing: 'var(--mc-indexing)',
+	accent: 'var(--mc-accent)',
+	danger: 'var(--mc-danger)',
+	purple: 'var(--mc-purple)',
+	teal: 'var(--mc-teal)',
+	muted: 'var(--mc-muted)',
 };
 
 /** Small status indicator dot with optional glow + pulse. */
 export function StatusDot({ color, glow = false, pulse = false, className }: { color: DotColor; glow?: boolean; pulse?: boolean; className?: string }) {
-	const hex = DOT_HEX[color];
+	const c = `hsl(${DOT_VAR[color]})`;
 	return (
 		<span
 			className={cn('inline-block h-[7px] w-[7px] rounded-full', pulse && 'animate-meshpulse', className)}
-			style={{ background: hex, boxShadow: glow ? `0 0 8px ${hex}66` : undefined }}
+			style={{ background: c, boxShadow: glow ? `0 0 8px hsl(${DOT_VAR[color]} / 0.5)` : undefined }}
 		/>
 	);
 }
@@ -27,7 +28,7 @@ export function StatusDot({ color, glow = false, pulse = false, className }: { c
 /**
  * The Meshify mark — a single traversal through five nodes that reads as an "M"
  * and as a path across a knowledge graph. White strokes/nodes so it sits on the
- * blue→indigo squircle lockup.
+ * indigo→iris squircle lockup in either theme.
  */
 export function MeshMark({ size = 20, stroke = '#fff', node = '#fff', center = '#fff' }: { size?: number; stroke?: string; node?: string; center?: string }) {
 	return (
@@ -42,18 +43,14 @@ export function MeshMark({ size = 20, stroke = '#fff', node = '#fff', center = '
 	);
 }
 
-/** The Meshify logo lockup: the mark inside a blue→indigo squircle. */
+const MESH_GRADIENT = 'linear-gradient(135deg, hsl(var(--mc-accent)), hsl(var(--mc-purple)))';
+
+/** The Meshify logo lockup: the mark inside an indigo→iris squircle. */
 export function MeshLogo({ size = 27, className }: { size?: number; className?: string }) {
 	return (
 		<div
 			className={cn('flex items-center justify-center', className)}
-			style={{
-				width: size,
-				height: size,
-				borderRadius: size * 0.33,
-				background: 'linear-gradient(135deg,#4F8DFB,#6366F1)',
-				boxShadow: '0 4px 12px rgba(79,110,240,.32)',
-			}}
+			style={{ width: size, height: size, borderRadius: size * 0.33, background: MESH_GRADIENT, boxShadow: 'var(--glow-accent)' }}
 		>
 			<MeshMark size={size * 0.66} />
 		</div>
@@ -61,55 +58,53 @@ export function MeshLogo({ size = 27, className }: { size?: number; className?: 
 }
 
 /**
- * The "Mesh" (AI) avatar — the same blue→indigo squircle lockup marking
- * AI-authored content. `breathe` gives it a subtle glow pulse.
+ * The "Mesh" (AI) avatar — the same squircle lockup marking AI-authored content.
+ * `breathe` gives it a subtle glow pulse.
  */
 export function MeshAvatar({ size = 28, breathe = false, className }: { size?: number; breathe?: boolean; className?: string }) {
 	return (
 		<div
 			className={cn('flex flex-none items-center justify-center', breathe && 'animate-breathe', className)}
-			style={{
-				width: size,
-				height: size,
-				borderRadius: size * 0.33,
-				background: 'linear-gradient(135deg,#4F8DFB,#6366F1)',
-				boxShadow: '0 4px 14px rgba(79,110,240,.3)',
-			}}
+			style={{ width: size, height: size, borderRadius: size * 0.33, background: MESH_GRADIENT, boxShadow: 'var(--glow-accent)' }}
 		>
 			<MeshMark size={size * 0.66} />
 		</div>
 	);
 }
 
-/** White surface card with a hairline border and a soft elevation shadow. */
+/** Elevated surface card with a hairline border and a soft shadow. */
 export function GlassCard({ children, className, glow = false }: { children: ReactNode; className?: string; glow?: boolean }) {
 	return (
-		<div
-			className={cn(
-				'rounded-2xl border bg-white shadow-[0_10px_30px_rgba(16,24,40,.06),0_1px_2px_rgba(16,24,40,.04)]',
-				glow ? 'border-mc-accent/20' : 'border-black/[.06]',
-				className
-			)}
-		>
-			{children}
+		<div className={cn('rounded-2xl border bg-mc-card shadow-e2', glow ? 'border-mc-accent/25' : 'border-mc-border', className)}>{children}</div>
+	);
+}
+
+/** A highlighted card with a faint iris tint and a slow light sweep. */
+export function BeamCard({ children, className }: { children: ReactNode; className?: string }) {
+	return (
+		<div className={cn('relative overflow-hidden rounded-2xl border border-mc-purple/25 bg-mc-card shadow-glow-purple', className)}>
+			<div className="pointer-events-none absolute inset-y-0 left-0 w-[36%] animate-beam" style={{ background: 'linear-gradient(90deg,transparent,hsl(var(--mc-purple)/.1),transparent)' }} />
+			<div className="relative">{children}</div>
 		</div>
 	);
 }
 
-/** A highlighted card with a faint indigo→blue tint and a slow light sweep. */
-export function BeamCard({ children, className }: { children: ReactNode; className?: string }) {
+/** A flat, low-elevation framed well for grouping content inside a page. */
+export function Surface({ children, className }: { children: ReactNode; className?: string }) {
+	return <div className={cn('rounded-xl border border-mc-border bg-mc-surface/60', className)}>{children}</div>;
+}
+
+/** A metric tile — a mono label above an emphasized value. `accent` tints it. */
+export function MetricCard({ label, children, accent = false, className }: { label: string; children: ReactNode; accent?: boolean; className?: string }) {
 	return (
-		<div className={cn('relative overflow-hidden rounded-2xl border border-mc-purple/[.16] bg-white shadow-[0_8px_26px_rgba(79,110,240,.1)]', className)}>
-			<div
-				className="pointer-events-none absolute inset-y-0 left-0 w-[36%] animate-beam"
-				style={{ background: 'linear-gradient(90deg,transparent,rgba(99,102,241,.06),transparent)' }}
-			/>
-			<div className="relative">{children}</div>
+		<div className={cn('rounded-xl border p-4', accent ? 'border-mc-accent/25 bg-mc-accent/[.06]' : 'border-mc-border bg-mc-card shadow-e1', className)}>
+			<div className="font-mono text-micro uppercase tracking-[.1em] text-mc-muted-2">{label}</div>
+			<div className="mt-2">{children}</div>
 		</div>
 	);
 }
 
 /** Small monospace section label (uppercase, tracked) — "// PROJECT BRIEFING" etc. */
 export function Kicker({ children, className }: { children: ReactNode; className?: string }) {
-	return <span className={cn('font-mono text-[10px] uppercase tracking-[0.12em] text-mc-muted-2', className)}>{children}</span>;
+	return <span className={cn('font-mono text-micro uppercase tracking-[0.12em] text-mc-muted-2', className)}>{children}</span>;
 }

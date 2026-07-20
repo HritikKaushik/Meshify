@@ -65,25 +65,6 @@ export interface JobsSnapshot {
 	recent: JobEvent[];
 }
 
-export interface SearchHit {
-	id: string;
-	collection: 'documents' | 'code';
-	/** The knowledge source — distinguishes GitHub, Documents, and Slack. */
-	source?: 'github' | 'documents' | 'slack';
-	sourcePath: string;
-	score: number;
-	content: string | null;
-	chunkIndex: number | null;
-}
-
-export interface SearchResponse {
-	query: string;
-	mode: string;
-	degradedTo?: string;
-	warning?: string;
-	results: SearchHit[];
-}
-
 export interface SlackCitationMeta {
 	channel: string | null;
 	channelId: string;
@@ -132,40 +113,6 @@ export interface ChatMessage {
 	modelUsed: string | null;
 	tokensUsed: number | null;
 	createdAt: string;
-}
-
-export interface GoldenCase {
-	id: string;
-	question: string;
-	expectedKeywords?: string[];
-	anyKeywords?: string[];
-	forbiddenKeywords?: string[];
-	expectedSources?: string[];
-	minConfidence?: number;
-}
-
-export interface EvaluationReport {
-	projectId: string;
-	total: number;
-	passed: number;
-	failed: number;
-	passRate: number;
-	averageConfidence: number;
-	averageLatencyMs: number;
-	totalTokens: number;
-	durationMs: number;
-	cases: Array<{
-		id: string;
-		question: string;
-		passed: boolean;
-		answer: string;
-		confidence: number;
-		latencyMs: number;
-		tokens: number;
-		citations: string[];
-		checks: Array<{ check: string; passed: boolean; detail: string }>;
-		error?: string;
-	}>;
 }
 
 export interface Repository {
@@ -390,6 +337,18 @@ export class MeshifyApi {
 		if (!res.ok && res.status !== 204) await this.parse(res);
 	}
 
+	/** A document's raw bytes — used to render PDF thumbnails in the Documents grid. */
+	async getDocumentContent(projectId: string, documentId: string): Promise<ArrayBuffer> {
+		const res = await fetch(this.url(`/api/v1/projects/${projectId}/documents/${documentId}/content`), { credentials: 'include' });
+		if (!res.ok) throw new ApiError(res.status, `Failed to fetch document content (${res.status})`);
+		return res.arrayBuffer();
+	}
+
+	/** The URL of a document's raw content — open in a new tab to view it inline. */
+	documentContentUrl(projectId: string, documentId: string): string {
+		return this.url(`/api/v1/projects/${projectId}/documents/${documentId}/content`);
+	}
+
 	// --- Background jobs (real-time) ---
 	/** Snapshot of a project's active jobs + recent history (first paint / SSE fallback). */
 	async listJobs(projectId: string): Promise<JobsSnapshot> {
@@ -399,18 +358,6 @@ export class MeshifyApi {
 	/** The SSE endpoint for live job progress — opened by the Job Progress Center via EventSource. */
 	jobsStreamUrl(projectId: string): string {
 		return this.url(`/api/v1/projects/${projectId}/jobs/stream`);
-	}
-
-	// --- Search ---
-	async search(projectId: string, query: string, mode: string): Promise<SearchResponse> {
-		return this.parse(
-			await fetch(this.url(`/api/v1/projects/${projectId}/search`), {
-				method: 'POST',
-				credentials: 'include',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ query, mode }),
-			})
-		);
 	}
 
 	// --- Chat ---
@@ -457,18 +404,6 @@ export class MeshifyApi {
 			await fetch(this.url(`/api/v1/projects/${projectId}/chats/${chatId}/messages`), { credentials: 'include' })
 		);
 		return messages;
-	}
-
-	// --- Evaluation ---
-	async runEvaluation(projectId: string, cases: GoldenCase[]): Promise<EvaluationReport> {
-		return this.parse(
-			await fetch(this.url(`/api/v1/projects/${projectId}/evaluation/run`), {
-				method: 'POST',
-				credentials: 'include',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ cases }),
-			})
-		);
 	}
 
 	// --- Repositories ---

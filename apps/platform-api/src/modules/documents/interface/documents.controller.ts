@@ -6,6 +6,7 @@ import { projectIsolationGuard } from '../../projects/interface/project-isolatio
 import type { UploadDocumentUseCase } from '../application/upload-document.usecase.js';
 import type { ListDocumentsUseCase } from '../application/list-documents.usecase.js';
 import { DeleteDocumentUseCase, DocumentNotFoundError } from '../application/delete-document.usecase.js';
+import type { GetDocumentContentUseCase } from '../application/get-document-content.usecase.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -25,6 +26,7 @@ export function createDocumentsController(deps: {
 	uploadDocument: UploadDocumentUseCase;
 	listDocuments: ListDocumentsUseCase;
 	deleteDocument: DeleteDocumentUseCase;
+	getDocumentContent: GetDocumentContentUseCase;
 }): Router {
 	const router = Router();
 	const guard = projectIsolationGuard(deps.getProject);
@@ -75,6 +77,28 @@ export function createDocumentsController(deps: {
 			}
 			req.log?.error({ err }, 'failed to delete document');
 			res.status(502).json({ error: 'Failed to delete document — see server logs' });
+		}
+	});
+
+	// Stream a document's raw upload back (project-isolation enforced) — powers the
+	// Documents grid's PDF thumbnails and in-app previews.
+	router.get('/v1/projects/:projectId/documents/:documentId/content', guard, async (req, res) => {
+		try {
+			const { buffer, contentType, filename } = await deps.getDocumentContent.execute({
+				projectId: req.project!.id,
+				documentId: req.params.documentId as string,
+			});
+			res.setHeader('Content-Type', contentType);
+			res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+			res.setHeader('Cache-Control', 'private, max-age=300');
+			res.status(200).send(buffer);
+		} catch (err) {
+			if (err instanceof DocumentNotFoundError) {
+				res.status(404).json({ error: err.message });
+				return;
+			}
+			req.log?.error({ err }, 'failed to fetch document content');
+			res.status(502).json({ error: 'Failed to fetch document content — see server logs' });
 		}
 	});
 
