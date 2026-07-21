@@ -1,0 +1,21 @@
+# Railway service config — meshify-bff (Clerk-session auth proxy).
+#
+# Wiring:
+#   • Config-as-code path = apps/bff/railway.toml, Root Directory = / (repo root).
+#   • Private only — the browser never hits the BFF directly; the web service's
+#     nginx proxies /api to meshify-bff.railway.internal:3001 (binds :: → IPv6 OK).
+#   • Env: NODE_ENV=production, BFF_PORT=3001,
+#     PLATFORM_API_ORIGIN=http://meshify-platform-api.railway.internal:3000,
+#     APP_ORIGIN=<the web service's public URL> (CSRF allowlist — REQUIRED in prod),
+#     CLERK_SECRET_KEY, CLERK_PUBLISHABLE_KEY, ORG_KEY_ENCRYPTION_KEY, DATABASE_URL,
+#     and PLATFORM_API_KEY_PEPPER — byte-identical to the backend's value (use a
+#     Railway shared variable so both reference the same secret).
+[build]
+builder = "dockerfile"
+dockerfilePath = "apps/bff/Dockerfile"
+
+[deploy]
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

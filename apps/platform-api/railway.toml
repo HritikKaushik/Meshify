@@ -1,0 +1,17 @@
+# Railway service config — meshify-platform-api (core API, API-key authenticated).
+#
+# Wiring (do once in the Railway dashboard, see docs/operations/DEPLOYMENT_RUNBOOK.md):
+#   • Service → Settings → Config-as-code path = apps/platform-api/railway.toml
+#   • Root Directory = / (repo root) so the Dockerfile's pnpm-workspace context resolves.
+#   • Private only — do NOT generate a public domain. Reached at
+#     meshify-platform-api.railway.internal:3000 (binds :: by default → IPv6 OK).
+#   • Env: attach the shared backend variables + NODE_ENV=production, PLATFORM_PORT=3000.
+[build]
+builder = "dockerfile"
+dockerfilePath = "apps/platform-api/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health/ready"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

@@ -1,0 +1,18 @@
+# Railway service config — meshify-worker (BullMQ ingestion consumer).
+#
+# Wiring:
+#   • Config-as-code path = apps/worker/railway.toml, Root Directory = / (repo root).
+#   • Private only, no inbound HTTP — a pure queue consumer. No healthcheck path
+#     (Railway treats the deploy as healthy while the container stays up). Its
+#     Prometheus /metrics + /healthz listen on WORKER_METRICS_PORT (9091) and are
+#     scraped over the private network if you wire monitoring.
+#   • Env: NODE_ENV=production + the shared backend variables.
+#   • On Railway there is NO "background worker = paid" penalty — this is an
+#     ordinary always-on service.
+[build]
+builder = "dockerfile"
+dockerfilePath = "apps/worker/Dockerfile"
+
+[deploy]
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

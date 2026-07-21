@@ -22,10 +22,18 @@ RUN VITE_CLERK_PUBLISHABLE_KEY="$VITE_CLERK_PUBLISHABLE_KEY" pnpm --filter @mesh
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 # Where nginx forwards /api. Override per environment (compose: http://bff:3001;
-# split hosting: the BFF's internal URL). Rendered into the config at startup.
+# split hosting: the BFF's internal URL, e.g. Railway http://meshify-bff.railway.internal:3001).
+# Rendered into the config at startup.
 ENV BFF_UPSTREAM=http://bff:3001
+# The port nginx listens on. Defaults to 8080 (unprivileged nginx can't bind <1024);
+# a host that injects its own $PORT (e.g. Railway) overrides this and nginx follows.
+ENV PORT=8080
+# Opt the image entrypoint into deriving ${NGINX_LOCAL_RESOLVERS} from /etc/resolv.conf
+# (guarded off by default). The /api location's request-time resolver needs it so
+# the container boots even when the BFF's internal DNS is briefly unresolvable.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 COPY apps/web/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
-	CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1
+	CMD wget -q -O /dev/null "http://127.0.0.1:${PORT}/" || exit 1

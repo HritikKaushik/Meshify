@@ -1,0 +1,20 @@
+# Railway service config — meshify-web (public origin: SPA + single-origin /api proxy).
+#
+# Wiring:
+#   • Config-as-code path = apps/web/railway.toml, Root Directory = / (repo root).
+#   • THE ONLY public service — generate a public domain (or attach a custom domain
+#     app.<yourdomain>); Railway terminates TLS. nginx listens on the injected $PORT.
+#   • Env:
+#       BFF_UPSTREAM=http://meshify-bff.railway.internal:3001   (private network)
+#       VITE_CLERK_PUBLISHABLE_KEY=pk_live_...                  (public; Railway passes
+#         service variables as Docker build args, so it reaches the Vite build ARG)
+#   • The browser only ever talks to THIS origin; nginx proxies /api to the BFF.
+[build]
+builder = "dockerfile"
+dockerfilePath = "apps/web/Dockerfile"
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

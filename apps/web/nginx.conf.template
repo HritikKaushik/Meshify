@@ -1,6 +1,13 @@
 # Rendered at container start by the nginx image's envsubst entrypoint: only real
-# env vars (BFF_UPSTREAM) are substituted; nginx's own $uri/$host are preserved.
-# The result is a STATIC proxy_pass target, so no runtime resolver is needed.
+# env vars (BFF_UPSTREAM, PORT, NGINX_LOCAL_RESOLVERS) are substituted; nginx's own
+# $uri/$host/$request_uri are preserved (they are not in the environment). PORT
+# defaults to 8080 (Dockerfile ENV) but is overridden by the value the host injects
+# — Railway assigns a $PORT for public services and routes to it.
+#
+# The /api upstream is resolved at REQUEST time (resolver + a variable in
+# proxy_pass), not at boot: a static target makes nginx refuse to start if the BFF
+# name is briefly unresolvable — the norm on platforms with dynamic internal DNS
+# (Railway `*.railway.internal`, a not-yet-deployed BFF, a rolling restart).
 #
 # NOTE on headers: nginx `add_header` does NOT inherit into a location that sets
 # its own add_header — it replaces the whole set. Because `/` internally redirects
@@ -8,7 +15,7 @@
 # location that also sets a Cache-Control header, or the app HTML would ship with
 # none. They are grouped below for that reason.
 server {
-    listen 8080;
+    listen ${PORT};
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
@@ -39,7 +46,16 @@ server {
     # under /api is streamed to the Clerk-authenticated BFF, so there is no CORS
     # surface and the browser never holds a platform-api or provider credential.
     location /api/ {
-        proxy_pass ${BFF_UPSTREAM};
+        # Request-time resolution (see header note). NGINX_LOCAL_RESOLVERS is set by
+        # the image entrypoint from /etc/resolv.conf — Railway internal DNS, Docker's
+        # 127.0.0.11, or kube-dns, whichever the platform provides. `valid=10s`
+        # re-resolves as the BFF's private IP changes across deploys; ipv6 is on by
+        # default, which Railway's IPv6 private network needs.
+        resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+        set $bff_upstream ${BFF_UPSTREAM};
+        # $request_uri = the full original path+query (e.g. /api/v1/x?y), so the /api
+        # prefix is preserved exactly as the static target did — no prefix stripping.
+        proxy_pass $bff_upstream$request_uri;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

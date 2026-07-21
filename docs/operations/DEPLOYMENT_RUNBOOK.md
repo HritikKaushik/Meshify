@@ -1,24 +1,29 @@
 # Meshify — Deployment Runbook (A–Z)
 
-Zero-to-live for the **free-tier path**: **Render** (5 app services) + **Cloudflare**
-(DNS/CDN/TLS + edge headers) + managed **Neon / Upstash / Qdrant Cloud / Backblaze B2**
-+ **RocketRide cloud**. Do the steps in order; each names the exact commands and the
-env vars it sets. Companion docs: [`render.yaml`](../../render.yaml) (the Blueprint),
+Zero-to-live on the **low-cost always-on path**: **Railway** (all 5 app services in
+one project) + managed **Neon / Upstash / Qdrant Cloud / Backblaze B2** + **RocketRide
+cloud**, with **Cloudflare** optional in front for CDN/WAF. Do the steps in order; each
+names the exact commands and the env vars it sets. Companion docs:
+`apps/*/railway.toml` (per-service Railway config),
 [PRODUCTION_DEPLOYMENT_AUDIT.md](PRODUCTION_DEPLOYMENT_AUDIT.md) (§7 = full env table,
 §4 = readiness), [BACKUP_DR](BACKUP_DR.md), [KEY_ROTATION](KEY_ROTATION.md),
 [OBSERVABILITY](OBSERVABILITY.md), [ENCRYPTION](ENCRYPTION.md).
 
 > **Reality check (from the audit):** everything below is built and locally
-> verified, but this is the **first** real deploy — expect to iterate on
-> platform-specific quirks (Render build args, internal DNS, Cloudflare routing).
-> Budget ~$5–15/mo for the two always-on consumers (worker, observability); the
-> rest is genuinely free-tier.
+> verified (the web image is confirmed to boot on Railway's injected `$PORT` and
+> proxy `/api` over the IPv6 private network), but this is the **first** real
+> deploy — expect to iterate on platform-specific quirks (private-DNS names, build
+> args, custom-domain TLS). **Cost:** Railway has no permanent free tier — budget
+> ~$5–20/mo (Hobby plan, usage-billed) for all five always-on services combined.
+> Unlike the Render/Fly split, there is **no "background worker = paid" penalty**
+> and **no spin-down**, so the worker + observability are ordinary services here.
 
 ---
 
 ## A. Prerequisites
 - **Tools:** `git`, `node 22`, `pnpm 9`, `docker` (for the optional local boot), `openssl`, the `gh` CLI (optional), `flyctl`/`kubectl` only if you take those paths.
-- **Accounts:** GitHub, Render, Cloudflare (+ a domain on it), Backblaze (B2), Neon, Upstash, Qdrant Cloud, Clerk (production instance), RocketRide; optionally a GitHub App and a Slack App.
+- **Accounts:** GitHub, Railway, Backblaze (B2), Neon, Upstash, Qdrant Cloud, Clerk (production instance), RocketRide; optionally Cloudflare (+ a domain) for CDN/WAF, and a GitHub App / Slack App.
+- **Railway CLI** (for the CI rollout and one-off commands): `npm i -g @railway/cli`.
 - Repo pushed to GitHub (CI builds/pushes images to GHCR on `main`).
 
 ## B. (Optional) prove it locally first
@@ -75,44 +80,63 @@ Create the App → webhook URL `https://app.<domain>/api/v1/webhooks/github`; en
 Set the OAuth redirect to `https://app.<domain>/oauth/slack/callback`; copy
 `SLACK_CLIENT_ID/SECRET`, `SLACK_SIGNING_SECRET`, and set `SLACK_REDIRECT_URI`.
 
-## I. Deploy the backend on Render (Blueprint)
-1. Render → **New → Blueprint** → select this repo (`render.yaml`). It defines
-   `meshify-platform-api`, `meshify-bff`, `meshify-worker`, `meshify-observability`,
-   and `meshify-web`, plus a shared `meshify-backend` env group.
-2. Fill every `sync:false` value from Steps C/D/F/G/H. **Critical:** set the **same**
-   `PLATFORM_API_KEY_PEPPER` on `meshify-bff` and the `meshify-backend` group.
-3. Set `APP_ORIGIN` on `meshify-bff` to your public app URL (Step L) — the BFF
+## I. Deploy the backend on Railway
+1. Railway → **New Project → Deploy from GitHub repo** → select this repo. Create **five
+   services** in the project, all pointing at the same repo. For **each** service set:
+   - **Root Directory** = `/` (repo root) — the Dockerfiles use the pnpm-workspace
+     context, so the build context must be the root, **not** the app subdir.
+   - **Config-as-code path** = `apps/<svc>/railway.toml` (defines the Dockerfile path,
+     healthcheck, restart policy, and — for observability — `numReplicas = 1`).
+
+     | Service | Config path | Public? |
+     |---|---|---|
+     | `meshify-platform-api` | `apps/platform-api/railway.toml` | private |
+     | `meshify-bff` | `apps/bff/railway.toml` | private |
+     | `meshify-worker` | `apps/worker/railway.toml` | private |
+     | `meshify-observability` | `apps/observability/railway.toml` | private (1 replica) |
+     | `meshify-web` | `apps/web/railway.toml` | **public** (Step K) |
+
+2. **Enable Private Networking** (Project → Settings; on by default). Services reach each
+   other at `<name>.railway.internal` over IPv6 — the Node apps bind `::` by default, so
+   this works with no code change. Set the cross-service URLs:
+   - `meshify-web` → `BFF_UPSTREAM=http://meshify-bff.railway.internal:3001`
+   - `meshify-bff` → `PLATFORM_API_ORIGIN=http://meshify-platform-api.railway.internal:3000`
+3. **Env vars.** Put the shared backend config (Steps C/D/G) in **Shared Variables** at
+   the project/environment level, then reference them from platform-api, worker, and
+   observability with `${{shared.VAR}}`. **Critical:** make `PLATFORM_API_KEY_PEPPER` a
+   shared variable referenced by **both** the BFF and the backend so the value is
+   byte-identical. Per-service: `NODE_ENV=production`; `PLATFORM_PORT=3000` (API);
+   `BFF_PORT=3001` + `CLERK_SECRET_KEY` + `CLERK_PUBLISHABLE_KEY` + `ORG_KEY_ENCRYPTION_KEY`
+   + `DATABASE_URL` (BFF).
+4. Set `APP_ORIGIN` on `meshify-bff` to your public app URL (Step K) — the BFF
    **refuses to boot** without it in production (CSRF allowlist).
-4. Set `VITE_CLERK_PUBLISHABLE_KEY` on `meshify-web` (Render exposes it to the Docker
-   build as a build arg).
-5. `observability` stays at 1 replica by default; it now uses a Postgres advisory
-   lock, so bumping to 2 for hot-standby HA is safe.
-6. Apply.
+5. Set `VITE_CLERK_PUBLISHABLE_KEY` on `meshify-web` — Railway passes service variables
+   as **Docker build args**, so it reaches the Vite build `ARG` (public key, safe).
+6. `meshify-observability` stays at `numReplicas = 1` (its `railway.toml`); it uses a
+   Postgres advisory lock, so a brief 2-replica overlap during a deploy is safe, but do
+   not scale it deliberately.
+7. Deploy. Watch each service's build/deploy logs.
 
-> **Strict-$0 variant:** Render background workers are paid. Delete the two
-> `type: worker` services from `render.yaml` and run `apps/worker` + `apps/observability`
-> on a **Fly.io** free machine with the same `meshify-backend` env — nothing else changes.
+## J. (Optional) run Postgres / Redis / Qdrant on Railway too
+The default keeps the data tier on **managed Neon / Upstash / Qdrant Cloud** (better free
+tiers, Neon PITR). If you prefer one bill, Railway can host all three as services (Postgres
+and Redis are one-click; Qdrant from its Docker image) — you then lose Neon's branching/PITR
+and own the backups yourself (see BACKUP_DR). Point `DATABASE_URL` / `REDIS_URL` /
+`QDRANT_URL` at the internal `*.railway.internal` addresses.
 
-## J. Deploy the web SPA
-Two options:
-- **On Render** (default in `render.yaml`): the `meshify-web` nginx image serves the
-  SPA and proxies `/api` → `meshify-bff` internally — one public origin, no CORS.
-- **On Cloudflare Pages** (managed CDN): build and upload `apps/web/dist`, then add a
-  Cloudflare rule so `app.<domain>/api/*` proxies to the BFF (preserves single-origin),
-  and remove `meshify-web` from `render.yaml`.
-  ```bash
-  VITE_CLERK_PUBLISHABLE_KEY=pk_live_… pnpm --filter @meshify/web build
-  ```
+## K. Public domain + TLS
+- Give **only** `meshify-web` a public domain: use the generated `*.up.railway.app`, or
+  attach a custom domain `app.<domain>` (Railway provisions TLS automatically). The web
+  nginx serves the SPA and proxies `/api` to the BFF over the private network — **one
+  public origin, no CORS**, and the browser never holds a platform-api/provider credential.
+- Keep the other four services **private** (no public domain).
+- (Optional) put **Cloudflare** in front of the web domain for CDN/WAF/edge headers —
+  proxy the DNS record; Railway's origin TLS stays valid.
 
-## K. DNS, custom domain, TLS
-- Point `app.<domain>` at `meshify-web` (Render custom domain) or Cloudflare Pages.
-- Keep `meshify-platform-api` / `meshify-bff` on **private/internal** hostnames the
-  browser never hits (the web nginx reaches the BFF; the BFF reaches the API).
-- Cloudflare universal SSL is automatic.
-
-## L. Edge headers + single-origin
-- The app sets X-Frame-Options / nosniff / Referrer-Policy itself; add **HSTS** and a
-  **CSP** at the Cloudflare edge (they belong at the TLS terminator).
+## L. Security headers + single-origin
+- The web nginx already sets X-Frame-Options / nosniff / Referrer-Policy. Add **HSTS** and
+  a **CSP**: if you front with Cloudflare, set them at the edge; **without Cloudflare**,
+  add them to `apps/web/nginx.conf.template` (Railway's proxy passes app headers through).
 - Set `APP_ORIGIN=https://app.<domain>` on the BFF and match it in Clerk's allowed origins.
 
 ## M. Observability wiring (see OBSERVABILITY.md)
@@ -131,8 +155,14 @@ Two options:
 ## O. CI/CD — wire the deploy workflow (see deploy.yml)
 In the GitHub repo settings add:
 - **Variables:** `VITE_CLERK_PUBLISHABLE_KEY` (image build), `PROD_APP_URL` (smoke test).
-- **Secrets:** `PROD_DATABASE_URL` (migrate job), and per-service `RENDER_DEPLOY_HOOK_PLATFORM_API` / `_BFF` / `_WORKER` / `_OBSERVABILITY` / `_WEB` (Render → each service → Settings → Deploy Hook). Unset hooks are skipped, so wire them incrementally.
-- A push to `main` runs CI (lint, audit, gitleaks, Trivy, image build/push). A `vX.Y.Z` **tag** runs `deploy.yml`: migrate → rollout (fires the hooks) → smoke.
+- **Secrets:** `PROD_DATABASE_URL` (migrate job) and `RAILWAY_TOKEN` — a Railway **project
+  token** (Project → Settings → Tokens) scoped to the production environment. The rollout
+  step runs `railway up --service <name>` for each service, building that service's
+  Dockerfile from the tagged commit. If `RAILWAY_TOKEN` is unset the step is a no-op
+  warning, so you can wire it up later — or skip it entirely and use Railway's native
+  **GitHub auto-deploy** (each service redeploys on push to `main`) instead.
+- A push to `main` runs CI (lint, audit, gitleaks, Trivy, image build/push). A `vX.Y.Z`
+  **tag** runs `deploy.yml`: migrate → rollout (`railway up` per service) → smoke.
 
 ## P. First-deploy verification (smoke tests)
 ```bash
@@ -147,15 +177,16 @@ ROCKETRIDE_URI=https://api.rocketride.ai pnpm --filter @meshify/rocketride-gatew
 ```
 
 ## Q. Monitoring & alerts
-- Uptime check on `https://app.<domain>/api/health` (Cloudflare Health Checks / BetterStack free).
+- Uptime check on `https://app.<domain>/api/health` (BetterStack / UptimeRobot free, or Cloudflare Health Checks if you front with it).
 - Grafana Cloud dashboard from `/metrics`; wire the starter alerts (5xx rate, p95 latency, queue backlog, target down) and **tune the thresholds** to your traffic.
 - Ship stdout (pino JSON) to a log backend.
 
 ## R. Ongoing operations
 - **Release:** push a `vX.Y.Z` tag → `deploy.yml` migrates then rolls out then smokes.
-- **Rollback:** re-deploy the previous image tag (Render: redeploy the prior deploy;
-  K8s: re-apply the previous pinned tag). Migrations are expand/contract, so the old
-  version keeps working during a roll.
+- **Rollback:** on Railway, open the service → **Deployments** → **Redeploy** the prior
+  successful deployment (or `railway redeploy --service <name>`); K8s: re-apply the
+  previous pinned tag. Migrations are expand/contract, so the old version keeps working
+  during a roll.
 - **Rotate keys** periodically per [KEY_ROTATION.md](KEY_ROTATION.md) — mind the special
   blast radius of `PLATFORM_API_KEY_PEPPER` and `ORG_KEY_ENCRYPTION_KEY`.
 - **Zero-downtime:** platform-api rolls with `maxUnavailable:0`; observability uses
