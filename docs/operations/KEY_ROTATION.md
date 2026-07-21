@@ -17,7 +17,7 @@ special blast radius, called out below.
 | `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_SECRET` | GitHub App settings | Installation tokens re-mint automatically; webhook HMAC uses the new secret |
 | `S3_SECRET_ACCESS_KEY`, `QDRANT_API_KEY`, `DATABASE_URL` (password), `REDIS_URL` (password) | Backblaze B2 (Application Keys) / Qdrant Cloud / Neon / Upstash consoles | Update env + redeploy; no data change |
 
-Standard flow: create the new key → set it in the secret store (Render dashboard /
+Standard flow: create the new key → set it in the secret store (Railway variables /
 K8s Secret) → redeploy → revoke the old key.
 
 ## `PLATFORM_API_KEY_PEPPER` — ⚠️ invalidates all issued API keys

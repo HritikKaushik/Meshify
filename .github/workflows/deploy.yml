@@ -41,42 +41,35 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      # Render rollout via per-service deploy hooks. The images for this tag are
-      # already built/pushed to GHCR by ci.yml. Set each hook as a repo secret
-      # (Render → service → Settings → Deploy Hook); any that are unset are skipped,
-      # so this is a no-op until you configure it — never a failure.
+      - uses: actions/checkout@v4
+      # Railway rollout via the CLI. `railway up` builds each service's Dockerfile
+      # (per its apps/<svc>/railway.toml) from THIS checked-out tag and deploys it.
+      # Auth is a Railway PROJECT TOKEN (Project → Settings → Tokens) scoped to the
+      # production environment, stored as the RAILWAY_TOKEN repo secret. If it is
+      # unset this step is a no-op warning — never a failure — so you can wire it up
+      # incrementally (or rely on Railway's native GitHub auto-deploy instead and
+      # delete this step). Deploy order: API → BFF → consumers → web (the migrate
+      # Job already ran in the job above; migrations are backward-compatible).
       #
       # On other platforms replace this step: Fly.io →
       #   flyctl deploy --image ghcr.io/${{ github.repository_owner }}/meshify-<svc>:${{ github.ref_name }}
-      # Kubernetes → bump overlays/prod image tags and `kubectl apply -k overlays/prod`
-      # (the migrate Job already ran in the job above). Cloudflare Pages redeploys web from the repo.
-      - name: Trigger Render deploys
+      # Kubernetes → bump overlays/prod image tags and `kubectl apply -k overlays/prod`.
+      - name: Trigger Railway deploys
         env:
           REF: ${{ github.ref_name }}
-          HOOK_PLATFORM_API: ${{ secrets.RENDER_DEPLOY_HOOK_PLATFORM_API }}
-          HOOK_BFF: ${{ secrets.RENDER_DEPLOY_HOOK_BFF }}
-          HOOK_WORKER: ${{ secrets.RENDER_DEPLOY_HOOK_WORKER }}
-          HOOK_OBSERVABILITY: ${{ secrets.RENDER_DEPLOY_HOOK_OBSERVABILITY }}
-          HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           set -euo pipefail
-          fired=0
-          for name in platform-api bff worker observability web; do
-            var="HOOK_$(echo "$name" | tr 'a-z-' 'A-Z_')" # e.g. HOOK_PLATFORM_API
-            url="${!var:-}"                                # indirect expansion (bash 3.2+)
-            if [ -n "$url" ]; then
-              echo "→ deploying $name for $REF"
-              curl -fsS -X POST "$url" > /dev/null
-              fired=$((fired + 1))
-            else
-              echo "· skipping $name (no ${var} secret set)"
-            fi
-          done
-          if [ "$fired" -eq 0 ]; then
-            echo "::warning::No RENDER_DEPLOY_HOOK_* secrets configured — nothing was rolled out. Set them to enable automated deploys, or replace this step for your platform."
-          else
-            echo "Triggered $fired Render deploy(s)."
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "::warning::RAILWAY_TOKEN not set — nothing was rolled out. Set a Railway project token to enable automated deploys, or replace this step for your platform."
+            exit 0
           fi
+          npm install -g @railway/cli >/dev/null 2>&1
+          for name in meshify-platform-api meshify-bff meshify-worker meshify-observability meshify-web; do
+            echo "→ deploying $name for $REF"
+            railway up --service "$name" --ci
+          done
+          echo "Triggered Railway deploys."
 
   smoke:
     needs: rollout

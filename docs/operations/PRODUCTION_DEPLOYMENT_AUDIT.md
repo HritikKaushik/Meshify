@@ -33,7 +33,7 @@ None of these are architectural dead-ends — they are gaps in an otherwise-soli
 ### 2.1 As-built request flow (verified against code)
 
 ```
-Browser (apps/web, React SPA, Cloudflare/static)
+Browser (apps/web, React SPA, served by the Railway web/nginx service)
   │  same-origin  /api/*   (Clerk session cookie, credentials: 'include')
   ▼
 BFF (apps/bff, Express + @clerk/express)
@@ -151,9 +151,9 @@ Full table in **§7**. Summary:
 | Backend security (crypto, API, webhooks) | **9** | ✅ AES-256-GCM vault, scrypt+salt, v3 per-org key (org API key), timing-safe webhook HMAC + replay window, parameterized SQL, rate-limiter fail-closed. −1: the CredentialVault is still single-master (true per-tenant = DEK/KEK/KMS, see ENCRYPTION.md). |
 | Edge / BFF security | **9** | ✅ CSRF Origin guard, helmet, per-user edge limit, upload cap, single-origin. −1: the BFF edge limiter is in-process — multiple BFF replicas need a shared (Redis) store. |
 | Authorization / RBAC | **9** | ✅ Clerk org-role → `isOrgAdmin` gating provider mgmt + destructive ops; API-key scopes enforced (least-privilege). −1: `requireScope` exists but isn't wired into per-route capabilities beyond admin — no granular permission matrix yet. |
-| Deployability | **9** | ✅ All 5 images build + run non-root; `pnpm deploy`; **full-stack compose boot healthy end-to-end** (web→bff→platform-api chain + migrations). 🟡 −1: never deployed to a real Render/Cloudflare account — the `render.yaml` build-arg/internal-DNS specifics are unproven against the live platform. |
+| Deployability | **9** | ✅ All 5 images build + run non-root; `pnpm deploy`; **full-stack compose boot healthy end-to-end** (web→bff→platform-api chain + migrations); per-service `apps/*/railway.toml`; the **web image is verified for Railway** — boots on an injected `$PORT`, resolves the BFF at request time (survives an unresolvable upstream), and forwards the exact `/api/**` path over a private network. 🟡 −1: never deployed to a real Railway account — the private-DNS names and custom-domain TLS are unproven against the live platform. |
 | Infra hardening (K8s) | **9** | 🟢 NetworkPolicy + PSA `restricted` + ServiceAccounts + non-root + HPA/KEDA/PDB, kustomize-validated. 🟡 −1: never applied to a live cluster; the prod ingress host is still a `REPLACE-ME` placeholder. |
-| CI/CD maturity | **8** | 🟢 lint + `pnpm audit` + gitleaks + Trivy + Dependabot + image builds + migration-gated deploy workflow. 🟡 −2: **the workflows have never run on GitHub Actions** (validated locally only), and the deploy rollout is Render-specific + unverified. |
+| CI/CD maturity | **8** | 🟢 lint + `pnpm audit` + gitleaks + Trivy + Dependabot + image builds + migration-gated deploy workflow. 🟡 −2: **the workflows have never run on GitHub Actions** (validated locally only), and the deploy rollout (Railway `railway up` per service) is unverified against a live project. |
 | Observability / ops | **8** | ✅ platform-api + worker `/metrics` scraped live; leader election tested live. 🟡 −2: OTel tracing is wired but **unproven against a real collector**; alert thresholds are untuned starter values; no dashboards. |
 | Config & docs completeness | **10** | ✅ Full env schema coverage; A-Z deployment runbook + backup-DR + observability + encryption + key-rotation runbooks. |
 
@@ -161,7 +161,7 @@ Full table in **§7**. Summary:
 
 **What moves each remaining point (all real-environment validation):**
 1. First **GitHub Actions run** green (CI + the scanning jobs) → +CI/CD.
-2. First **cloud deploy** via `render.yaml` + smoke passing → +Deployability.
+2. First **cloud deploy** via `apps/*/railway.toml` + smoke passing → +Deployability.
 3. **OTel traces** landing in a real collector; tuned alerts + a dashboard → +Observability.
 4. **Shared-store BFF rate limiter** (Redis) for horizontal BFF scaling → +Edge.
 5. **DEK/KEK or KMS** master + vault per-org context → +Backend security.
@@ -185,25 +185,25 @@ Full table in **§7**. Summary:
 
 ## 6. Recommended Deployment — cheapest viable ("near-free")
 
-The realistic constraint: Meshify has **two always-on background services** (worker, observability) and stateful deps. "Fully free forever" isn't achievable without cold-starts that break BullMQ/DAP consumers. The plan below is **free or ~$5–15/mo** for a demo/early-prod footprint, scaling cleanly.
+The realistic constraint: Meshify has **two always-on background services** (worker, observability) and stateful deps. "Fully free forever" isn't achievable without cold-starts that break BullMQ/DAP consumers — which is exactly why **Railway** fits: every service is always-on and usage-billed, with no per-type "worker = paid" penalty and no spin-down. The plan below is **~$5–20/mo** (Railway Hobby) for a demo/early-prod footprint, scaling cleanly, with the whole app tier in **one project** instead of a Render+Fly split.
 
-| Layer | Recommendation | Why | Free tier | Upgrade path | Trade-off |
-|-------|----------------|-----|-----------|--------------|-----------|
-| **Frontend (web)** | **Cloudflare Pages** | Static Vite SPA; global CDN; unlimited bandwidth; can route `/api/*` to the BFF (keeps same-origin, solves CORS/CSRF) | Unlimited requests/bandwidth, 500 builds/mo | Pages stays free at scale | Build-time env only (fine — one publishable key) |
-| **BFF** | **Render Web Service** (or Fly.io Machine) behind the same Cloudflare origin | Persistent Node/Express (`@clerk/express` + `http-proxy-middleware` need a real Node runtime, **not** Workers) | Render free 512MB (spins down after 15min idle) | Render Starter $7/mo (no spin-down) | Free tier cold-starts ~30s — acceptable for demo, not prod |
-| **Platform API** | **Render Web Service** / **Fly.io** / **Northflank** | Stateless Node container; has `/health/ready` for probes | Render/Fly free instance | Paid instance + HPA when you move to K8s | Cold-start on free tier |
-| **Worker** | **Fly.io Machine** (always-on) or Render Background Worker | BullMQ consumer must stay warm | Fly free allowance covers a small always-on VM; Render bg workers are **paid** ($7) | Scale via KEDA on K8s later | Truly-free always-on is the hardest slot |
-| **Observability** | **Fly.io Machine** (single, always-on) | Must be a singleton DAP subscriber | Fly free allowance | Same | Same as worker |
-| **Postgres** | **Neon** (preferred) or Supabase | Serverless Postgres, generous free, branching | Neon: 0.5GB, autosuspend | Neon paid scales to 100s GB | Autosuspend cold-start (~1s) |
-| **Redis** | **Upstash Redis** | Serverless, per-request pricing, BullMQ-compatible | 10k commands/day free | Pay-as-you-go | Command budget tight under heavy ingest |
+| Layer | Recommendation | Why | Cost | Upgrade path | Trade-off |
+|-------|----------------|-----|------|--------------|-----------|
+| **Frontend (web)** | **Railway** service (`meshify-web`, nginx) | Serves the Vite SPA and proxies `/api` → BFF over the private network (single origin, no CORS); binds Railway's injected `$PORT` | Usage-billed (small) | Front with Cloudflare CDN if you want edge caching/WAF | nginx image, not a managed CDN (add Cloudflare for that) |
+| **BFF** | **Railway** service (`meshify-bff`, private) | Persistent Node/Express (`@clerk/express` + `http-proxy-middleware` need a real Node runtime) | Usage-billed | Bump resources / replicas | — |
+| **Platform API** | **Railway** service (`meshify-platform-api`, private) | Stateless Node container; `/health/ready` drives the Railway healthcheck | Usage-billed | Paid instance + HPA when you move to K8s | — |
+| **Worker** | **Railway** service (`meshify-worker`, private) | BullMQ consumer stays warm — an ordinary always-on service here | Usage-billed | Scale via KEDA on K8s later | No worker penalty (the Render pain point) |
+| **Observability** | **Railway** service (`meshify-observability`, `numReplicas=1`) | Singleton DAP subscriber; advisory-lock leader election | Usage-billed | Same | Keep at 1 replica |
+| **Postgres** | **Neon** (preferred) or Railway Postgres | Serverless Postgres, generous free, branching/PITR | Neon: 0.5GB free, autosuspend | Neon paid scales to 100s GB | Railway-hosted PG loses Neon PITR |
+| **Redis** | **Upstash Redis** or Railway Redis | Serverless, per-request pricing, BullMQ-compatible | 10k commands/day free | Pay-as-you-go | Command budget tight under heavy ingest |
 | **Vector DB** | **Qdrant Cloud** free | Managed, matches self-hosted image | 1GB cluster free | Paid clusters | 1GB ≈ ~1M small vectors — plan capacity |
-| **Object storage** | **Backblaze B2** | S3-compatible (drop-in for `@aws-sdk/client-s3`), $6/TB-mo at rest; egress free up to 3× storage, and **free via Cloudflare** (Bandwidth Alliance) | 10GB storage + 1GB/day free download | Pay-as-you-go ($0.006/GB) | Server-side-only access (browser never hits it) keeps egress trivial; `S3_REGION` must be the real region, not `auto` |
+| **Object storage** | **Backblaze B2** | S3-compatible (drop-in for `@aws-sdk/client-s3`), $6/TB-mo at rest; egress free up to 3× storage | 10GB storage + 1GB/day free download | Pay-as-you-go ($0.006/GB) | Server-side-only access (browser never hits it) keeps egress trivial; `S3_REGION` must be the real region, not `auto` |
 | **RocketRide** | Managed cloud endpoint (`https://api.rocketride.ai`) | No self-host image exists | per RocketRide plan | — | External dependency/cost |
-| **CDN / DNS / SSL** | **Cloudflare** (Pages + DNS + proxied origins) | One pane; free universal SSL; WAF/rate-limit rules at the edge | Free | Pro $20/mo for advanced WAF | — |
+| **CDN / DNS / TLS** | **Railway** custom domain (auto-TLS); **Cloudflare** optional in front | Railway provisions TLS per public service; Cloudflare adds CDN/WAF/edge headers if you want them | Free–$0 | Cloudflare Pro $20/mo for advanced WAF | Only the web service is public |
 
-**Topology (the important part):** put **Cloudflare in front of everything**. Web on Pages at `app.yourdomain.com`; add a Cloudflare rule (Worker or Pages `_routes`/rewrite) so `app.yourdomain.com/api/*` proxies to the BFF service. The browser then sees a **single origin** → the missing-CORS design works, and you can add CSRF/security headers at the Cloudflare edge as defense-in-depth. Platform-API stays on a **private** hostname the BFF reaches server-side (never exposed to the browser). This directly satisfies your "browser only talks to BFF" requirement at the network layer.
+**Topology (the important part):** the **only public service is `meshify-web`** (a custom domain `app.yourdomain.com` with Railway-managed TLS, optionally proxied through Cloudflare). Its nginx serves the SPA and proxies `/api` to `meshify-bff.railway.internal` over Railway's **IPv6 private network**; the BFF reaches `meshify-platform-api.railway.internal`; worker/observability are private with no inbound. The browser therefore sees a **single origin** → the missing-CORS design works, and it never holds a platform-api/provider credential. This satisfies the "browser only talks to BFF" requirement at the network layer. *(Verified: the web image boots on an injected `$PORT`, resolves the BFF at request time via nginx `resolver`, and forwards the exact `/api/**` path over the private network.)*
 
-**Honest verdict:** front + data tiers are genuinely free (Cloudflare + Neon + Upstash + Qdrant Cloud + Backblaze B2). The **two always-on Node consumers (worker, observability)** are where "free" gets thin — budget ~$5–15/mo (Fly.io) for those. Everything migrates to the existing K8s manifests unchanged when you outgrow it.
+**Honest verdict:** with Railway the whole app tier is one always-on project (~$5–20/mo) and the data tier stays on generous managed free tiers (Neon + Upstash + Qdrant Cloud + Backblaze B2). No spin-down, no worker penalty, no second platform — simpler ops than the earlier Render+Fly split. Everything migrates to the existing K8s manifests unchanged when you outgrow it.
 
 ---
 
@@ -258,7 +258,7 @@ Legend: **FE** = shipped to browser · **BE** = server-only · **Secret?** · **
 
 ## 8. Step-by-Step Deployment Guide (free-tier path)
 
-> Prereqs: a domain on Cloudflare, a GitHub repo, and accounts on Neon, Upstash, Qdrant Cloud, Backblaze (B2), Cloudflare (Pages/DNS), Render/Fly, and Clerk.
+> Prereqs: a GitHub repo, and accounts on Railway, Neon, Upstash, Qdrant Cloud, Backblaze (B2), Clerk, and RocketRide; optionally Cloudflare (+ a domain) for CDN/WAF.
 
 **0. Generate production secrets**
 ```bash
@@ -283,24 +283,23 @@ DATABASE_URL="postgres://…neon…" pnpm --filter @meshify/data-access migrate
 - Create a **production** Clerk app → copy `pk_live_…` (publishable) and `sk_live_…` (secret).
 - Set allowed origins to your `app.yourdomain.com`.
 
-**4. Deploy the backend three** (Render or Fly, using the existing Dockerfiles)
-- `platform-api` (web service, port 3000, health check `/health/ready`) — private hostname.
-- `worker` (background/always-on machine).
-- `observability` (single always-on machine, **never scale >1**).
-- Set the full backend env (§7) on all three (they share `loadEnv()`).
+> The canonical, command-by-command version of this is the A–Z
+> [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md); the summary below is the shape.
 
-**5. Build & host the BFF** *(new work — see C1)*
-- Add `apps/bff/Dockerfile` (mirror `apps/platform-api/Dockerfile`; it depends on config/shared/data-access).
-- Deploy as a Render/Fly service; set `PLATFORM_API_ORIGIN` to the platform-api private URL, plus `CLERK_SECRET_KEY`, `ORG_KEY_ENCRYPTION_KEY`, `PLATFORM_API_KEY_PEPPER`, `DATABASE_URL`.
+**4. Deploy the backend three** (Railway services, from the existing Dockerfiles + `apps/*/railway.toml`)
+- `meshify-platform-api` (private, port 3000, healthcheck `/health/ready`).
+- `meshify-worker` (private, always-on — no worker penalty on Railway).
+- `meshify-observability` (private, `numReplicas=1`, **never scale >1**).
+- Set the full backend env (§7) as Railway **shared variables** referenced by all three.
 
-**6. Build & host the web SPA** *(new work — see C1)*
-```bash
-VITE_CLERK_PUBLISHABLE_KEY=pk_live_… pnpm --filter @meshify/web build   # → apps/web/dist
-```
-- Cloudflare Pages → point at `apps/web/dist` (or connect the repo with this build command).
+**5. Build & host the BFF**
+- `meshify-bff` (private) — set `PLATFORM_API_ORIGIN=http://meshify-platform-api.railway.internal:3000`, plus `CLERK_SECRET_KEY`, `ORG_KEY_ENCRYPTION_KEY`, `PLATFORM_API_KEY_PEPPER` (identical shared value), `DATABASE_URL`, and `APP_ORIGIN` (the public web URL).
+
+**6. Build & host the web SPA**
+- `meshify-web` (nginx, public) builds from `apps/web/Dockerfile`; set `VITE_CLERK_PUBLISHABLE_KEY` (Railway passes it as a build arg) and `BFF_UPSTREAM=http://meshify-bff.railway.internal:3001`.
 
 **7. Wire the single origin (critical)**
-- In Cloudflare, add a rule/Worker so `app.yourdomain.com/api/*` proxies to the BFF service URL; everything else serves the Pages SPA. Add security headers here (CSP, HSTS, X-Frame-Options, `Referrer-Policy`, `X-Content-Type-Options`).
+- The web nginx *is* the single origin: it serves the SPA and proxies `/api` to the BFF over the private network — no CORS surface. Give **only** `meshify-web` a public domain. Add HSTS/CSP at nginx, or front with Cloudflare and set them at the edge.
 
 **8. Configure the GitHub App** (operator-level, once)
 - Create the App → set webhook URL to `https://app.yourdomain.com/api/v1/webhooks/github` (via BFF→API), enable "Request user authorization (OAuth) during installation", copy `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_SLUG`.
@@ -308,7 +307,7 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_live_… pnpm --filter @meshify/web build   # → 
 **9. Configure the Slack App** (optional)
 - Set redirect URL, copy `SLACK_CLIENT_ID/SECRET`, `SLACK_SIGNING_SECRET`; set `SLACK_REDIRECT_URI` to the static `/oauth/slack/callback`.
 
-**10. DNS + SSL** — Cloudflare universal SSL is automatic; set `app.yourdomain.com` (Pages) and a proxied CNAME for the BFF origin.
+**10. DNS + TLS** — attach `app.yourdomain.com` to the `meshify-web` service; Railway provisions TLS automatically. Keep the other four services private. Optionally proxy the record through Cloudflare for CDN/WAF.
 
 **11. Verify**
 ```bash
@@ -317,7 +316,7 @@ curl https://<platform-api-private>/health/ready     # 200 with pg/redis/qdrant 
 ```
 - Sign in via the SPA → create a project → upload a doc → confirm ingest job completes → run an Ask Mesh query and confirm a cited answer.
 
-**12. Backups & monitoring** — enable Neon PITR/branching; schedule Qdrant snapshots; add uptime checks (Cloudflare Health Checks / BetterStack free) on `/health/ready`; ship logs to a free tier (Grafana Cloud / BetterStack).
+**12. Backups & monitoring** — enable Neon PITR/branching; schedule Qdrant snapshots; add uptime checks (BetterStack / UptimeRobot free) on `/health/ready`; ship logs to a free tier (Grafana Cloud / BetterStack).
 
 ---
 
@@ -340,11 +339,11 @@ Current CI (`.github/workflows/ci.yml`) does: install → `turbo typecheck build
 **Add a `deploy` workflow** (tag-triggered, `v*`):
 1. On git tag → build/push images tagged with the version.
 2. **Run the migrate Job and wait for completion** before rollout (currently a manual step).
-3. `kubectl apply -k overlays/prod` (or Render/Fly deploy hooks) — rolling update `maxUnavailable: 0` already gives near-zero-downtime.
+3. `kubectl apply -k overlays/prod` (or `railway up` per service — see `deploy.yml`) — rolling update `maxUnavailable: 0` already gives near-zero-downtime.
 4. Post-deploy smoke test hitting `/health/ready` + one authenticated round-trip; **rollback** by re-applying the previous pinned tag on failure.
 5. Bump the prod overlay image tag automatically (today `:1.0.0` is hand-edited).
 
-**Preview deployments:** Cloudflare Pages gives per-PR web previews for free; add ephemeral Neon branches per PR for full-stack previews later.
+**Preview deployments:** Railway gives per-PR environments (enable PR deploys on the project); add ephemeral Neon branches per PR for full-stack previews later.
 
 ---
 
@@ -352,10 +351,10 @@ Current CI (`.github/workflows/ci.yml`) does: install → `turbo typecheck build
 
 Assumes managed-fallback embeddings on ingest + query (OpenAI `text-embedding-3-small`) and modest chat via managed LLM. BYOA orgs cost the operator **$0** in AI.
 
-| Users | Hosting (front+BFF+API) | Workers (worker+obs) | Postgres | Redis | Qdrant | Storage+CDN | AI (managed) | **Total/mo** |
+| Users | Hosting (web+BFF+API) | Workers (worker+obs) | Postgres | Redis | Qdrant | Storage+CDN | AI (managed) | **Total/mo** |
 |-------|------------------------|----------------------|----------|-------|--------|-------------|--------------|--------------|
-| **10** | $0 (CF Pages + Render free) | ~$5–10 (Fly always-on) | $0 (Neon) | $0 (Upstash) | $0 (Qdrant free) | $0 (B2 free 10GB) | ~$1–5 | **~$6–20** |
-| **100** | $0–7 (Render Starter for BFF) | ~$10–20 | $0–19 (Neon) | $0–10 | $0 (still <1GB likely) | $0–5 | ~$10–40 | **~$30–100** |
+| **10** | ~$5–10 (Railway, 3 svcs) | ~$3–8 (Railway, 2 svcs) | $0 (Neon) | $0 (Upstash) | $0 (Qdrant free) | $0 (B2 free 10GB) | ~$1–5 | **~$10–25** |
+| **100** | ~$10–25 (Railway) | ~$8–20 (Railway) | $0–19 (Neon) | $0–10 | $0 (still <1GB likely) | $0–5 | ~$10–40 | **~$35–110** |
 | **1,000** | ~$25 (paid API+BFF, no cold start) | ~$40 | ~$69 (Neon Scale) | ~$10–30 | ~$25 (paid cluster) | ~$5–15 | ~$100–400 | **~$275–600** |
 | **10,000** | ~$150–400 (K8s, HPA 3–20) | ~$150 (KEDA ≤20) | ~$300+ (HA Postgres) | ~$100 | ~$150+ | ~$50 | ~$1,000–5,000 | **~$2,000–6,000+** |
 
@@ -363,7 +362,7 @@ Assumes managed-fallback embeddings on ingest + query (OpenAI `text-embedding-3-
 - **Upstash 10k commands/day** — BullMQ + rate limiting + pub/sub blow past this within **tens of active users** during ingestion. First upgrade.
 - **Qdrant 1GB** — ~1M small vectors; a few large repos/doc sets hit this by ~100s of docs.
 - **Neon 0.5GB + autosuspend** — fine to ~100 users; upgrade for connection ceiling and no cold-start.
-- **Render free spin-down** — unacceptable for prod the moment you have real users (auth cold-starts). Move BFF+API to paid (~$7 each) early.
+- **Railway has no free tier** — it's ~$5/mo (Hobby, incl. $5 usage) minimum, billed by RAM/CPU/egress. The upside: all services are always-on (no spin-down, no cold-start) and there is no "worker = paid" penalty, so the two consumers cost the same as any service.
 - **Managed AI** is the dominant cost at scale — push orgs toward BYOA (which the platform already supports and resolves vendor-blind) to keep operator AI spend near zero.
 
 ---
@@ -372,9 +371,9 @@ Assumes managed-fallback embeddings on ingest + query (OpenAI `text-embedding-3-
 
 | Item | Status | Why |
 |------|--------|-----|
-| HTTPS enforced end-to-end | ⚠️ NEEDS IMPROVEMENT | TLS at platform-api ingress only; web/bff TLS depends on undefined host. Enforce at Cloudflare. |
-| HSTS | ❌ FAIL | Not set anywhere. Add at edge. |
-| CSP configured | ❌ FAIL | No CSP. Add via helmet (BFF) or Cloudflare. |
+| HTTPS enforced end-to-end | ⚠️ NEEDS IMPROVEMENT | TLS at platform-api ingress only; web/bff TLS depends on undefined host. Enforce at the edge (Railway auto-TLS on the web service, or Cloudflare if fronted). |
+| HSTS | ❌ FAIL | Not set anywhere. Add at the web nginx (or Cloudflare edge). |
+| CSP configured | ❌ FAIL | No CSP. Add via helmet (BFF), the web nginx, or Cloudflare. |
 | CORS correct | ⚠️ NEEDS IMPROVEMENT | Safe-by-default but requires enforced same-origin topology. |
 | CSRF protection | ❌ FAIL | Absent on cookie-auth state-changing routes. |
 | Clickjacking (X-Frame-Options/frame-ancestors) | ❌ FAIL | Not set. |
@@ -409,7 +408,7 @@ Assumes managed-fallback embeddings on ingest + query (OpenAI `text-embedding-3-
 
 ### 🔴 Critical (block production)
 
-Remediation status as of the follow-up work (2026-07-21): **C1, C2, C3, C5, C6 — DONE & verified. C4 — code done, key rotation is an operator action. M5 (Dockerfile drift) fixed in passing.** Chosen deployment path: free-tier (Cloudflare Pages + Render/Fly + Neon/Upstash/Qdrant Cloud/Backblaze B2), so the K8s manifests are the scale-later option.
+Remediation status as of the follow-up work (2026-07-21): **C1, C2, C3, C5, C6 — DONE & verified. C4 — code done, key rotation is an operator action. M5 (Dockerfile drift) fixed in passing.** Chosen deployment path: Railway (all 5 app services) + managed Neon/Upstash/Qdrant Cloud/Backblaze B2, with Cloudflare optional in front, so the K8s manifests are the scale-later option.
 
 | ID | Issue | Risk | Fix | Status |
 |----|-------|------|-----|--------|
@@ -418,7 +417,7 @@ Remediation status as of the follow-up work (2026-07-21): **C1, C2, C3, C5, C6 �
 | C3 | RBAC no-op (every member = admin) | Any member rotates/disconnects LLM providers, deletes projects | **Clerk org role → RBAC.** BFF resolves the Clerk org role (`org:admin`→admin, else member) and forwards it as a trusted, server-set `X-Meshify-Org-Role` header (overwrites any browser value, so members can't forge admin). `AuthContext.isOrgAdmin` derives from it in the auth guard; a request with no header = direct API-key caller (server credential) = full access. Gated: LLM provider mgmt (`requireLlmAdmin`) + destructive ops via new `requireOrgAdmin` — project deletion, connector disconnect, and all integration connect/reconnect/disconnect/registration routes (all → 403 for members). 137 platform-api tests pass incl. new RBAC + role-mapping tests. | ✅ DONE |
 | C4 | Weak/placeholder prod secrets + local `.env` live keys | Brute-forceable encryption; leaked provider keys | **Code done:** `loadEnv` now fail-closes in production on weak/placeholder `PLATFORM_API_KEY_PEPPER`/`ORG_KEY_ENCRYPTION_KEY`/`INTEGRATION_ENCRYPTION_KEY` (placeholder markers + entropy check; 5 tests). `.env.example` points at `openssl rand -base64 32`. **Operator action still required:** generate real 32-byte keys, rotate the live provider/Clerk keys currently in the untracked local `.env`, and remove the stray `CLERK_SECRET_KEY` from `apps/web/.env`. | 🟡 CODE DONE / ops pending |
 | C5 | No `.dockerignore` | `.env` baked into image layers | Added `.dockerignore` — excludes `.env*`, `node_modules`, `**/dist`, and (critically) `**/*.tsbuildinfo` so images rebuild cleanly from source instead of shipping host artifacts. | ✅ DONE |
-| C6 | Ingress host/TLS are placeholders | Prod apply deploys a dead host | `overlays/prod` now **overrides** the ingress host + TLS host (to a loud `api.REPLACE-ME.example.com` placeholder in the env-specific overlay, not silently inherited from base) and the K8s README makes setting it a required pre-deploy step (`kubectl kustomize` verified). For the chosen free-tier path this is the scale-later option — the browser tier deploys on Cloudflare/Render per §8, not this ingress. | ✅ DONE |
+| C6 | Ingress host/TLS are placeholders | Prod apply deploys a dead host | `overlays/prod` now **overrides** the ingress host + TLS host (to a loud `api.REPLACE-ME.example.com` placeholder in the env-specific overlay, not silently inherited from base) and the K8s README makes setting it a required pre-deploy step (`kubectl kustomize` verified). For the chosen path this is the scale-later option — the browser tier deploys on Railway per §8, not this ingress. | ✅ DONE |
 
 > **M5 (Dockerfile COPY-list drift), fixed in passing:** completing C5's clean-rebuild exposed that `platform-api` and `worker` Dockerfiles had stale COPY lists missing packages their tsconfig now references (platform-api: ai/github/providers/slack; worker: providers/slack/vector-store) — the old images only "worked" by shipping host-built `dist/`. Both are now completed to their full dependency closures and build clean in-image.
 
@@ -453,7 +452,7 @@ Remediation status (2026-07-21 follow-up): **M1–M6 — ALL DONE & verified.**
 | M1 | zod validation missing on documents/jobs/connectors/webhooks controllers | Malformed input reaches use cases | Added a reusable `requireUuidParams` guard (`apps/platform-api/src/http/`) applied to documents(`documentId`)/jobs(`jobId`)/connectors(`connectorId`)/integrations(`integrationId`) — a non-UUID id now returns 400 instead of a Postgres `uuid`-syntax 500. Webhooks stay signature-verified (that IS their validation). +5 tests. | ✅ DONE |
 | M2 | No upload size/type limit at BFF edge | Oversized/abusive uploads streamed through | Added `maxBodySize(50MB)` on the BFF `/api/v1` — rejects an oversized declared `Content-Length` with 413 before streaming (no buffering), matching the nginx `client_max_body_size` and platform-api's multer cap. +4 tests. | ✅ DONE |
 | M3 | K8s missing NetworkPolicy / PodSecurity / dedicated ServiceAccounts | Lateral movement, over-privileged pods | Added default-deny-ingress + platform-api ingress-allow NetworkPolicies, PSA `restricted` enforce label (all workloads already comply), and a dedicated `meshify` ServiceAccount with `automountServiceAccountToken: false` on all deployments + the migrate Job. kustomize validated. | ✅ DONE |
-| M4 | No metrics/tracing/alerting stack | Blind in prod | platform-api exposes Prometheus `/metrics` (prom-client: process/nodejs + `http_request_duration_seconds` by method/route/status), token-gated by `METRICS_TOKEN`. Added `infrastructure/kubernetes/monitoring/` ServiceMonitor + PrometheusRule (5xx rate, p95, down, not-ready, queue backlog) kept out of base kustomize, and `docs/operations/OBSERVABILITY.md` (Grafana Cloud for Render, ServiceMonitor for K8s). +3 tests; verified live. Worker HTTP metrics + OTel tracing noted as further steps. | ✅ DONE |
+| M4 | No metrics/tracing/alerting stack | Blind in prod | platform-api exposes Prometheus `/metrics` (prom-client: process/nodejs + `http_request_duration_seconds` by method/route/status), token-gated by `METRICS_TOKEN`. Added `infrastructure/kubernetes/monitoring/` ServiceMonitor + PrometheusRule (5xx rate, p95, down, not-ready, queue backlog) kept out of base kustomize, and `docs/operations/OBSERVABILITY.md` (Grafana Cloud for the Railway path, ServiceMonitor for K8s). +3 tests; verified live. Worker HTTP metrics + OTel tracing noted as further steps. | ✅ DONE |
 | M5 | Hand-maintained Dockerfile COPY lists | Silent breakage on dep-graph change | Migrated the 4 Node app Dockerfiles to `pnpm deploy --prod` — runtime derived from the actual dep graph, no COPY lists (−206 lines). Images ~10% smaller; migrate Job path updated. All build + run non-root, verified. | ✅ DONE |
 | M6 | No DB backup/PITR or Qdrant snapshot policy | Data loss | `docs/operations/BACKUP_DR.md` — Postgres (Neon PITR) is the source of truth, B2 durable, Qdrant/Redis derived/ephemeral; RPO/RTO targets, full-restore runbook, and the critical encryption-key backup note. | ✅ DONE |
 

@@ -1,0 +1,16 @@
+# Railway service config — meshify-observability (RocketRide pipeline-trace subscriber).
+#
+# Wiring:
+#   • Config-as-code path = apps/observability/railway.toml, Root Directory = / (repo root).
+#   • Private only, no inbound HTTP.
+#   • MUST stay at exactly ONE replica — it is a singleton DAP subscriber and has
+#     Postgres advisory-lock leader election, but do not scale it deliberately.
+#   • Env: NODE_ENV=production + the shared backend variables.
+[build]
+builder = "dockerfile"
+dockerfilePath = "apps/observability/Dockerfile"
+
+[deploy]
+numReplicas = 1
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

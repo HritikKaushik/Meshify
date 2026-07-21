@@ -44,7 +44,7 @@ can be rebuilt.
 3. **Object storage** — B2 bucket intact (or restore versions). No action if durable.
 4. **Redis** — provision a fresh Upstash DB; set `REDIS_URL`. Empty is fine.
 5. **Qdrant** — restore the latest snapshot into a fresh cluster; set `QDRANT_URL`/`QDRANT_API_KEY`. If no usable snapshot, skip — step 7 rebuilds it.
-6. **Deploy** the backend services (Render Blueprint / K8s) with the restored env; run the migrate Job.
+6. **Deploy** the backend services (Railway / K8s) with the restored env; run the migrate Job.
 7. **Rebuild derived state if needed** — re-run ingestion for projects whose Qdrant collections are missing/stale (from Postgres doc rows + B2 files + connected repos).
 8. **Verify** per [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md) step 10 (health + a real ingest→chat round-trip).
 

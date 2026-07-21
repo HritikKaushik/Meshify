@@ -21,19 +21,21 @@
 `/metrics` leaks internal detail, so set **`METRICS_TOKEN`** in production; the
 endpoint then requires `Authorization: Bearer <token>`. Unset (dev) leaves it open.
 
-## Scraping — Render / Cloudflare (the free-tier path)
+## Scraping — Railway (the non-K8s path)
 Use a **Grafana Cloud** free account + the Grafana Agent (or any Prometheus) to
-scrape the platform-api service URL:
+scrape the platform-api service. On Railway, scrape it over the **private network**
+(`http://meshify-platform-api.railway.internal:3000/metrics`) so `/metrics` never
+needs a public domain; the token below is defense-in-depth:
 
 ```yaml
 # grafana-agent scrape_config
 - job_name: meshify-platform-api
   metrics_path: /metrics
-  scheme: https
+  scheme: http   # private network on Railway; use https only if scraping a public TLS host
   authorization:
     credentials: <METRICS_TOKEN>
   static_configs:
-    - targets: ["platform-api.internal.yourhost"] # the API's reachable host:port
+    - targets: ["meshify-platform-api.railway.internal:3000"] # or your reachable host:port
 ```
 Keep the API's `/metrics` off the public ingress if possible (scrape it on an
 internal address); the token is the backstop if it is reachable.
