@@ -9,9 +9,13 @@ export interface RateLimiter {
 /**
  * Per-API-key rate limit. Mount AFTER authGuard so `req.auth.keyId` is the
  * identity — limits follow the credential, not a spoofable client IP. Emits
- * standard `RateLimit-*` headers; 429 + `Retry-After` on exhaustion. If the
- * limiter backend errors, requests are allowed through (fail-open) so a Redis
- * blip degrades throttling rather than the whole API.
+ * standard `RateLimit-*` headers; 429 + `Retry-After` on exhaustion.
+ *
+ * Fails CLOSED (503) if the limiter throws. In production the limiter is a
+ * {@link FallbackRateLimiter} that already degrades a Redis outage to an
+ * in-process limiter, so a throw here is a genuine last resort — refusing the
+ * request is safer than dropping throttling entirely (the previous fail-open
+ * behaviour let a Redis blip disable rate limiting for the whole API).
  */
 export function rateLimitGuard(limiter: RateLimiter) {
 	return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -25,8 +29,9 @@ export function rateLimitGuard(limiter: RateLimiter) {
 		try {
 			decision = await limiter.hit(identity);
 		} catch (err) {
-			req.log?.warn({ err }, 'rate limiter unavailable — allowing request');
-			next();
+			req.log?.error({ err }, 'rate limiter unavailable — failing closed');
+			res.setHeader('Retry-After', 5);
+			res.status(503).json({ error: 'Service temporarily unavailable' });
 			return;
 		}
 

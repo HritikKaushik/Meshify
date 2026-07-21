@@ -1,3 +1,4 @@
+import '@meshify/telemetry'; // MUST be first — instruments http/express/pg before they load
 import express from 'express';
 import { pinoHttp } from 'pino-http';
 import pg from 'pg';
@@ -9,6 +10,7 @@ import { RedisChecker } from './modules/health/infrastructure/redis.checker.js';
 import { QdrantChecker } from './modules/health/infrastructure/qdrant.checker.js';
 import { CheckHealthUseCase } from './modules/health/application/check-health.usecase.js';
 import { createHealthController } from './modules/health/interface/health.controller.js';
+import { createMetrics } from './modules/observability/metrics.js';
 import { PostgresProjectRepository } from '@meshify/data-access';
 import { QdrantCollectionProvisioner } from '@meshify/vector-store';
 import { CreateProjectUseCase } from './modules/projects/application/create-project.usecase.js';
@@ -72,6 +74,8 @@ import { PostgresApiKeyRepository, PostgresAuditLogRepository } from '@meshify/d
 import { AuthenticateApiKeyUseCase } from './modules/security/application/authenticate.usecase.js';
 import { authGuard } from './modules/security/interface/auth.guard.js';
 import { RedisRateLimiter } from './modules/security/infrastructure/redis-rate-limiter.js';
+import { InMemoryRateLimiter } from './modules/security/infrastructure/in-memory-rate-limiter.js';
+import { FallbackRateLimiter } from './modules/security/infrastructure/fallback-rate-limiter.js';
 import { rateLimitGuard } from './modules/security/interface/rate-limit.guard.js';
 import { auditLogMiddleware } from './modules/security/interface/audit-log.middleware.js';
 import {
@@ -289,8 +293,13 @@ async function bootstrap(): Promise<void> {
 	const webhookEventRepository = new PostgresWebhookEventRepository(pgPool);
 	const webhookEventsQueue = createWebhookEventsQueue(bullRedis);
 	// Webhooks are pre-auth, so the per-key limiter can't apply — use a
-	// per-provider fixed window generous enough for bursty pushes.
-	const webhookLimiter = new RedisRateLimiter(redis, 600, 60);
+	// per-provider fixed window generous enough for bursty pushes. Falls back to an
+	// in-process limiter if Redis is down rather than dropping throttling.
+	const webhookLimiter = new FallbackRateLimiter(
+		new RedisRateLimiter(redis, 600, 60),
+		new InMemoryRateLimiter(600, 60),
+		(err) => logger.warn({ err }, 'webhook rate limiter fell back to in-memory (redis unavailable)')
+	);
 
 	const attachSlackWorkspace = new AttachSlackWorkspaceUseCase(integrationRepository, knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, credentialVault, slackClient);
 	const connectRepositoryFromIntegration = new ConnectRepositoryFromIntegrationUseCase(
@@ -354,13 +363,23 @@ async function bootstrap(): Promise<void> {
 	const apiKeyRepository = new PostgresApiKeyRepository(pgPool);
 	const auditLogRepository = new PostgresAuditLogRepository(pgPool);
 	const authenticate = new AuthenticateApiKeyUseCase(apiKeyRepository, env.PLATFORM_API_KEY_PEPPER);
-	const rateLimiter = new RedisRateLimiter(redis, env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC);
+	const rateLimiter = new FallbackRateLimiter(
+		new RedisRateLimiter(redis, env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC),
+		new InMemoryRateLimiter(env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC),
+		(err) => logger.warn({ err }, 'rate limiter fell back to in-memory (redis unavailable)')
+	);
 
 	const app = express();
 	// Honour X-Forwarded-For for accurate client IPs in audit logs (behind a
 	// load balancer / ingress). Rate limits key on the API key, not the IP.
 	app.set('trust proxy', true);
 	app.use(pinoHttp({ logger }));
+
+	// Prometheus: time every request (mounted early) and expose /metrics (public,
+	// token-gated). See modules/observability/metrics.ts.
+	const metrics = createMetrics({ token: env.METRICS_TOKEN });
+	app.use(metrics.httpMiddleware);
+	app.get('/metrics', metrics.metricsHandler);
 
 	// Public webhook receiver — MUST precede express.json(): provider
 	// signatures cover the exact raw bytes, so nothing may parse the body first.

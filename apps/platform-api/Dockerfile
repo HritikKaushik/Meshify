@@ -1,59 +1,31 @@
+# Assembled via `pnpm deploy` — the runtime image is derived from the actual
+# dependency graph, so there are no hand-maintained per-package COPY lists to
+# drift out of sync (the failure mode that previously shipped host-built dist).
 FROM node:22-alpine AS base
 RUN corepack enable
 WORKDIR /repo
 
-FROM base AS deps
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY packages/config/package.json packages/config/package.json
-COPY packages/data-access/package.json packages/data-access/package.json
-COPY packages/embeddings/package.json packages/embeddings/package.json
-COPY packages/object-storage/package.json packages/object-storage/package.json
-COPY packages/queues/package.json packages/queues/package.json
-COPY packages/rocketride-gateway/package.json packages/rocketride-gateway/package.json
-COPY packages/shared/package.json packages/shared/package.json
-COPY packages/vector-store/package.json packages/vector-store/package.json
-COPY apps/platform-api/package.json apps/platform-api/package.json
-RUN pnpm install --frozen-lockfile
-
-FROM deps AS build
-COPY tsconfig.base.json ./
-COPY packages/config packages/config
-COPY packages/data-access packages/data-access
-COPY packages/embeddings packages/embeddings
-COPY packages/object-storage packages/object-storage
-COPY packages/queues packages/queues
-COPY packages/rocketride-gateway packages/rocketride-gateway
-COPY packages/shared packages/shared
-COPY packages/vector-store packages/vector-store
+FROM base AS build
+# Whole workspace source (the .dockerignore keeps node_modules/dist/tsbuildinfo
+# out). Copying wholesale is what removes the drift — `pnpm deploy` prunes to just
+# what platform-api needs. Other apps' manifests may be absent; pnpm tolerates it.
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
+COPY packages packages
 COPY apps/platform-api apps/platform-api
-RUN pnpm --filter @meshify/config --filter @meshify/data-access --filter @meshify/embeddings --filter @meshify/object-storage --filter @meshify/queues --filter @meshify/rocketride-gateway --filter @meshify/shared --filter @meshify/vector-store build \
-	&& pnpm --filter @meshify/platform-api build
+RUN pnpm install --frozen-lockfile
+# Build the app and its workspace dependencies (`...` = "and its deps").
+RUN pnpm --filter @meshify/platform-api... build
+# Produce a self-contained prod deployment (app + injected workspace deps + prod
+# node_modules). data-access ships its migrations/ so the migrate Job can run.
+RUN pnpm --filter=@meshify/platform-api deploy --prod /prod
 
 FROM base AS runtime
 ENV NODE_ENV=production
-COPY --from=build /repo/pnpm-workspace.yaml /repo/package.json /repo/pnpm-lock.yaml ./
-COPY --from=build /repo/packages/config/package.json packages/config/package.json
-COPY --from=build /repo/packages/config/dist packages/config/dist
-COPY --from=build /repo/packages/data-access/package.json packages/data-access/package.json
-COPY --from=build /repo/packages/data-access/dist packages/data-access/dist
-# Migration SQL must ship in the image so the K8s migrate Job (node
-# packages/data-access/dist/migrate.js) can find it at runtime.
-COPY --from=build /repo/packages/data-access/migrations packages/data-access/migrations
-COPY --from=build /repo/packages/embeddings/package.json packages/embeddings/package.json
-COPY --from=build /repo/packages/embeddings/dist packages/embeddings/dist
-COPY --from=build /repo/packages/object-storage/package.json packages/object-storage/package.json
-COPY --from=build /repo/packages/object-storage/dist packages/object-storage/dist
-COPY --from=build /repo/packages/queues/package.json packages/queues/package.json
-COPY --from=build /repo/packages/queues/dist packages/queues/dist
-COPY --from=build /repo/packages/rocketride-gateway/package.json packages/rocketride-gateway/package.json
-COPY --from=build /repo/packages/rocketride-gateway/dist packages/rocketride-gateway/dist
-COPY --from=build /repo/packages/shared/package.json packages/shared/package.json
-COPY --from=build /repo/packages/shared/dist packages/shared/dist
-COPY --from=build /repo/packages/vector-store/package.json packages/vector-store/package.json
-COPY --from=build /repo/packages/vector-store/dist packages/vector-store/dist
-COPY --from=build /repo/apps/platform-api/package.json apps/platform-api/package.json
-COPY --from=build /repo/apps/platform-api/dist apps/platform-api/dist
-RUN pnpm install --frozen-lockfile --prod
-
+WORKDIR /app
+COPY --from=build /prod ./
+USER node
 EXPOSE 3000
-CMD ["node", "apps/platform-api/dist/main.js"]
+# Liveness only — /health/live has no downstream checks (mirrors the K8s probe).
+HEALTHCHECK --interval=15s --timeout=3s --start-period=15s --retries=3 \
+	CMD node -e "fetch('http://127.0.0.1:'+(process.env.PLATFORM_PORT||3000)+'/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "dist/main.js"]

@@ -34,22 +34,30 @@ async function main(): Promise<void> {
 		embedding: { provider: 'openai', profile: 'text-embedding-3-large', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
 		chunkSize: 768,
 	});
-	const ingestResult = await client.validate({ pipeline: ingestPipeline });
-	if (ingestResult.errors.length > 0) {
-		throw new Error(`Ingest pipeline invalid: ${JSON.stringify(ingestResult.errors)}`);
+	// The engine's rrext_validate expects the .pipe wrapper `{ pipeline: {...} }`.
+	// The SDK's use()/restart() auto-unwrap that form, but validate() forwards its
+	// argument verbatim — so a flat PipelineConfig arrives with components:null and
+	// fails with ccode 40. Wrap it here (the runtime use()/restart() stay flat). A
+	// successful validate returns the normalized pipeline with no errors/warnings
+	// arrays, so default them.
+	const ingestResult = await client.validate({ pipeline: { pipeline: ingestPipeline } });
+	const ingestErrors = ingestResult.errors ?? [];
+	if (ingestErrors.length > 0) {
+		throw new Error(`Ingest pipeline invalid: ${JSON.stringify(ingestErrors)}`);
 	}
-	console.log(`    OK — ${ingestResult.warnings.length} warning(s)`);
+	console.log(`    OK — ${(ingestResult.warnings ?? []).length} warning(s)`);
 
 	console.log('4/4 Validating a sample chat pipeline...');
 	const chatPipeline = buildChatPipeline({
 		pipelineGuid: '00000000-0000-4000-8000-000000000002',
 		llm: { provider: 'openai', profile: 'openai-5', apiKeyEnvVar: 'ROCKETRIDE_OPENAI_KEY' },
 	});
-	const chatResult = await client.validate({ pipeline: chatPipeline });
-	if (chatResult.errors.length > 0) {
-		throw new Error(`Chat pipeline invalid: ${JSON.stringify(chatResult.errors)}`);
+	const chatResult = await client.validate({ pipeline: { pipeline: chatPipeline } });
+	const chatErrors = chatResult.errors ?? [];
+	if (chatErrors.length > 0) {
+		throw new Error(`Chat pipeline invalid: ${JSON.stringify(chatErrors)}`);
 	}
-	console.log(`    OK — ${chatResult.warnings.length} warning(s)`);
+	console.log(`    OK — ${(chatResult.warnings ?? []).length} warning(s)`);
 
 	await pool.shutdown();
 	console.log('\nAll checks passed.');

@@ -11,8 +11,10 @@ related:
 
 # @meshify/object-storage
 
-A thin S3-compatible client (MinIO locally, S3/R2/Spaces in production). Callers
-never touch the AWS SDK directly, so swapping providers only touches config.
+A thin S3-compatible client (MinIO locally, Backblaze B2/S3/Spaces in production).
+Callers never touch the AWS SDK directly, so swapping providers only touches config.
+Request/response checksums are set to `WHEN_REQUIRED` so the client stays portable
+across stricter S3-compatible endpoints (B2, some MinIO/Ceph builds).
 
 ## Purpose & responsibilities
 - `putObject` / `getObject` / `deleteObject` against a configured bucket.

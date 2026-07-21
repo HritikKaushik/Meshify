@@ -44,7 +44,11 @@ function harness(provider: Provider, integrationOverrides: Parameters<typeof bui
 	registry.register(provider);
 	const integration = buildIntegration({ id: 'int-1', provider: 'fakehub', orgId: 'org-1', status: 'active', ...integrationOverrides });
 	const credentials = new InMemoryIntegrationCredentialRepository();
-	const vault = new CredentialVault(credentials, fakeCipher);
+	// Wire the vault to the SAME fixed clock as the processor — otherwise its
+	// get()/expiry check uses the real system clock and any credential the test
+	// stores with an expiry relative to NOW reads as expired once real time
+	// passes that instant (a date-triggered flake).
+	const vault = new CredentialVault(credentials, fakeCipher, () => NOW);
 	const enqueued: unknown[] = [];
 	const deps: MaintenanceProcessorDeps = {
 		registry,

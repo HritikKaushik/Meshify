@@ -10,7 +10,7 @@ export interface ObjectStorageConfig {
 }
 
 /**
- * Thin S3-compatible wrapper — MinIO locally, real S3/R2/Spaces in
+ * Thin S3-compatible wrapper — MinIO locally, real S3/Backblaze B2/R2/Spaces in
  * production, per the confirmed Phase I decision. Callers never touch the
  * AWS SDK directly so swapping providers only ever touches ObjectStorageConfig.
  */
@@ -25,6 +25,12 @@ export class ObjectStorageClient {
 			region: config.region,
 			forcePathStyle: config.forcePathStyle,
 			credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+			// The AWS SDK (>= ~3.729) sends default CRC32 request checksums, which
+			// stricter S3-compatible endpoints (Backblaze B2, some MinIO/Ceph builds)
+			// reject. Send checksums only when an operation actually requires them —
+			// maximally portable across every S3-alternative, a no-op against real S3.
+			requestChecksumCalculation: 'WHEN_REQUIRED',
+			responseChecksumValidation: 'WHEN_REQUIRED',
 		});
 	}
 

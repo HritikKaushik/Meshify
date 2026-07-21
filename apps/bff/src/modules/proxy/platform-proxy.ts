@@ -30,8 +30,11 @@ export function createPlatformApiProxy(platformApiOrigin: string): RequestHandle
 		pathRewrite: (path) => `/v1${path}`,
 		on: {
 			proxyReq: (proxyReq, req) => {
-				const apiKey = (req as Request).meshify?.apiKey;
-				if (apiKey) proxyReq.setHeader('Authorization', `Bearer ${apiKey}`);
+				const meshify = (req as Request).meshify;
+				if (meshify?.apiKey) proxyReq.setHeader('Authorization', `Bearer ${meshify.apiKey}`);
+				// Trusted org role for platform-api's RBAC. setHeader OVERWRITES any
+				// value the browser tried to send, so a member can't forge 'admin'.
+				proxyReq.setHeader('X-Meshify-Org-Role', meshify?.orgRole ?? 'member');
 			},
 		},
 	});

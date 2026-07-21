@@ -21,7 +21,7 @@ kubernetes/
 
 ## Prerequisites
 
-- The stateful dependencies — **PostgreSQL, Redis, Qdrant, object storage (S3/R2/MinIO), and the RocketRide server** — are expected to exist already (managed services in prod, or in-cluster). The `ConfigMap`/`Secret` point the apps at them; these manifests do **not** provision them.
+- The stateful dependencies — **PostgreSQL, Redis, Qdrant, object storage (Backblaze B2/S3/MinIO), and the RocketRide server** — are expected to exist already (managed services in prod, or in-cluster). The `ConfigMap`/`Secret` point the apps at them; these manifests do **not** provision them.
 - **KEDA** installed in the cluster (for worker queue-depth autoscaling).
 - **metrics-server** (for the platform-api CPU HPA).
 - An ingress controller + cert-manager if you use `platform-api.ingress.yaml`.
@@ -36,6 +36,9 @@ kubectl create namespace meshify --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n meshify apply -f /tmp/app-secrets.yaml
 
 # 2. Adjust base/app-config.configmap.yaml to point at your Postgres/Redis/Qdrant/S3/RocketRide.
+#    For prod, ALSO set your real API host: replace api.REPLACE-ME.example.com in
+#    overlays/prod/kustomization.yaml (Ingress patch). Applying with the placeholder
+#    deploys a non-functional Ingress.
 
 # 3. Run migrations and wait for completion (uses the platform-api image).
 kubectl -n meshify apply -f base/migrate.job.yaml

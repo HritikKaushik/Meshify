@@ -3,6 +3,7 @@ import multer from 'multer';
 import type { Document } from '@meshify/data-access';
 import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
 import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
+import { requireUuidParams } from '../../../http/require-uuid-params.js';
 import type { UploadDocumentUseCase } from '../application/upload-document.usecase.js';
 import type { ListDocumentsUseCase } from '../application/list-documents.usecase.js';
 import { DeleteDocumentUseCase, DocumentNotFoundError } from '../application/delete-document.usecase.js';
@@ -63,7 +64,7 @@ export function createDocumentsController(deps: {
 	});
 
 	// Remove an ingested document — purges its vectors, raw upload, and DB row.
-	router.delete('/v1/projects/:projectId/documents/:documentId', guard, async (req, res) => {
+	router.delete('/v1/projects/:projectId/documents/:documentId', guard, requireUuidParams('documentId'), async (req, res) => {
 		try {
 			await deps.deleteDocument.execute({
 				project: req.project!,
@@ -82,7 +83,7 @@ export function createDocumentsController(deps: {
 
 	// Stream a document's raw upload back (project-isolation enforced) — powers the
 	// Documents grid's PDF thumbnails and in-app previews.
-	router.get('/v1/projects/:projectId/documents/:documentId/content', guard, async (req, res) => {
+	router.get('/v1/projects/:projectId/documents/:documentId/content', guard, requireUuidParams('documentId'), async (req, res) => {
 		try {
 			const { buffer, contentType, filename } = await deps.getDocumentContent.execute({
 				projectId: req.project!.id,

@@ -22,12 +22,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Typecheck, build, test
         run: pnpm exec turbo run typecheck build test
 
-  # Build (and, on main, publish) the three deployable images. Catches
+      # Full dependency audit (prod + dev). The tree is currently clean at high+;
+      # dev/build tooling (vitest/vite/esbuild) was upgraded past its advisories.
+      # If a future dev-only advisory has no fix yet and must ship, narrow this
+      # back to `--prod` (dev tooling isn't in the images or run in prod).
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
+
+  # Secret scanning across the full history — catches a committed key before it
+  # ships. gitleaks-action is free for personal repos.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so gitleaks can scan past commits
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build (and, on main, publish) the deployable backend images. Catches
   # Dockerfile/packaging regressions that the JS build can't — e.g. a missing
-  # COPY of migrations or the lockfile — which have bitten us before.
+  # COPY of migrations or the lockfile — which have bitten us before. The bff is
+  # a plain Node service (no build args), so it rides the same matrix; web needs
+  # a build-time VITE_ arg and is built in its own job below.
   images:
     needs: verify
     runs-on: ubuntu-latest
@@ -36,7 +60,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        app: [platform-api, worker, observability]
+        app: [platform-api, worker, observability, bff]
     env:
       REGISTRY: ghcr.io
       IMAGE: ghcr.io/${{ github.repository_owner }}/meshify-${{ matrix.app }}
@@ -60,8 +84,67 @@ jobs:
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
           push: ${{ github.ref == 'refs/heads/main' }}
+          load: true # keep the image in the local daemon so Trivy can scan it
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:${{ github.ref == 'refs/heads/main' && 'latest' || 'pr' }}
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      # Fail only on FIXABLE high/critical CVEs — unfixable base-image noise
+      # shouldn't block a release; a fixable one means "rebuild on a newer base".
+      - name: Scan image (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+  # The web SPA is built separately because it bakes a build-time public var
+  # (VITE_CLERK_PUBLISHABLE_KEY — publishable/non-secret) into the bundle, so the
+  # image is environment-specific. The key comes from a repo variable (Settings →
+  # Variables); an empty value still builds fine (the key is only read at runtime).
+  web-image:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/meshify-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' }}
+          load: true # keep the image in the local daemon so Trivy can scan it
+          build-args: |
+            VITE_CLERK_PUBLISHABLE_KEY=${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:${{ github.ref == 'refs/heads/main' && 'latest' || 'pr' }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - name: Scan image (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

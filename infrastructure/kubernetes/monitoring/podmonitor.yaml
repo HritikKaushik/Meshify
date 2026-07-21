@@ -1,0 +1,22 @@
+# Scrapes the worker's metrics endpoint directly from its pods (a PodMonitor,
+# not a ServiceMonitor — the worker has no Service; it's a Redis-driven consumer).
+# Requires the Prometheus Operator; apply with the rest of monitoring/.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: worker
+  namespace: meshify
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: meshify
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+  podMetricsEndpoints:
+    - port: metrics # the containerPort name on the worker pod
+      path: /metrics
+      interval: 30s
+      bearerTokenSecret:
+        name: meshify-secrets
+        key: METRICS_TOKEN

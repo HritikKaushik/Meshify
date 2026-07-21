@@ -29,8 +29,40 @@ describe('AuthenticateApiKeyUseCase', () => {
 
 		const auth = await new AuthenticateApiKeyUseCase(repo, PEPPER).execute(`Bearer ${plaintext}`);
 
-		expect(auth).toEqual({ orgId: 'org-1', keyId: 'key-1', scopes: ['read'] });
+		// The key is scoped to ['read'] (non-empty, no 'admin'), so it is NOT an org
+		// admin — least privilege — even as a direct caller with no role header.
+		expect(auth).toEqual({ orgId: 'org-1', keyId: 'key-1', scopes: ['read'], isOrgAdmin: false });
 		expect(touch).toHaveBeenCalledWith('key-1');
+	});
+
+	it.each([
+		['admin role → org admin', 'admin', true],
+		['member role → not org admin', 'member', false],
+		['unknown role → not org admin', 'something-else', false],
+		['no role header → full access (direct server key)', undefined, true],
+	])('derives isOrgAdmin from the forwarded org role: %s', async (_label, roleHeader, expected) => {
+		const { plaintext } = generateApiKey();
+		const hash = hashApiKey(PEPPER, plaintext);
+		const { repo } = fakeRepo({ [hash]: activeKey() });
+
+		const auth = await new AuthenticateApiKeyUseCase(repo, PEPPER).execute(`Bearer ${plaintext}`, roleHeader);
+
+		expect(auth.isOrgAdmin).toBe(expected);
+	});
+
+	it.each([
+		['empty scopes → unrestricted, direct caller is admin', [], undefined, true],
+		['scoped key without "admin" → not admin even as direct caller', ['read'], undefined, false],
+		['scoped key with "admin" → admin as direct caller', ['admin'], undefined, true],
+		['admin-scoped key is still downscoped by a member role', ['admin'], 'member', false],
+	])('applies key scopes to isOrgAdmin: %s', async (_label, scopes, roleHeader, expected) => {
+		const { plaintext } = generateApiKey();
+		const hash = hashApiKey(PEPPER, plaintext);
+		const { repo } = fakeRepo({ [hash]: activeKey({ scopes }) });
+
+		const auth = await new AuthenticateApiKeyUseCase(repo, PEPPER).execute(`Bearer ${plaintext}`, roleHeader);
+
+		expect(auth.isOrgAdmin).toBe(expected);
 	});
 
 	it.each([

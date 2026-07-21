@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # JS/TS dependencies (pnpm workspace via the root lockfile). Minor + patch are
+  # grouped into one PR to cut noise; majors come as individual PRs to review.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # Keep the pinned GitHub Actions current (they're a supply-chain surface).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Base images (node:22-alpine, nginx-unprivileged) — a Dependabot bump is how a
+  # fixable base-image CVE gets picked up before Trivy fails a release build.
+  - package-ecosystem: docker
+    directories:
+      - /apps/platform-api
+      - /apps/worker
+      - /apps/observability
+      - /apps/bff
+      - /apps/web
+    schedule:
+      interval: weekly

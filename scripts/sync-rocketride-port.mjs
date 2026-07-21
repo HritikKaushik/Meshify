@@ -46,6 +46,20 @@ function engineListenPorts() {
 	return [...ports].sort((a, b) => a - b);
 }
 
+/**
+ * Is this URI a local engine (something we may retarget to a fresh port), or a
+ * deliberately-pinned remote/cloud engine (which we must never touch)? An
+ * unparseable value is treated as local so a broken URI still gets repaired.
+ */
+function isLocalUri(uri) {
+	try {
+		const host = new URL(uri).hostname;
+		return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+	} catch {
+		return true;
+	}
+}
+
 /** Resolves the HTTP status of a GET to localhost:port, or 0 if it doesn't respond. */
 function probe(port) {
 	return new Promise((resolve) => {
@@ -62,6 +76,32 @@ function probe(port) {
 }
 
 async function main() {
+	// Read .env up front so we can honour a pinned remote URI before doing any
+	// local-port discovery.
+	let env;
+	try {
+		env = readFileSync(ENV_PATH, 'utf8');
+	} catch {
+		console.warn(`[rocketride] no .env at ${ENV_PATH} — skipping port sync.`);
+		return;
+	}
+
+	const uriLine = /^ROCKETRIDE_URI=.*$/m;
+	const currentLine = env.match(uriLine)?.[0];
+	if (!currentLine) {
+		console.warn('[rocketride] no active ROCKETRIDE_URI line in .env — skipping port sync.');
+		return;
+	}
+	const currentUri = currentLine.slice('ROCKETRIDE_URI='.length);
+
+	// Respect a deliberately-pinned remote/cloud engine: if ROCKETRIDE_URI points
+	// anywhere other than localhost, the developer is testing against a hosted
+	// RocketRide (e.g. the cloud endpoint), so never clobber it with a local port.
+	if (!isLocalUri(currentUri)) {
+		console.log(`[rocketride] ROCKETRIDE_URI is remote (${currentUri}) — leaving it untouched (pinned to a hosted engine).`);
+		return;
+	}
+
 	const ports = engineListenPorts();
 	if (ports.length === 0) {
 		console.warn('[rocketride] engine not running — leaving ROCKETRIDE_URI as-is. Ingest/chat will fail until the RocketRide VS Code extension starts it.');
@@ -83,29 +123,13 @@ async function main() {
 	}
 
 	const desiredUri = `http://localhost:${livePort}`;
-	let env;
-	try {
-		env = readFileSync(ENV_PATH, 'utf8');
-	} catch {
-		console.warn(`[rocketride] no .env at ${ENV_PATH} — skipping port sync.`);
-		return;
-	}
-
-	// Match the active (uncommented) ROCKETRIDE_URI line only.
-	const uriLine = /^ROCKETRIDE_URI=.*$/m;
-	if (!uriLine.test(env)) {
-		console.warn('[rocketride] no active ROCKETRIDE_URI line in .env — skipping port sync.');
-		return;
-	}
-
-	const current = env.match(uriLine)[0];
-	if (current === `ROCKETRIDE_URI=${desiredUri}`) {
+	if (currentLine === `ROCKETRIDE_URI=${desiredUri}`) {
 		console.log(`[rocketride] ROCKETRIDE_URI already points at the live engine (${desiredUri}).`);
 		return;
 	}
 
 	writeFileSync(ENV_PATH, env.replace(uriLine, `ROCKETRIDE_URI=${desiredUri}`), 'utf8');
-	console.log(`[rocketride] synced ROCKETRIDE_URI → ${desiredUri} (was: ${current.split('=')[1]}).`);
+	console.log(`[rocketride] synced ROCKETRIDE_URI → ${desiredUri} (was: ${currentUri}).`);
 }
 
 main().catch((err) => {

@@ -6,7 +6,7 @@ function limiter(hit: RateLimiter['hit']): RateLimiter {
 	return { hit };
 }
 
-const authed = () => mockRequest({ auth: { orgId: 'o1', keyId: 'k1', scopes: [] } } as never);
+const authed = () => mockRequest({ auth: { orgId: 'o1', keyId: 'k1', scopes: [], isOrgAdmin: true } } as never);
 
 describe('rateLimitGuard', () => {
 	it('allows the request and sets RateLimit headers when under the limit', async () => {
@@ -36,7 +36,7 @@ describe('rateLimitGuard', () => {
 		expect(hit).toHaveBeenCalledWith('k1');
 	});
 
-	it('fails open (allows) when the limiter backend throws', async () => {
+	it('fails closed (503) when the limiter backend throws', async () => {
 		const res = mockResponse();
 		const next = vi.fn();
 		await rateLimitGuard(
@@ -45,8 +45,9 @@ describe('rateLimitGuard', () => {
 			})
 		)(authed(), res, next);
 
-		expect(next).toHaveBeenCalledOnce();
-		expect(res.statusCode).toBe(200);
+		expect(next).not.toHaveBeenCalled();
+		expect(res.statusCode).toBe(503);
+		expect(Number(res.getHeader('Retry-After'))).toBeGreaterThan(0);
 	});
 
 	it('passes through when there is no authenticated key', async () => {

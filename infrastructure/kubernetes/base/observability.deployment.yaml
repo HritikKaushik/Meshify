@@ -1,8 +1,11 @@
-# The DAP event ingester MUST run as a single instance — two replicas would
-# double-write pipeline_runs (no leader election yet; see apps/observability and
-# docs/Architecture.md "DAP event gaps"). replicas is pinned to 1 and there is
-# NO HPA/ScaledObject for it. Recreate strategy guarantees the old pod is gone
-# before the new one starts, so a rollout never briefly runs two subscribers.
+# The DAP event ingester elects a single ACTIVE leader via a Postgres advisory
+# lock (see apps/observability/leader-election.ts): only the leader subscribes /
+# writes pipeline_runs; extra replicas block as hot standbys and take over if the
+# leader dies. That makes >1 replica and rolling updates safe (a brief handover
+# overlap is harmless — upserts are keyed by run_key). RollingUpdate with a
+# surge lets a new pod stand by and take over the instant the old one releases
+# the lock. Bump replicas to 2 for hot-standby HA; no HPA (leadership, not load,
+# gates work).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,13 +19,18 @@ spec:
     matchLabels:
       app.kubernetes.io/name: observability
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0 # keep a leader running during the roll
+      maxSurge: 1 # new pod stands by, takes over when the old releases the lock
   template:
     metadata:
       labels:
         app.kubernetes.io/name: observability
         app.kubernetes.io/part-of: meshify
     spec:
+      serviceAccountName: meshify
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

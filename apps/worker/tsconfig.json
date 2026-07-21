@@ -15,7 +15,13 @@
 			"path": "../../packages/data-access"
 		},
 		{
+			"path": "../../packages/github"
+		},
+		{
 			"path": "../../packages/object-storage"
+		},
+		{
+			"path": "../../packages/providers"
 		},
 		{
 			"path": "../../packages/queues"
@@ -27,16 +33,13 @@
 			"path": "../../packages/shared"
 		},
 		{
-			"path": "../../packages/github"
-		},
-		{
 			"path": "../../packages/slack"
 		},
 		{
-			"path": "../../packages/vector-store"
+			"path": "../../packages/telemetry"
 		},
 		{
-			"path": "../../packages/providers"
+			"path": "../../packages/vector-store"
 		}
 	],
 	"exclude": [

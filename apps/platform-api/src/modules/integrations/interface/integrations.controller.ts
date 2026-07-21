@@ -15,6 +15,8 @@ import type { ConfigureRegistrationUseCase, DescribeRegistrationUseCase, DeleteR
 import { RegistrationInUseError } from '../application/configure-registration.usecase.js';
 import type { IntegrationEventHub } from '../infrastructure/integration-event-hub.js';
 import { IntegrationNotFoundError, InvalidOAuthStateError, UnsupportedProviderOperationError } from '../application/integration-support.js';
+import { OrgAdminForbiddenError, requireOrgAdmin } from '../../security/authorization/org-authorization.js';
+import { requireUuidParams } from '../../../http/require-uuid-params.js';
 import { ProviderConfigError } from '@meshify/providers';
 
 const SSE_HEARTBEAT_MS = 15_000;
@@ -55,7 +57,9 @@ function toResponse(integration: Integration) {
 }
 
 function mapError(err: unknown, res: import('express').Response, log?: { error: (obj: unknown, msg: string) => void }): void {
-	if (err instanceof ProviderNotFoundError || err instanceof IntegrationNotFoundError) {
+	if (err instanceof OrgAdminForbiddenError) {
+		res.status(403).json({ error: err.message });
+	} else if (err instanceof ProviderNotFoundError || err instanceof IntegrationNotFoundError) {
 		res.status(404).json({ error: err.message });
 	} else if (err instanceof ProviderNotConfiguredError) {
 		res.status(503).json({ error: err.message });
@@ -110,6 +114,7 @@ export function createIntegrationsController(deps: {
 			return;
 		}
 		try {
+			requireOrgAdmin(req.auth!, 'connect integrations');
 			const result = await deps.connectProvider.execute({
 				orgId: req.auth!.orgId,
 				provider: req.params.provider!,
@@ -130,6 +135,7 @@ export function createIntegrationsController(deps: {
 			return;
 		}
 		try {
+			requireOrgAdmin(req.auth!, 'connect integrations');
 			const result = await deps.completeConnect.execute({
 				orgId: req.auth!.orgId,
 				provider: req.params.provider!,
@@ -147,16 +153,17 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	router.post('/v1/integrations/:integrationId/reconnect', async (req, res) => {
+	router.post('/v1/integrations/:integrationId/reconnect', requireUuidParams('integrationId'), async (req, res) => {
 		const parsed = reconnectSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
 			return;
 		}
 		try {
+			requireOrgAdmin(req.auth!, 'reconnect integrations');
 			const result = await deps.reconnectIntegration.execute({
 				orgId: req.auth!.orgId,
-				integrationId: req.params.integrationId!,
+				integrationId: req.params.integrationId as string,
 				returnPath: parsed.data.returnPath,
 				createdByKeyId: req.auth!.keyId,
 			});
@@ -166,21 +173,22 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	router.delete('/v1/integrations/:integrationId', async (req, res) => {
+	router.delete('/v1/integrations/:integrationId', requireUuidParams('integrationId'), async (req, res) => {
 		try {
-			await deps.disconnectIntegration.execute({ orgId: req.auth!.orgId, integrationId: req.params.integrationId! });
+			requireOrgAdmin(req.auth!, 'disconnect integrations');
+			await deps.disconnectIntegration.execute({ orgId: req.auth!.orgId, integrationId: req.params.integrationId as string });
 			res.status(204).send();
 		} catch (err) {
 			mapError(err, res, req.log);
 		}
 	});
 
-	router.get('/v1/integrations/:integrationId/resources', async (req, res) => {
+	router.get('/v1/integrations/:integrationId/resources', requireUuidParams('integrationId'), async (req, res) => {
 		try {
 			const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
 			const result = await deps.listIntegrationResources.execute({
 				orgId: req.auth!.orgId,
-				integrationId: req.params.integrationId!,
+				integrationId: req.params.integrationId as string,
 				cursor,
 			});
 			res.status(200).json(result);
@@ -208,6 +216,7 @@ export function createIntegrationsController(deps: {
 			return;
 		}
 		try {
+			requireOrgAdmin(req.auth!, 'manage provider registrations');
 			const result = await deps.configureRegistration.execute({ orgId: req.auth!.orgId, provider: req.params.provider!, values: parsed.data.values });
 			res.status(200).json(result);
 		} catch (err) {
@@ -218,6 +227,7 @@ export function createIntegrationsController(deps: {
 	// Remove the org's BYOA registration for a provider (revert to managed). 409 if integrations still use it.
 	router.delete('/v1/providers/:provider/registration', async (req, res) => {
 		try {
+			requireOrgAdmin(req.auth!, 'manage provider registrations');
 			await deps.deleteRegistration.execute({ orgId: req.auth!.orgId, provider: req.params.provider! });
 			res.status(204).end();
 		} catch (err) {

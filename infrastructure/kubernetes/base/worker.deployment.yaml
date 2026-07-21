@@ -22,6 +22,8 @@ spec:
         app.kubernetes.io/name: worker
         app.kubernetes.io/part-of: meshify
     spec:
+      serviceAccountName: meshify
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -30,16 +32,20 @@ spec:
       containers:
         - name: worker
           image: meshify/worker:latest
+          ports:
+            # Metrics/health only (queue depth + process metrics); job intake is
+            # via Redis, not HTTP. Scraped by the PodMonitor in monitoring/.
+            - name: metrics
+              containerPort: 9091
           envFrom:
             - configMapRef:
                 name: meshify-config
             - secretRef:
                 name: meshify-secrets
-          # No HTTP surface, so no readiness/liveness probe: a crashed or exited
-          # process is already restarted by the kubelet. BullMQ workers are
-          # stateless consumers — in-flight jobs return to the queue on SIGTERM
-          # and are retried, so termination is safe. Deeper liveness would need a
-          # health port (future).
+          # No readiness probe (job intake is via Redis, not HTTP). A liveness
+          # probe on the metrics /healthz is optional; the kubelet already
+          # restarts a crashed/exited process, and in-flight jobs return to the
+          # queue on SIGTERM and are retried, so termination is safe.
           resources:
             requests:
               cpu: 250m

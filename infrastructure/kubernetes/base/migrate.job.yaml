@@ -25,6 +25,8 @@ spec:
         app.kubernetes.io/part-of: meshify
     spec:
       restartPolicy: Never
+      serviceAccountName: meshify
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -33,7 +35,9 @@ spec:
       containers:
         - name: migrate
           image: meshify/platform-api:latest
-          command: ["node", "packages/data-access/dist/migrate.js"]
+          # The platform-api image is assembled with `pnpm deploy` (WORKDIR /app),
+          # so data-access lives under node_modules and ships its migrations/ there.
+          command: ["node", "node_modules/@meshify/data-access/dist/migrate.js"]
           envFrom:
             - configMapRef:
                 name: meshify-config

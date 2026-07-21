@@ -4,15 +4,20 @@ import { createLogger } from '@meshify/shared';
 import { PostgresPipelineRunRepository } from '@meshify/data-access';
 import { RocketRideClientPool } from '@meshify/rocketride-gateway';
 import { DapEventHandler } from './dap-event-handler.js';
+import { acquireLeadership } from './leader-election.js';
 
-// One long-lived DAP subscriber for the whole platform. Runs as a SINGLE
-// instance: unlike the queue workers it holds one WebSocket subscription and
-// must not be horizontally scaled without leader election, or every replica
-// would double-write events. Upserts are keyed by run_key so a brief overlap
-// during a restart is harmless, but steady-state duplication is not.
+// One long-lived DAP subscriber for the whole platform. It holds a single
+// WebSocket subscription and writes pipeline_runs, so exactly one replica may be
+// ACTIVE at a time — enforced by a Postgres advisory lock (leader election).
+// Extra replicas block as hot standbys and take over if the leader dies; a brief
+// overlap during handover is harmless (upserts are keyed by run_key). This makes
+// rolling restarts / a standby replica safe.
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'observability' });
+
+	// Block until we're the leader — standbys wait here without subscribing.
+	await acquireLeadership(env.DATABASE_URL, logger);
 
 	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
 	const runs = new PostgresPipelineRunRepository(pgPool);

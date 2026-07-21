@@ -18,9 +18,9 @@ describe('authGuard', () => {
 		const req = mockRequest();
 		const res = mockResponse();
 		const next = vi.fn();
-		await authGuard(usecaseReturning({ orgId: 'org-1', keyId: 'k1', scopes: [] }))(req, res, next);
+		await authGuard(usecaseReturning({ orgId: 'org-1', keyId: 'k1', scopes: [], isOrgAdmin: true }))(req, res, next);
 
-		expect(req.auth).toEqual({ orgId: 'org-1', keyId: 'k1', scopes: [] });
+		expect(req.auth).toEqual({ orgId: 'org-1', keyId: 'k1', scopes: [], isOrgAdmin: true });
 		expect(next).toHaveBeenCalledOnce();
 	});
 

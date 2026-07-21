@@ -18,28 +18,31 @@
 			"path": "../../packages/data-access"
 		},
 		{
+			"path": "../../packages/embeddings"
+		},
+		{
 			"path": "../../packages/object-storage"
+		},
+		{
+			"path": "../../packages/providers"
 		},
 		{
 			"path": "../../packages/queues"
 		},
 		{
-			"path": "../../packages/shared"
-		},
-		{
-			"path": "../../packages/vector-store"
-		},
-		{
 			"path": "../../packages/rocketride-gateway"
 		},
 		{
-			"path": "../../packages/embeddings"
+			"path": "../../packages/shared"
 		},
 		{
 			"path": "../../packages/slack"
 		},
 		{
-			"path": "../../packages/providers"
+			"path": "../../packages/telemetry"
+		},
+		{
+			"path": "../../packages/vector-store"
 		}
 	],
 	"exclude": [

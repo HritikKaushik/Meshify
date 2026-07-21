@@ -19,6 +19,21 @@ images:
     newTag: 1.0.0
 
 patches:
+  # REQUIRED before applying: replace api.REPLACE-ME.example.com with your real
+  # public API host (the same host cert-manager will issue a certificate for).
+  # Applying with the placeholder deploys a non-functional Ingress — that's the
+  # C6 gap this override closes by forcing the host to be set in the prod overlay
+  # rather than silently inheriting the base placeholder.
+  - target:
+      kind: Ingress
+      name: platform-api
+    patch: |
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.REPLACE-ME.example.com
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: api.REPLACE-ME.example.com
   - target:
       kind: HorizontalPodAutoscaler
       name: platform-api

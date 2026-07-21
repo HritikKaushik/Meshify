@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { JobEvent } from '@meshify/queues';
 import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
 import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
+import { requireUuidParams } from '../../../http/require-uuid-params.js';
 import type { GetJobStatusUseCase } from '../application/get-job-status.usecase.js';
 import type { ListProjectJobsUseCase } from '../application/list-project-jobs.usecase.js';
 import type { JobEventStream } from '../application/job-event-stream.port.js';
@@ -18,7 +19,7 @@ export function createJobsController(deps: {
 	const guard = projectIsolationGuard(deps.getProject);
 
 	// Single job status (back-compat; org-scoped).
-	router.get('/v1/jobs/:jobId', async (req, res) => {
+	router.get('/v1/jobs/:jobId', requireUuidParams('jobId'), async (req, res) => {
 		const job = await deps.getJobStatus.execute(req.params.jobId as string, req.auth!.orgId);
 		if (!job) {
 			res.status(404).json({ error: `Job "${req.params.jobId}" not found` });

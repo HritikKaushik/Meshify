@@ -1,0 +1,98 @@
+# Tag-triggered production deploy. Push a version tag (e.g. `v1.2.0`) to run it.
+#
+# SCAFFOLD — the actual rollout step is intentionally left as a placeholder
+# because it depends on the hosting platform you wire up (see the deployment
+# runbook in docs/operations/). What IS encoded here is the safe ORDER every
+# production deploy must follow: migrate the database FIRST, then roll out, then
+# smoke-test. Fill in the marked steps and the referenced repository secrets.
+name: Deploy
+
+on:
+  push:
+    tags: ["v*"]
+
+# Never run two production deploys at once.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production # gate on a GitHub Environment (approvals + scoped secrets)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Apply pending schema migrations BEFORE any new code serves traffic.
+      # Migrations must be backward-compatible with the currently-running version
+      # (expand/contract) so the old pods keep working during the rollout.
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: pnpm --filter @meshify/data-access migrate
+
+  rollout:
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      # Render rollout via per-service deploy hooks. The images for this tag are
+      # already built/pushed to GHCR by ci.yml. Set each hook as a repo secret
+      # (Render → service → Settings → Deploy Hook); any that are unset are skipped,
+      # so this is a no-op until you configure it — never a failure.
+      #
+      # On other platforms replace this step: Fly.io →
+      #   flyctl deploy --image ghcr.io/${{ github.repository_owner }}/meshify-<svc>:${{ github.ref_name }}
+      # Kubernetes → bump overlays/prod image tags and `kubectl apply -k overlays/prod`
+      # (the migrate Job already ran in the job above). Cloudflare Pages redeploys web from the repo.
+      - name: Trigger Render deploys
+        env:
+          REF: ${{ github.ref_name }}
+          HOOK_PLATFORM_API: ${{ secrets.RENDER_DEPLOY_HOOK_PLATFORM_API }}
+          HOOK_BFF: ${{ secrets.RENDER_DEPLOY_HOOK_BFF }}
+          HOOK_WORKER: ${{ secrets.RENDER_DEPLOY_HOOK_WORKER }}
+          HOOK_OBSERVABILITY: ${{ secrets.RENDER_DEPLOY_HOOK_OBSERVABILITY }}
+          HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
+        run: |
+          set -euo pipefail
+          fired=0
+          for name in platform-api bff worker observability web; do
+            var="HOOK_$(echo "$name" | tr 'a-z-' 'A-Z_')" # e.g. HOOK_PLATFORM_API
+            url="${!var:-}"                                # indirect expansion (bash 3.2+)
+            if [ -n "$url" ]; then
+              echo "→ deploying $name for $REF"
+              curl -fsS -X POST "$url" > /dev/null
+              fired=$((fired + 1))
+            else
+              echo "· skipping $name (no ${var} secret set)"
+            fi
+          done
+          if [ "$fired" -eq 0 ]; then
+            echo "::warning::No RENDER_DEPLOY_HOOK_* secrets configured — nothing was rolled out. Set them to enable automated deploys, or replace this step for your platform."
+          else
+            echo "Triggered $fired Render deploy(s)."
+          fi
+
+  smoke:
+    needs: rollout
+    runs-on: ubuntu-latest
+    steps:
+      # Give the rollout a moment, then confirm the public app answers and the API
+      # is ready. Fail the deploy (and alert) if either is unhealthy.
+      - name: Smoke test
+        env:
+          APP_URL: ${{ vars.PROD_APP_URL }} # e.g. https://app.yourdomain.com
+        run: |
+          set -e
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/api/health" || true)
+            echo "attempt $i: /api/health → $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "smoke test failed: /api/health never returned 200"; exit 1

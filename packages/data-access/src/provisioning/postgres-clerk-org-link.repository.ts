@@ -24,7 +24,8 @@ export class PostgresClerkOrgLinkRepository implements ClerkOrgLinkRepository {
 			clerkOrgId: row.clerk_org_id,
 			orgId: row.org_id,
 			apiKeyId: row.api_key_id,
-			apiKeyPlaintext: decryptSecret(this.encryptionKey, row.encrypted_secret),
+			// org_id is the v3 per-org context; ignored for older v2/v1 rows.
+			apiKeyPlaintext: decryptSecret(this.encryptionKey, row.encrypted_secret, row.org_id),
 			createdAt: row.created_at,
 		};
 	}
@@ -36,7 +37,8 @@ export class PostgresClerkOrgLinkRepository implements ClerkOrgLinkRepository {
 	}
 
 	async create(input: CreateClerkOrgLinkInput): Promise<ClerkOrgLink> {
-		const encryptedSecret = encryptSecret(this.encryptionKey, input.apiKeyPlaintext);
+		// Bind the org's API key to its org (v3 per-org derived key).
+		const encryptedSecret = encryptSecret(this.encryptionKey, input.apiKeyPlaintext, input.orgId);
 		const { rows } = await this.pool.query<ClerkOrgLinkRow>(
 			`insert into clerk_org_links (clerk_org_id, org_id, api_key_id, encrypted_secret)
 			 values ($1, $2, $3, $4)
