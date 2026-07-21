@@ -398,7 +398,7 @@ async function bootstrap(): Promise<void> {
 	app.use(express.json());
 
 	// Public: health/readiness probes must answer without credentials.
-	app.use(createHealthController(checkHealth));
+	app.use(createHealthController(checkHealth, logger));
 
 	// Everything below requires a valid API key, is rate-limited per key, and
 	// (for mutations) audited. Order matters: authenticate → throttle → audit.
