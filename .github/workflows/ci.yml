@@ -25,11 +25,12 @@ jobs:
       - name: Typecheck, build, test
         run: pnpm exec turbo run typecheck build test
 
-      # Production dependencies only — dev/build tooling (vitest/vite/esbuild) is
-      # never shipped in the images (they build with --prod) or run in prod, so a
-      # dev-only advisory shouldn't block a release. Currently clean at high+.
-      - name: Audit production dependencies
-        run: pnpm audit --prod --audit-level=high
+      # Full dependency audit (prod + dev). The tree is currently clean at high+;
+      # dev/build tooling (vitest/vite/esbuild) was upgraded past its advisories.
+      # If a future dev-only advisory has no fix yet and must ship, narrow this
+      # back to `--prod` (dev tooling isn't in the images or run in prod).
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
 
   # Secret scanning across the full history — catches a committed key before it
   # ships. gitleaks-action is free for personal repos.
