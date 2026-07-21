@@ -125,8 +125,9 @@ services:
       minio:
         condition: service_healthy
 
-  # Single long-lived DAP subscriber — do NOT scale without leader election
-  # (each replica would double-write). See apps/observability/src/main.ts.
+  # Long-lived DAP subscriber. Safe to scale now: replicas elect one ACTIVE leader
+  # via a Postgres advisory lock (apps/observability/src/leader-election.ts); the
+  # rest stand by. Standbys just hold an idle DB connection.
   observability:
     build:
       context: ../..
