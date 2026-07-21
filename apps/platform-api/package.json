@@ -23,7 +23,7 @@
 		"@meshify/slack": "workspace:*",
 		"@meshify/vector-store": "workspace:*",
 		"bullmq": "^5.28.2",
-		"express": "^4.21.1",
+		"express": "^5.2.1",
 		"ioredis": "^5.4.1",
 		"multer": "^1.4.5-lts.1",
 		"pg": "^8.13.1",
