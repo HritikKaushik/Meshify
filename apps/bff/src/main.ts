@@ -126,7 +126,11 @@ async function bootstrap(): Promise<void> {
 	// Railway (and similar PaaS) inject the port to bind as $PORT and probe the
 	// healthcheck there; honor it when present, else the configured BFF_PORT.
 	const port = Number(process.env.PORT) || env.BFF_PORT;
-	const server = app.listen(port, () => {
+	// Bind :: (all IPv6, dual-stack — also accepts IPv4) rather than the default.
+	// Railway's private network is IPv6-only: a service bound to 0.0.0.0 answers the
+	// loopback healthcheck (so it shows "Online") but is unreachable at
+	// <name>.railway.internal, which makes the web nginx return 502 for /api.
+	const server = app.listen(port, '::', () => {
 		logger.info({ port }, 'bff listening');
 	});
 

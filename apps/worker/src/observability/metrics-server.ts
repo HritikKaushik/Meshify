@@ -64,7 +64,9 @@ export function startMetricsServer(opts: {
 		}
 		res.writeHead(404).end();
 	});
-	server.listen(opts.port);
+	// Bind :: (dual-stack) so the metrics endpoint is reachable over Railway's
+	// IPv6-only private network when scraped, not just on IPv4 loopback.
+	server.listen(opts.port, '::');
 
 	return {
 		close: async () => {
