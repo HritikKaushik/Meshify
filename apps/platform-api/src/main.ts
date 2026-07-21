@@ -329,7 +329,7 @@ async function bootstrap(): Promise<void> {
 	// path as /search) — RocketRide's chat pipeline is a bare LLM call, see
 	// chat-pipeline.ts for why.
 	const rocketridePool = new RocketRideClientPool(env, logger);
-	const pipelineRegistry = new PipelineRegistry(rocketridePool);
+	const pipelineRegistry = new PipelineRegistry(rocketridePool, env.ROCKETRIDE_OP_TIMEOUT_MS);
 	const ragService = new RocketRideRagService(rocketridePool);
 	// The resolver consults the active LLM provider; falls back to managed OpenAI when none is active.
 	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry, llmResolutionService);

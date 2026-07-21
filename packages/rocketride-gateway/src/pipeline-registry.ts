@@ -11,7 +11,10 @@ export class RocketRidePipelineTimeoutError extends Error {
 	}
 }
 
-const DEFAULT_OP_TIMEOUT_MS = 20_000;
+// use()/restart() start a pipeline on the engine — documented as "time-consuming"
+// — so this budget must accommodate a managed cloud engine provisioning embeddings
+// and a Qdrant connection, not just a local round-trip. Override via ROCKETRIDE_OP_TIMEOUT_MS.
+const DEFAULT_OP_TIMEOUT_MS = 60_000;
 
 interface CachedToken {
 	token: string;
