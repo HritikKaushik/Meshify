@@ -91,6 +91,18 @@ async function bootstrap(): Promise<void> {
 	const env = loadEnv();
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'worker' });
 
+	// A managed (non-local) Qdrant requires an API key; without it the ingest
+	// pipeline's Qdrant target is built with no auth, RocketRide can't write vectors,
+	// and the pipeline task WEDGES (surfacing only as a "pipeline restart did not
+	// respond" timeout). Warn loudly at boot so that failure mode is diagnosable.
+	{
+		const qdrantHostname = new URL(env.QDRANT_URL).hostname;
+		const isLocalQdrant = ['localhost', '127.0.0.1', '::1'].includes(qdrantHostname) || qdrantHostname.endsWith('.railway.internal');
+		if (!isLocalQdrant && !env.QDRANT_API_KEY) {
+			logger.warn({ qdrantHostname }, 'QDRANT_API_KEY is not set but QDRANT_URL is a managed host — ingest pipelines will fail to write to Qdrant Cloud (the RocketRide task will wedge). Set QDRANT_API_KEY.');
+		}
+	}
+
 	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
 	const bullRedis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 	// Publishes real-time job progress to Redis Pub/Sub (PUBLISH works on a normal connection, so bullRedis is reused).
