@@ -22,7 +22,7 @@ jobs:
     environment: production # gate on a GitHub Environment (approvals + scoped secrets)
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 22
