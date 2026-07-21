@@ -31,7 +31,11 @@ function originOf(url: string | undefined): string | undefined {
 }
 
 export function csrfOriginGuard(allowedOrigins: readonly string[]): RequestHandler {
-	const allow = new Set(allowedOrigins);
+	// Normalize each configured origin to a bare `scheme://host[:port]` (the exact
+	// shape browsers send in `Origin`). This tolerates a common misconfiguration —
+	// an APP_ORIGIN with a trailing slash or path (e.g. `https://app.example.com/`)
+	// — which would otherwise never string-match the header and reject every request.
+	const allow = new Set(allowedOrigins.map((o) => originOf(o) ?? o));
 	return (req, res, next) => {
 		if (SAFE_METHODS.has(req.method)) {
 			next();

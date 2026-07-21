@@ -65,4 +65,15 @@ describe('csrfOriginGuard', () => {
 		expect(next).not.toHaveBeenCalled();
 		expect(status).toHaveBeenCalledWith(403);
 	});
+
+	it('normalizes a configured origin with a trailing slash so it still matches', () => {
+		const guard = csrfOriginGuard(['https://app.example.com/']);
+		const req = { method: 'POST', get: (n: string) => ({ origin: 'https://app.example.com' })[n.toLowerCase()] } as unknown as Request;
+		const json = vi.fn();
+		const status = vi.fn(() => ({ json }) as unknown as Response);
+		const next = vi.fn();
+		guard(req, { status } as unknown as Response, next);
+		expect(next).toHaveBeenCalledOnce();
+		expect(status).not.toHaveBeenCalled();
+	});
 });
