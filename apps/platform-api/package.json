@@ -25,7 +25,7 @@
 		"bullmq": "^5.28.2",
 		"express": "^4.21.1",
 		"ioredis": "^5.4.1",
-		"multer": "^1.4.5-lts.1",
+		"multer": "^2.2.0",
 		"pg": "^8.13.1",
 		"pino": "^9.5.0",
 		"pino-http": "^10.3.0",
@@ -36,7 +36,7 @@
 	"devDependencies": {
 		"@meshify/testing": "workspace:*",
 		"@types/express": "^5.0.0",
-		"@types/multer": "^1.4.12",
+		"@types/multer": "^2.2.0",
 		"@types/node": "^22.9.0",
 		"@types/pg": "^8.11.10",
 		"tsx": "^4.19.2",
