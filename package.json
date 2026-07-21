@@ -28,7 +28,7 @@
 		"eslint": "^9",
 		"eslint-plugin-react-hooks": "^7.1.1",
 		"globals": "^17.7.0",
-		"turbo": "^2.3.3",
+		"turbo": "^2.10.5",
 		"typescript-eslint": "^8",
 		"vitest": "^3.2.6"
 	},

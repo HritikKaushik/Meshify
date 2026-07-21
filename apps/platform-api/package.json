@@ -22,7 +22,7 @@
 		"@meshify/shared": "workspace:*",
 		"@meshify/slack": "workspace:*",
 		"@meshify/vector-store": "workspace:*",
-		"bullmq": "^5.28.2",
+		"bullmq": "^5.80.10",
 		"express": "^4.21.1",
 		"ioredis": "^5.4.1",
 		"multer": "^1.4.5-lts.1",
@@ -39,7 +39,7 @@
 		"@types/multer": "^1.4.12",
 		"@types/node": "^22.9.0",
 		"@types/pg": "^8.11.10",
-		"tsx": "^4.19.2",
+		"tsx": "^4.23.1",
 		"typescript": "^5.6.3",
 		"vitest": "^3.2.6"
 	}
