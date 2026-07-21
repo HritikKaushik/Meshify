@@ -41,24 +41,42 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
-      # REQUIRED: replace with your platform's deploy trigger. The images for this
-      # tag are already built/pushed to GHCR by ci.yml. Examples:
+      # Render rollout via per-service deploy hooks. The images for this tag are
+      # already built/pushed to GHCR by ci.yml. Set each hook as a repo secret
+      # (Render → service → Settings → Deploy Hook); any that are unset are skipped,
+      # so this is a no-op until you configure it — never a failure.
       #
-      #   Render (deploy hooks, one per service):
-      #     curl -fsS "${{ secrets.RENDER_DEPLOY_HOOK_PLATFORM_API }}"
-      #     curl -fsS "${{ secrets.RENDER_DEPLOY_HOOK_BFF }}"
-      #     curl -fsS "${{ secrets.RENDER_DEPLOY_HOOK_WORKER }}"
-      #     curl -fsS "${{ secrets.RENDER_DEPLOY_HOOK_OBSERVABILITY }}"
-      #     # web: Cloudflare Pages redeploys from the repo automatically.
-      #
-      #   Fly.io:
-      #     flyctl deploy --image ghcr.io/${{ github.repository_owner }}/meshify-platform-api:${{ github.ref_name }}
-      #
-      #   Kubernetes (scale-later path): bump overlays/prod image tags, run the
-      #     migrate Job, then `kubectl apply -k overlays/prod`.
-      - name: Trigger rollout
-        run: echo "TODO: trigger the hosting platform deploy for tag ${{ github.ref_name }}"
+      # On other platforms replace this step: Fly.io →
+      #   flyctl deploy --image ghcr.io/${{ github.repository_owner }}/meshify-<svc>:${{ github.ref_name }}
+      # Kubernetes → bump overlays/prod image tags and `kubectl apply -k overlays/prod`
+      # (the migrate Job already ran in the job above). Cloudflare Pages redeploys web from the repo.
+      - name: Trigger Render deploys
+        env:
+          REF: ${{ github.ref_name }}
+          HOOK_PLATFORM_API: ${{ secrets.RENDER_DEPLOY_HOOK_PLATFORM_API }}
+          HOOK_BFF: ${{ secrets.RENDER_DEPLOY_HOOK_BFF }}
+          HOOK_WORKER: ${{ secrets.RENDER_DEPLOY_HOOK_WORKER }}
+          HOOK_OBSERVABILITY: ${{ secrets.RENDER_DEPLOY_HOOK_OBSERVABILITY }}
+          HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
+        run: |
+          set -euo pipefail
+          fired=0
+          for name in platform-api bff worker observability web; do
+            var="HOOK_$(echo "$name" | tr 'a-z-' 'A-Z_')" # e.g. HOOK_PLATFORM_API
+            url="${!var:-}"                                # indirect expansion (bash 3.2+)
+            if [ -n "$url" ]; then
+              echo "→ deploying $name for $REF"
+              curl -fsS -X POST "$url" > /dev/null
+              fired=$((fired + 1))
+            else
+              echo "· skipping $name (no ${var} secret set)"
+            fi
+          done
+          if [ "$fired" -eq 0 ]; then
+            echo "::warning::No RENDER_DEPLOY_HOOK_* secrets configured — nothing was rolled out. Set them to enable automated deploys, or replace this step for your platform."
+          else
+            echo "Triggered $fired Render deploy(s)."
+          fi
 
   smoke:
     needs: rollout
