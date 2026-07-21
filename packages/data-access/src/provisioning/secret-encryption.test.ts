@@ -22,6 +22,35 @@ describe('secret-encryption', () => {
 		expect(decryptSecret(KEY, ciphertext)).toBe('xoxb-super-secret');
 	});
 
+	it('round-trips through the v3 (per-org) envelope with matching context', () => {
+		const ciphertext = encryptSecret(KEY, 'msk_org_key', 'org-123');
+		expect(ciphertext.startsWith('v3.')).toBe(true);
+		expect(decryptSecret(KEY, ciphertext, 'org-123')).toBe('msk_org_key');
+	});
+
+	it('a v3 secret cannot be decrypted with a different org context', () => {
+		const ciphertext = encryptSecret(KEY, 'msk_org_key', 'org-123');
+		expect(() => decryptSecret(KEY, ciphertext, 'org-999')).toThrow();
+	});
+
+	it('a v3 secret requires a context to decrypt', () => {
+		const ciphertext = encryptSecret(KEY, 'msk_org_key', 'org-123');
+		expect(() => decryptSecret(KEY, ciphertext)).toThrow(/context/);
+	});
+
+	it('a passed context is ignored for pre-v3 (v2) payloads', () => {
+		const v2 = encryptSecret(KEY, 'legacy-value');
+		expect(decryptSecret(KEY, v2, 'org-irrelevant')).toBe('legacy-value');
+	});
+
+	it('per-org keys differ: same plaintext under two orgs is not interchangeable', () => {
+		const a = encryptSecret(KEY, 'same', 'org-A');
+		const b = encryptSecret(KEY, 'same', 'org-B');
+		expect(() => decryptSecret(KEY, a, 'org-B')).toThrow();
+		expect(decryptSecret(KEY, a, 'org-A')).toBe('same');
+		expect(decryptSecret(KEY, b, 'org-B')).toBe('same');
+	});
+
 	it('still decrypts legacy v1-prefixed envelopes (SHA-256 key)', () => {
 		const v1 = legacyCiphertext(KEY, 'legacy-v1-token', true);
 		expect(v1.split('.')).toHaveLength(4);

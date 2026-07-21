@@ -48,7 +48,14 @@ export class AuthenticateApiKeyUseCase {
 		// Fire-and-forget; swallow errors so telemetry never gates authentication.
 		void this.apiKeys.touch(key.id).catch(() => undefined);
 
-		const isOrgAdmin = orgRoleHeader === undefined ? true : orgRoleHeader === 'admin';
+		// A key's scopes cap what it can do: EMPTY scopes = unrestricted (the shared
+		// org key + every existing/Clerk-provisioned key — unchanged behaviour); a
+		// non-empty scope list is least-privilege, and org-admin then requires an
+		// explicit `admin` scope. The BFF-forwarded role further downscopes Clerk
+		// users (a member is never admin regardless of the key's scopes).
+		const keyIsAdminCapable = key.scopes.length === 0 || key.scopes.includes('admin');
+		const roleIsAdmin = orgRoleHeader === undefined ? true : orgRoleHeader === 'admin';
+		const isOrgAdmin = keyIsAdminCapable && roleIsAdmin;
 		return { orgId: key.orgId, keyId: key.id, scopes: key.scopes, isOrgAdmin };
 	}
 }

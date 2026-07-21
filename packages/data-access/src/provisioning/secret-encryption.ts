@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, scryptSync } from 'node:crypto';
 
 // AES-256-GCM with a scrypt-derived key (v2 envelope). The encryption key is an
 // arbitrary-length operator-chosen string; scrypt with a per-secret random salt
@@ -45,15 +45,34 @@ function deriveKeyLegacy(encryptionKey: string): Buffer {
 	return createHash('sha256').update(encryptionKey).digest();
 }
 
-/** Encrypts `plaintext`, returning a versioned `v2.salt.iv.authTag.ciphertext` envelope (parts base64). */
-export function encryptSecret(encryptionKey: string, plaintext: string): string {
+/**
+ * Per-org key derivation (v3): HKDF-expand the scrypt key with the org context as
+ * `info`, so each org gets DISTINCT key material and can be rotated independently
+ * of others. NOTE: this derives from the single master, so it does NOT reduce
+ * blast radius against a MASTER compromise — full cross-tenant isolation needs a
+ * KMS/DEK-managed master (see docs/operations/ENCRYPTION.md). It does prevent one
+ * org's key from being usable for another and enables per-org key operations.
+ */
+function deriveKeyV3(encryptionKey: string, salt: Buffer, context: string): Buffer {
+	const prk = deriveKeyScrypt(encryptionKey, salt); // cached, expensive scrypt
+	return Buffer.from(hkdfSync('sha256', prk, salt, Buffer.from(`org:${context}`), 32));
+}
+
+/**
+ * Encrypts `plaintext`. With `context` (an org id), binds the ciphertext to that
+ * org via a per-org derived key → `v3.salt.iv.authTag.ciphertext`; without it,
+ * the shared-key `v2.salt.iv.authTag.ciphertext`. Parts are base64.
+ */
+export function encryptSecret(encryptionKey: string, plaintext: string, context?: string): string {
 	const salt = randomBytes(SALT_BYTES);
 	const iv = randomBytes(12);
-	const cipher = createCipheriv('aes-256-gcm', deriveKeyScrypt(encryptionKey, salt), iv);
+	const version = context ? 'v3' : ENVELOPE_VERSION;
+	const key = context ? deriveKeyV3(encryptionKey, salt, context) : deriveKeyScrypt(encryptionKey, salt);
+	const cipher = createCipheriv('aes-256-gcm', key, iv);
 	const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
 	const authTag = cipher.getAuthTag();
 	const parts = [salt, iv, authTag, ciphertext].map((b) => b.toString('base64'));
-	return [ENVELOPE_VERSION, ...parts].join('.');
+	return [version, ...parts].join('.');
 }
 
 function gcmDecrypt(key: Buffer, ivB64: string, authTagB64: string, ciphertextB64: string): string {
@@ -65,13 +84,25 @@ function gcmDecrypt(key: Buffer, ivB64: string, authTagB64: string, ciphertextB6
 /**
  * Inverse of {@link encryptSecret}. Dispatches on the envelope version so all
  * three formats keep decrypting without a flag-day re-encryption:
- *   - `v2.salt.iv.authTag.ciphertext` — scrypt-derived key (current).
+ *   - `v3.salt.iv.authTag.ciphertext` — per-org key (requires `context`).
+ *   - `v2.salt.iv.authTag.ciphertext` — scrypt-derived shared key.
  *   - `v1.iv.authTag.ciphertext`      — SHA-256-derived key (legacy).
  *   - `iv.authTag.ciphertext`         — SHA-256, pre-versioning (legacy).
- * Throws if the payload was tampered with or the key is wrong.
+ * Pass the same `context` used at encryption for v3 payloads (ignored otherwise —
+ * so callers can always pass it, and pre-v3 rows still decrypt). Throws if the
+ * payload was tampered with, the key is wrong, or a v3 payload's context is missing/wrong.
  */
-export function decryptSecret(encryptionKey: string, encrypted: string): string {
+export function decryptSecret(encryptionKey: string, encrypted: string, context?: string): string {
 	const parts = encrypted.split('.');
+
+	if (parts[0] === 'v3') {
+		if (!context) throw new Error('v3 encrypted secret requires its org context to decrypt');
+		const [saltB64, ivB64, authTagB64, ciphertextB64] = parts.slice(1);
+		if (!saltB64 || !ivB64 || !authTagB64 || !ciphertextB64) {
+			throw new Error('Malformed encrypted secret — expected "v3.salt.iv.authTag.ciphertext"');
+		}
+		return gcmDecrypt(deriveKeyV3(encryptionKey, Buffer.from(saltB64, 'base64'), context), ivB64, authTagB64, ciphertextB64);
+	}
 
 	if (parts[0] === ENVELOPE_VERSION) {
 		const [saltB64, ivB64, authTagB64, ciphertextB64] = parts.slice(1);
