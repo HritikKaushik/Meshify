@@ -1,4 +1,4 @@
-import type { PipelineJob, PipelineJobStatus, PipelineJobType } from './pipeline-job.entity.js';
+import type { PipelineJob, PipelineJobType } from './pipeline-job.entity.js';
 
 export interface CreatePipelineJobInput {
 	id: string;

@@ -75,7 +75,7 @@ import {
 	createSlackTransport,
 	type ContentLedger,
 } from '@meshify/providers';
-import type { Integration, KnowledgeConnector } from '@meshify/data-access';
+import type { KnowledgeConnector } from '@meshify/data-access';
 import { processSourceSyncJob } from './processors/source-sync.processor.js';
 import { processWebhookEventJob } from './processors/webhook-event.processor.js';
 import { processMaintenanceJob } from './processors/integration-maintenance.processor.js';
