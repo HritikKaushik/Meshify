@@ -42,9 +42,9 @@ const LoaderCore = ({ loadingStates, value = 0 }: { loadingStates: LoadingState[
 					>
 						<div>
 							{index > value && <CheckIcon className="text-black dark:text-white" />}
-							{index <= value && <CheckFilled className={cn('text-black dark:text-white', value === index && 'text-mc-purple opacity-100')} />}
+							{index <= value && <CheckFilled className={cn('text-black dark:text-white', value === index && 'text-mc-accent dark:text-mc-accent opacity-100')} />}
 						</div>
-						<span className={cn('text-black dark:text-white', value === index && 'text-mc-purple opacity-100')}>{loadingState.text}</span>
+						<span className={cn('text-black dark:text-white', value === index && 'text-mc-accent dark:text-mc-accent opacity-100')}>{loadingState.text}</span>
 					</motion.div>
 				);
 			})}
