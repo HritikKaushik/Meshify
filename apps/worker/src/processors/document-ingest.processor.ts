@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Job } from 'bullmq';
 import { apiKeyEnvVarFor, embeddingProviderFromProfile } from '@meshify/data-access';
 import type { DocumentRepository, PipelineJobRepository, ProjectRepository } from '@meshify/data-access';
@@ -44,6 +45,19 @@ export async function processDocumentIngestJob(job: Job<DocumentIngestJobPayload
 
 		await progress.stage('Extracting content', 15);
 		const buffer = await deps.storage.getObject(document.objectStorageKey);
+
+		// Integrity gate: the bytes are hashed at upload (document.contentHash). If what
+		// we just pulled from object storage doesn't match, the corruption is in
+		// storage/retrieval (not downstream in RocketRide) — fail loudly and precisely
+		// here rather than letting a mangled file surface as an opaque parser decode error.
+		const retrievedHash = createHash('sha256').update(buffer).digest('hex');
+		if (retrievedHash !== document.contentHash) {
+			throw new Error(
+				`Object-storage integrity check failed for ${document.objectStorageKey}: retrieved bytes ` +
+					`(sha256 ${retrievedHash.slice(0, 12)}…, head ${buffer.subarray(0, 4).toString('hex')}, ${buffer.byteLength}B) ` +
+					`do not match the upload hash ${document.contentHash.slice(0, 12)}…. Corruption is in storage/retrieval, not RocketRide.`
+			);
+		}
 
 		const embeddingProvider = embeddingProviderFromProfile(project.embeddingProfile);
 
