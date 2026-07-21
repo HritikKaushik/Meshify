@@ -10,7 +10,7 @@
 #         service variables as Docker build args, so it reaches the Vite build ARG)
 #   • The browser only ever talks to THIS origin; nginx proxies /api to the BFF.
 [build]
-builder = "dockerfile"
+builder = "DOCKERFILE"
 dockerfilePath = "apps/web/Dockerfile"
 
 [deploy]

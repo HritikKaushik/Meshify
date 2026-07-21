@@ -11,7 +11,7 @@
 #     and PLATFORM_API_KEY_PEPPER — byte-identical to the backend's value (use a
 #     Railway shared variable so both reference the same secret).
 [build]
-builder = "dockerfile"
+builder = "DOCKERFILE"
 dockerfilePath = "apps/bff/Dockerfile"
 
 [deploy]

@@ -85,10 +85,18 @@ Set the OAuth redirect to `https://app.<domain>/oauth/slack/callback`; copy
    services** in the project, all pointing at the same repo. For **each** service set:
    - **Root Directory** = `/` (repo root) — the Dockerfiles use the pnpm-workspace
      context, so the build context must be the root, **not** the app subdir.
-   - **Config-as-code path** = `apps/<svc>/railway.toml` (defines the Dockerfile path,
-     healthcheck, restart policy, and — for observability — `numReplicas = 1`).
+   - **Railway Config File** (Settings → Config-as-code) = `apps/<svc>/railway.toml`.
+     This is **required** — Railway looks for the config at the root directory by
+     default, so without pointing it at the app's `railway.toml` it will **ignore the
+     Dockerfile and fall back to its Railpack auto-builder**, which fails on this repo
+     with `✖ No start command detected` (it can't guess an entrypoint for a workspace).
+     Setting the config path applies the Dockerfile builder, healthcheck, restart
+     policy, and — for observability — `numReplicas = 1`.
+     - *Alternative if you can't find that setting:* add a service variable
+       `RAILWAY_DOCKERFILE_PATH=apps/<svc>/Dockerfile` (forces the Dockerfile builder);
+       then set healthcheck/replicas in the dashboard since the toml won't be read.
 
-     | Service | Config path | Public? |
+     | Service | Config file | Public? |
      |---|---|---|
      | `meshify-platform-api` | `apps/platform-api/railway.toml` | private |
      | `meshify-bff` | `apps/bff/railway.toml` | private |
