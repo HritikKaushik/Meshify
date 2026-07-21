@@ -105,8 +105,9 @@ Set the OAuth redirect to `https://app.<domain>/oauth/slack/callback`; copy
      | `meshify-web` | `apps/web/railway.toml` | **public** (Step K) |
 
 2. **Enable Private Networking** (Project → Settings; on by default). Services reach each
-   other at `<name>.railway.internal` over IPv6 — the Node apps bind `::` by default, so
-   this works with no code change. Set the cross-service URLs:
+   other at `<name>.railway.internal` over **IPv6** — the Node apps bind `::` explicitly
+   (dual-stack) so they're reachable there; a service bound to `0.0.0.0` would answer the
+   loopback healthcheck (show "Online") yet 502 on cross-service calls. Set the URLs:
    - `meshify-web` → `BFF_UPSTREAM=http://meshify-bff.railway.internal:3001`
    - `meshify-bff` → `PLATFORM_API_ORIGIN=http://meshify-platform-api.railway.internal:3000`
    - **Set `PORT` per service to the port above** — `PORT=3000` on platform-api, `PORT=3001`
