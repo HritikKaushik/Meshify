@@ -1,0 +1,25 @@
+# Prometheus Operator ServiceMonitor — scrapes platform-api's /metrics.
+# REQUIRES the Prometheus Operator CRDs (kube-prometheus-stack). Kept OUT of the
+# base kustomization so `kubectl apply -k overlays/<env>` still works on clusters
+# without the operator; apply this separately: `kubectl -n meshify apply -f monitoring/`.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: platform-api
+  namespace: meshify
+  labels:
+    app.kubernetes.io/name: platform-api
+    app.kubernetes.io/part-of: meshify
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-api
+  endpoints:
+    - port: http # the platform-api Service's port name
+      path: /metrics
+      interval: 30s
+      # /metrics is token-gated (METRICS_TOKEN); the scraper authenticates with
+      # the same value from the meshify-secrets Secret.
+      bearerTokenSecret:
+        name: meshify-secrets
+        key: METRICS_TOKEN

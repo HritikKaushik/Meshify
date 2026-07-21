@@ -15,6 +15,9 @@ const envSchema = z.object({
 	// a key the BFF minted.
 	PLATFORM_API_KEY_PEPPER: z.string().min(16, 'PLATFORM_API_KEY_PEPPER must be at least 16 chars'),
 	PLATFORM_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+	// Gates the Prometheus /metrics endpoint. Set in production and configure the
+	// same bearer token on the scraper; unset leaves /metrics open (dev only).
+	METRICS_TOKEN: z.string().optional(),
 
 	// BFF (Clerk session proxy — apps/bff). Optional here so platform-api/worker
 	// aren't forced to set them; apps/bff validates its own required-ness at boot.

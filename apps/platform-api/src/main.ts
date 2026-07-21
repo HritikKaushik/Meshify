@@ -9,6 +9,7 @@ import { RedisChecker } from './modules/health/infrastructure/redis.checker.js';
 import { QdrantChecker } from './modules/health/infrastructure/qdrant.checker.js';
 import { CheckHealthUseCase } from './modules/health/application/check-health.usecase.js';
 import { createHealthController } from './modules/health/interface/health.controller.js';
+import { createMetrics } from './modules/observability/metrics.js';
 import { PostgresProjectRepository } from '@meshify/data-access';
 import { QdrantCollectionProvisioner } from '@meshify/vector-store';
 import { CreateProjectUseCase } from './modules/projects/application/create-project.usecase.js';
@@ -372,6 +373,12 @@ async function bootstrap(): Promise<void> {
 	// load balancer / ingress). Rate limits key on the API key, not the IP.
 	app.set('trust proxy', true);
 	app.use(pinoHttp({ logger }));
+
+	// Prometheus: time every request (mounted early) and expose /metrics (public,
+	// token-gated). See modules/observability/metrics.ts.
+	const metrics = createMetrics({ token: env.METRICS_TOKEN });
+	app.use(metrics.httpMiddleware);
+	app.get('/metrics', metrics.metricsHandler);
 
 	// Public webhook receiver — MUST precede express.json(): provider
 	// signatures cover the exact raw bytes, so nothing may parse the body first.

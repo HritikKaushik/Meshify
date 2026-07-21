@@ -108,6 +108,8 @@ envVarGroups:
     envVars:
       - key: PLATFORM_API_KEY_PEPPER # identical to the BFF's value
         sync: false
+      - key: METRICS_TOKEN # gates /metrics; give the same value to your scraper
+        sync: false
       - key: ORG_KEY_ENCRYPTION_KEY
         sync: false
       - key: INTEGRATION_ENCRYPTION_KEY

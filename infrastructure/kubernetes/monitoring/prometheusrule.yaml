@@ -1,0 +1,63 @@
+# Prometheus Operator alerting rules for Meshify. Apply alongside the
+# ServiceMonitor (requires the operator CRDs). Thresholds are starting points —
+# tune to your traffic.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: meshify-alerts
+  namespace: meshify
+  labels:
+    app.kubernetes.io/part-of: meshify
+spec:
+  groups:
+    - name: platform-api
+      rules:
+        - alert: PlatformApiDown
+          expr: up{job="platform-api"} == 0
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: platform-api target is down
+            description: No platform-api instance has been scrapeable for 2m.
+
+        - alert: PlatformApiHighErrorRate
+          # >5% of requests returning 5xx over 5m.
+          expr: |
+            sum(rate(http_request_duration_seconds_count{status=~"5.."}[5m]))
+              / sum(rate(http_request_duration_seconds_count[5m])) > 0.05
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: Elevated 5xx error rate on platform-api
+            description: More than 5% of requests are failing (5xx) over the last 5m.
+
+        - alert: PlatformApiHighLatencyP95
+          # p95 request latency above 1.5s over 5m.
+          expr: |
+            histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1.5
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: platform-api p95 latency is high
+            description: p95 request latency has exceeded 1.5s for 5m.
+
+        - alert: PlatformApiNotReady
+          # Readiness gate is failing (a downstream — pg/redis/qdrant — is unreachable).
+          expr: kube_pod_container_status_ready{namespace="meshify", pod=~"platform-api.*"} == 0
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: platform-api pod not ready
+            description: A platform-api pod has been NotReady for 5m (a downstream dependency may be down).
+
+    - name: worker
+      rules:
+        - alert: WorkerQueueBacklogGrowing
+          # BullMQ wait-list depth (exported by KEDA's metrics or a redis exporter).
+          # Placeholder expr — wire to your Redis/queue metric source.
+          expr: max(bull_queue_wait_total{namespace="meshify"}) > 500
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: Ingestion queue backlog is growing
+            description: The BullMQ wait list has exceeded 500 for 10m; workers may be under-scaled.
