@@ -5,6 +5,7 @@ import { ArrowRight, Menu, X, Sparkles, GitBranch, FileText, Search, MessageSqua
 import { MeshLogo, MeshMark, Kicker } from '@/components/mc/primitives';
 import { Atmosphere } from '@/components/mc/Atmosphere';
 import { AnimatedGroup } from '@/components/ui/animated-group';
+import { InfiniteMovingCards, type IntegrationItem } from '@/components/ui/infinite-moving-cards';
 import { Reveal } from '@/components/mc/motion';
 import { cn } from '@/lib/utils';
 
@@ -287,20 +288,38 @@ function MockChip({ children, variant }: { children: string; variant: 'accent' |
 	return <span className={cn('rounded-md px-2 py-1 font-mono text-[10px] font-medium', tint)}>{children}</span>;
 }
 
-/* ------------------------------------------------------------------ logos */
+/* ----------------------------------------------------------- integrations */
+
+// Static (this section renders pre-auth, so no backend fetch). "available" =
+// shipped today; the rest surface in the marketplace as "coming soon".
+const INTEGRATIONS: IntegrationItem[] = [
+	{ name: 'GitHub', iconKey: 'github', available: true },
+	{ name: 'OpenAI', iconKey: 'openai', available: true },
+	{ name: 'Anthropic', iconKey: 'anthropic', available: true },
+	{ name: 'Google Gemini', iconKey: 'gemini', available: true },
+	{ name: 'Slack', iconKey: 'slack', available: true },
+	{ name: 'Azure OpenAI', iconKey: 'azure-openai', available: true },
+	{ name: 'OpenRouter', iconKey: 'openrouter', available: true },
+	{ name: 'Ollama', iconKey: 'ollama', available: true },
+	{ name: 'GitLab', iconKey: 'gitlab', available: false },
+	{ name: 'Bitbucket', iconKey: 'bitbucket', available: false },
+	{ name: 'Discord', iconKey: 'discord', available: false },
+	{ name: 'Microsoft Teams', iconKey: 'teams', available: false },
+	{ name: 'Notion', iconKey: 'notion', available: false },
+	{ name: 'Jira', iconKey: 'jira', available: false },
+	{ name: 'Confluence', iconKey: 'confluence', available: false },
+	{ name: 'Google Drive', iconKey: 'googledrive', available: false },
+	{ name: 'Linear', iconKey: 'linear', available: false },
+];
 
 function Logos() {
 	return (
-		<section className="border-y border-mc-hairline bg-mc-card/30 px-6 py-10">
-			<div className="mx-auto flex max-w-5xl flex-col items-center gap-6">
-				<span className="font-mono text-[11px] tracking-[.14em] text-mc-muted-2">TRUSTED BY ENGINEERING TEAMS AT</span>
-				<div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-4 text-lg font-semibold tracking-[-.01em] text-mc-muted">
-					{['Northwind', 'Halcyon', 'Vector Labs', 'Fathom', 'Aperture'].map((n) => (
-						<span key={n} className="transition-colors hover:text-mc-text-3">
-							{n}
-						</span>
-					))}
-				</div>
+		<section className="border-y border-mc-hairline bg-mc-card/30 py-11">
+			<div className="mx-auto max-w-5xl px-6 text-center">
+				<span className="font-mono text-[11px] tracking-[.14em] text-mc-muted-2">CONNECT THE TOOLS YOUR TEAM ALREADY USES</span>
+			</div>
+			<div className="mt-7 flex justify-center">
+				<InfiniteMovingCards items={INTEGRATIONS} direction="left" speed="slow" className="max-w-6xl" />
 			</div>
 		</section>
 	);
