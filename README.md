@@ -85,6 +85,11 @@ pnpm dev:worker     # ingestion worker
 docker compose -f infrastructure/docker/docker-compose.yml up -d --build
 docker compose -f infrastructure/docker/docker-compose.yml up -d --scale worker=3
 ```
+For a fully in-cluster stack, set **`QDRANT_URL=http://qdrant:6333`** in `.env`
+before `up` — unlike Postgres/Redis/S3 (which compose points at the internal
+services automatically), `QDRANT_URL` is read from `.env` so it can also target
+Qdrant Cloud. Without it the API's `/health/ready` reports Qdrant `down` (503).
+The web SPA is served at http://localhost:5174 and proxies `/api` to the BFF.
 
 ### Talking to the API directly
 The core API is API-key authenticated. Issue an org key with
