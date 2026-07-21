@@ -128,7 +128,7 @@ async function bootstrap(): Promise<void> {
 	});
 
 	const clientPool = new RocketRideClientPool(env, logger);
-	const pipelineRegistry = new PipelineRegistry(clientPool);
+	const pipelineRegistry = new PipelineRegistry(clientPool, env.ROCKETRIDE_OP_TIMEOUT_MS);
 	const rag = new RocketRideRagService(clientPool);
 	// GITHUB_APP_* is optional (slack/docs-only deployments boot without it);
 	// repo jobs on an unconfigured deployment fail with a clear message instead

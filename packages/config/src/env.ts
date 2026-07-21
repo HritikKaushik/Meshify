@@ -72,6 +72,11 @@ const envSchema = z.object({
 	// RocketRide — only ever read inside packages/rocketride-gateway
 	ROCKETRIDE_URI: z.string().url(),
 	ROCKETRIDE_APIKEY: z.string().min(1),
+	// Per-op timeout (ms) for RocketRide pipeline lifecycle calls (use/restart).
+	// use() is documented as "time-consuming" — a managed cloud engine provisioning
+	// embeddings + a Qdrant connection can exceed a tight budget, surfacing as
+	// "pipeline start/restart did not respond". Default 60s; raise for slow engines.
+	ROCKETRIDE_OP_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
 	// Provider embedding keys. RocketRide substitutes these into ingest pipelines;
 	// the search path also reads ROCKETRIDE_OPENAI_KEY directly to embed queries
