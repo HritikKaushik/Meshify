@@ -722,9 +722,20 @@ export class MeshifyApi {
 		);
 	}
 
-	/** Make this provider the org's single active provider. */
-	async activateLlmProvider(provider: string): Promise<{ activeProvider: string; defaultModel: string }> {
-		return this.parse(await fetch(this.url(`/api/v1/providers/llm/${provider}/activate`), { method: 'POST', credentials: 'include' }));
+	/**
+	 * Make this provider the org's single active provider. Passing `projectId`
+	 * makes the call block until that project's RocketRide pipeline is (re)built,
+	 * so the UI can hold a loader; `ready` reports whether the warm succeeded.
+	 */
+	async activateLlmProvider(provider: string, projectId?: string): Promise<{ activeProvider: string; defaultModel: string; ready: boolean }> {
+		return this.parse(
+			await fetch(this.url(`/api/v1/providers/llm/${provider}/activate`), {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ projectId }),
+			})
+		);
 	}
 
 	/** Disconnect a provider — purges its credentials + config (and clears "active" if it was active). */

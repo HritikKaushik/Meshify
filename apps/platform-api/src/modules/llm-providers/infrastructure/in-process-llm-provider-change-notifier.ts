@@ -41,6 +41,26 @@ export class InProcessLlmProviderChangeNotifier implements LlmProviderChangeNoti
 	}
 
 	/**
+	 * Synchronously (re)build one project's chat pipeline on RocketRide and await
+	 * it. Used by activate so the UI can hold a loader until the pipeline is ready.
+	 * Best-effort — returns false (and logs) rather than throwing, since the
+	 * provider is already active and the pipeline will otherwise build lazily on
+	 * the first chat.
+	 */
+	async warmChatPipeline(orgId: string, projectId: string): Promise<boolean> {
+		try {
+			const projects = await this.projects.findByOrgId(orgId);
+			const project = projects.find((candidate) => candidate.id === projectId);
+			if (!project) return false;
+			await this.chatPipelines.resolve(project);
+			return true;
+		} catch (err) {
+			this.logger?.warn({ orgId, projectId, err: err instanceof Error ? err.message : String(err) }, 'synchronous chat pipeline warm failed');
+			return false;
+		}
+	}
+
+	/**
 	 * Best-effort — never throws. Warms each project's pipeline SEQUENTIALLY: the
 	 * process shares ONE RocketRide client (a single WebSocket/DAP connection), so
 	 * firing concurrent restart/use calls corrupts the protocol and drops the

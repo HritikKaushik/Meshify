@@ -90,8 +90,13 @@ class MemConfigRepo implements LlmProviderConfigurationRepository {
 class RecordingNotifier implements LlmProviderChangeNotifier {
 	readonly calls: string[] = [];
 	readonly warmed: string[] = [];
+	readonly warmedProjects: Array<{ orgId: string; projectId: string }> = [];
 	async notifyChanged(orgId: string) {
 		this.calls.push(orgId);
+	}
+	async warmChatPipeline(orgId: string, projectId: string) {
+		this.warmedProjects.push({ orgId, projectId });
+		return true;
 	}
 	async warmChatPipelines(orgId: string) {
 		this.warmed.push(orgId);
@@ -174,6 +179,16 @@ describe('ActivateLlmProviderUseCase', () => {
 		expect((await h.activeRepo.findByOrg('org2'))?.configurationId).toBeDefined();
 		// Activation pre-warms the pipeline so the first chat message is fast.
 		expect(h.notifier.warmed).toContain('org2');
+	});
+
+	it('synchronously warms the named project and reports readiness', async () => {
+		const h = makeHarness();
+		const connect = new ConnectLlmProviderUseCase(h.registry, h.configs, h.vault, h.notifier);
+		const activate = new ActivateLlmProviderUseCase(h.registry, h.configs, h.activeRepo, h.vault, h.notifier);
+		await connect.execute({ orgId: 'org2b', provider: 'openai', values: { api_key: 'sk' } });
+		const result = await activate.execute({ orgId: 'org2b', provider: 'openai', projectId: 'proj-1' });
+		expect(result.ready).toBe(true);
+		expect(h.notifier.warmedProjects).toContainEqual({ orgId: 'org2b', projectId: 'proj-1' });
 	});
 
 	it('refuses to activate a provider that was never connected', async () => {

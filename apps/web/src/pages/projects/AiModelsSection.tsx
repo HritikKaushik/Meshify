@@ -4,10 +4,22 @@ import { Zap } from 'lucide-react';
 import { api } from '@/api-client';
 import type { LlmProviderCatalogEntry, LlmProviderStatus } from '@/api';
 import { useAsync } from '@/ui';
+import { useWorkspace } from '@/lib/workspace-context';
 import { GlassCard, Kicker, StatusDot, type DotColor } from '@/components/mc/primitives';
 import { Button } from '@/components/ui/button';
+import { MultiStepLoader } from '@/components/ui/multi-step-loader';
 import { ProviderBrandIcon } from '@/components/ProviderBrandIcon';
 import { LlmProviderDialog } from './LlmProviderDialog';
+
+/** Steps shown while the backend activates the provider and builds its RocketRide pipeline. */
+const ACTIVATE_STEPS = [
+	{ text: 'Validating provider credentials' },
+	{ text: 'Securing your API key in the vault' },
+	{ text: 'Activating the provider' },
+	{ text: 'Building the RocketRide pipeline' },
+	{ text: 'Warming up the model connection' },
+	{ text: 'Almost ready' },
+];
 
 const STATUS_VIEW: Record<LlmProviderStatus, { label: string; color: DotColor }> = {
 	connected: { label: 'Connected', color: 'success' },
@@ -32,6 +44,7 @@ function iconChip(provider: LlmProviderCatalogEntry): { className: string; style
  * RocketRide pipeline automatically.
  */
 export function AiModelsSection() {
+	const { project } = useWorkspace();
 	const catalog = useAsync<LlmProviderCatalogEntry[]>();
 	const [manageProvider, setManageProvider] = useState<string | null>(null);
 	const [activating, setActivating] = useState<string | null>(null);
@@ -45,11 +58,19 @@ export function AiModelsSection() {
 		refresh();
 	}, [refresh]);
 
-	async function activate(provider: LlmProviderCatalogEntry) {
-		setActivating(provider.id);
+	/**
+	 * Activate a provider. The multi-step loader is shown for the whole call:
+	 * the backend builds this project's RocketRide pipeline synchronously (via
+	 * `projectId`), so the loader stays until the pipeline is ready and the user
+	 * never chats mid-build.
+	 */
+	async function activate(providerId: string, displayName?: string) {
+		const name = displayName ?? providerId;
+		setActivating(providerId);
 		try {
-			await api.activateLlmProvider(provider.id);
-			toast.success(`${provider.displayName} is now the active model provider`);
+			const { ready } = await api.activateLlmProvider(providerId, project.id);
+			toast.success(ready ? `${name} is now the active model provider` : `${name} activated — its pipeline is still warming up`);
+			setManageProvider(null);
 			refresh();
 		} catch (err) {
 			toast.error((err as Error).message);
@@ -99,7 +120,7 @@ export function AiModelsSection() {
 						{provider.lastError && <p className="text-[12px] text-mc-danger">{provider.lastError}</p>}
 						<div className="flex flex-wrap items-center gap-2 pt-0.5">
 							{!provider.active && (
-								<Button variant="meshAi" size="sm" disabled={activating === provider.id} onClick={() => void activate(provider)}>
+								<Button variant="meshAi" size="sm" disabled={activating !== null} onClick={() => void activate(provider.id, provider.displayName)}>
 									<Zap size={14} className="mr-1.5" /> Set active
 								</Button>
 							)}
@@ -137,8 +158,12 @@ export function AiModelsSection() {
 					provider={manageProvider}
 					onClose={() => setManageProvider(null)}
 					onSaved={refresh}
+					onActivate={(providerId, displayName) => void activate(providerId, displayName)}
 				/>
 			)}
+
+			{/* Full-screen multi-step loader while a provider is activated + its pipeline builds. */}
+			<MultiStepLoader loadingStates={ACTIVATE_STEPS} loading={activating !== null} duration={2200} />
 		</section>
 	);
 }
