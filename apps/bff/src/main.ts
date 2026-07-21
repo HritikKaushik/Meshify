@@ -9,6 +9,7 @@ import { createLogger } from '@meshify/shared';
 import { requireClerkSession } from './modules/auth/clerk-guard.js';
 import { resolveOrgForClerk } from './modules/auth/resolve-org-for-clerk.js';
 import { csrfOriginGuard } from './modules/security/csrf-origin-guard.js';
+import { maxBodySize } from './modules/security/max-body-size.js';
 import { createHealthProxy, createPlatformApiProxy } from './modules/proxy/platform-proxy.js';
 
 /** Fields the shared env schema marks optional (other apps don't need them) but this app requires. */
@@ -77,6 +78,10 @@ async function bootstrap(): Promise<void> {
 	app.get('/healthz', (_req, res) => {
 		res.json({ status: 'ok' });
 	});
+
+	// Reject oversized uploads at the edge (matches the web nginx client_max_body_size
+	// and platform-api's 50MB multer limit) before streaming anything downstream.
+	app.use('/api/v1', maxBodySize(50 * 1024 * 1024));
 
 	// CSRF guard runs BEFORE Clerk so a forged cross-origin write is rejected with
 	// 403 without spending any auth work on it. Safe methods pass straight through.

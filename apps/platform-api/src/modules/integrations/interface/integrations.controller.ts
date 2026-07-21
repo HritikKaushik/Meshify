@@ -16,6 +16,7 @@ import { RegistrationInUseError } from '../application/configure-registration.us
 import type { IntegrationEventHub } from '../infrastructure/integration-event-hub.js';
 import { IntegrationNotFoundError, InvalidOAuthStateError, UnsupportedProviderOperationError } from '../application/integration-support.js';
 import { OrgAdminForbiddenError, requireOrgAdmin } from '../../security/authorization/org-authorization.js';
+import { requireUuidParams } from '../../../http/require-uuid-params.js';
 import { ProviderConfigError } from '@meshify/providers';
 
 const SSE_HEARTBEAT_MS = 15_000;
@@ -152,7 +153,7 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	router.post('/v1/integrations/:integrationId/reconnect', async (req, res) => {
+	router.post('/v1/integrations/:integrationId/reconnect', requireUuidParams('integrationId'), async (req, res) => {
 		const parsed = reconnectSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -162,7 +163,7 @@ export function createIntegrationsController(deps: {
 			requireOrgAdmin(req.auth!, 'reconnect integrations');
 			const result = await deps.reconnectIntegration.execute({
 				orgId: req.auth!.orgId,
-				integrationId: req.params.integrationId!,
+				integrationId: req.params.integrationId as string,
 				returnPath: parsed.data.returnPath,
 				createdByKeyId: req.auth!.keyId,
 			});
@@ -172,22 +173,22 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	router.delete('/v1/integrations/:integrationId', async (req, res) => {
+	router.delete('/v1/integrations/:integrationId', requireUuidParams('integrationId'), async (req, res) => {
 		try {
 			requireOrgAdmin(req.auth!, 'disconnect integrations');
-			await deps.disconnectIntegration.execute({ orgId: req.auth!.orgId, integrationId: req.params.integrationId! });
+			await deps.disconnectIntegration.execute({ orgId: req.auth!.orgId, integrationId: req.params.integrationId as string });
 			res.status(204).send();
 		} catch (err) {
 			mapError(err, res, req.log);
 		}
 	});
 
-	router.get('/v1/integrations/:integrationId/resources', async (req, res) => {
+	router.get('/v1/integrations/:integrationId/resources', requireUuidParams('integrationId'), async (req, res) => {
 		try {
 			const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
 			const result = await deps.listIntegrationResources.execute({
 				orgId: req.auth!.orgId,
-				integrationId: req.params.integrationId!,
+				integrationId: req.params.integrationId as string,
 				cursor,
 			});
 			res.status(200).json(result);

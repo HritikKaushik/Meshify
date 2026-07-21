@@ -426,10 +426,12 @@ Remediation status (2026-07-21 follow-up): **H1, H2, H3, H5, H6 — DONE & verif
 
 ### 🟡 Medium Priority
 
-| ID | Issue | Risk | Fix | Effort |
+Remediation status (2026-07-21 follow-up): **M1, M2 — DONE & verified. M3–M6 open.**
+
+| ID | Issue | Risk | Fix | Status |
 |----|-------|------|-----|--------|
-| M1 | zod validation missing on documents/jobs/connectors/webhooks controllers | Malformed input reaches use cases | Add schemas for path params + upload metadata | 1 d |
-| M2 | No upload size/type limit at BFF edge | Oversized/abusive uploads streamed through | Add body-size + content-type limits (defense-in-depth) | 0.5 d |
+| M1 | zod validation missing on documents/jobs/connectors/webhooks controllers | Malformed input reaches use cases | Added a reusable `requireUuidParams` guard (`apps/platform-api/src/http/`) applied to documents(`documentId`)/jobs(`jobId`)/connectors(`connectorId`)/integrations(`integrationId`) — a non-UUID id now returns 400 instead of a Postgres `uuid`-syntax 500. Webhooks stay signature-verified (that IS their validation). +5 tests. | ✅ DONE |
+| M2 | No upload size/type limit at BFF edge | Oversized/abusive uploads streamed through | Added `maxBodySize(50MB)` on the BFF `/api/v1` — rejects an oversized declared `Content-Length` with 413 before streaming (no buffering), matching the nginx `client_max_body_size` and platform-api's multer cap. +4 tests. | ✅ DONE |
 | M3 | K8s missing NetworkPolicy / PodSecurity / dedicated ServiceAccounts | Lateral movement, over-privileged pods | Add default-deny NetworkPolicies, PSA `restricted` namespace label, per-app SA with `automountServiceAccountToken: false` | 1–2 d |
 | M4 | No metrics/tracing/alerting stack | Blind in prod | Add Prometheus ServiceMonitor/OTel + alerts on `/health/ready`, queue depth, error rate | 2–3 d |
 | M5 | Hand-maintained Dockerfile COPY lists | Silent breakage on dep-graph change | Migrate to `pnpm deploy --prod` per app | 1 d |
