@@ -197,13 +197,13 @@ The realistic constraint: Meshify has **two always-on background services** (wor
 | **Postgres** | **Neon** (preferred) or Supabase | Serverless Postgres, generous free, branching | Neon: 0.5GB, autosuspend | Neon paid scales to 100s GB | Autosuspend cold-start (~1s) |
 | **Redis** | **Upstash Redis** | Serverless, per-request pricing, BullMQ-compatible | 10k commands/day free | Pay-as-you-go | Command budget tight under heavy ingest |
 | **Vector DB** | **Qdrant Cloud** free | Managed, matches self-hosted image | 1GB cluster free | Paid clusters | 1GB ≈ ~1M small vectors — plan capacity |
-| **Object storage** | **Cloudflare R2** | S3-compatible (drop-in for `@aws-sdk/client-s3`), **zero egress fees** | 10GB storage, 1M Class-A ops/mo | Pay-as-you-go, still no egress | Set `S3_FORCE_PATH_STYLE` per R2 docs |
+| **Object storage** | **Backblaze B2** | S3-compatible (drop-in for `@aws-sdk/client-s3`), $6/TB-mo at rest; egress free up to 3× storage, and **free via Cloudflare** (Bandwidth Alliance) | 10GB storage + 1GB/day free download | Pay-as-you-go ($0.006/GB) | Server-side-only access (browser never hits it) keeps egress trivial; `S3_REGION` must be the real region, not `auto` |
 | **RocketRide** | Managed cloud endpoint (`https://api.rocketride.ai`) | No self-host image exists | per RocketRide plan | — | External dependency/cost |
 | **CDN / DNS / SSL** | **Cloudflare** (Pages + DNS + proxied origins) | One pane; free universal SSL; WAF/rate-limit rules at the edge | Free | Pro $20/mo for advanced WAF | — |
 
 **Topology (the important part):** put **Cloudflare in front of everything**. Web on Pages at `app.yourdomain.com`; add a Cloudflare rule (Worker or Pages `_routes`/rewrite) so `app.yourdomain.com/api/*` proxies to the BFF service. The browser then sees a **single origin** → the missing-CORS design works, and you can add CSRF/security headers at the Cloudflare edge as defense-in-depth. Platform-API stays on a **private** hostname the BFF reaches server-side (never exposed to the browser). This directly satisfies your "browser only talks to BFF" requirement at the network layer.
 
-**Honest verdict:** front + data tiers are genuinely free (Cloudflare + Neon + Upstash + Qdrant Cloud + R2). The **two always-on Node consumers (worker, observability)** are where "free" gets thin — budget ~$5–15/mo (Fly.io) for those. Everything migrates to the existing K8s manifests unchanged when you outgrow it.
+**Honest verdict:** front + data tiers are genuinely free (Cloudflare + Neon + Upstash + Qdrant Cloud + Backblaze B2). The **two always-on Node consumers (worker, observability)** are where "free" gets thin — budget ~$5–15/mo (Fly.io) for those. Everything migrates to the existing K8s manifests unchanged when you outgrow it.
 
 ---
 
@@ -230,8 +230,8 @@ Legend: **FE** = shipped to browser · **BE** = server-only · **Secret?** · **
 | `REDIS_URL` | Redis/BullMQ DSN | `rediss://…` | | ✅ | 🔒 | ✅ | ✅ |
 | `QDRANT_URL` | Vector DB endpoint | `https://…qdrant.io` | | ✅ | | ✅ | — |
 | `QDRANT_API_KEY` | Qdrant Cloud auth | `…` | | ✅ | 🔒 | ✅* | ✅ |
-| `S3_ENDPOINT` | Object store endpoint | `https://…r2.cloudflarestorage.com` | | ✅ | | ✅ | — |
-| `S3_REGION` | Region | `auto` | | ✅ | | ✅ | — |
+| `S3_ENDPOINT` | Object store endpoint | `https://s3.us-west-004.backblazeb2.com` | | ✅ | | ✅ | — |
+| `S3_REGION` | Region (match endpoint; **not** `auto`) | `us-west-004` | | ✅ | | ✅ | — |
 | `S3_BUCKET` | Bucket name | `meshify-documents` | | ✅ | | ✅ | — |
 | `S3_ACCESS_KEY_ID` | Object store key id | `…` | | ✅ | 🔒 | ✅ | ✅ |
 | `S3_SECRET_ACCESS_KEY` | Object store secret | `…` | | ✅ | 🔒 | ✅ | ✅ |
@@ -258,7 +258,7 @@ Legend: **FE** = shipped to browser · **BE** = server-only · **Secret?** · **
 
 ## 8. Step-by-Step Deployment Guide (free-tier path)
 
-> Prereqs: a domain on Cloudflare, a GitHub repo, and accounts on Neon, Upstash, Qdrant Cloud, Cloudflare (R2 + Pages), Render/Fly, and Clerk.
+> Prereqs: a domain on Cloudflare, a GitHub repo, and accounts on Neon, Upstash, Qdrant Cloud, Backblaze (B2), Cloudflare (Pages/DNS), Render/Fly, and Clerk.
 
 **0. Generate production secrets**
 ```bash
@@ -272,7 +272,7 @@ openssl rand -base64 32   # → INTEGRATION_ENCRYPTION_KEY
 - **Neon**: create project → copy `DATABASE_URL` (use the pooled connection string).
 - **Upstash**: create Redis DB → copy `rediss://` `REDIS_URL` (TLS).
 - **Qdrant Cloud**: create free cluster → `QDRANT_URL` + `QDRANT_API_KEY`.
-- **Cloudflare R2**: create bucket `meshify-documents` → S3 API token → `S3_ENDPOINT` (`https://<acct>.r2.cloudflarestorage.com`), `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION=auto`, `S3_FORCE_PATH_STYLE=false`.
+- **Backblaze B2**: create a **private** bucket `meshify-documents` → create an **Application Key** scoped to it → `S3_ENDPOINT` (`https://s3.<region>.backblazeb2.com`), `S3_ACCESS_KEY_ID` (the B2 `keyID`), `S3_SECRET_ACCESS_KEY` (the B2 `applicationKey`), `S3_REGION=<real region, e.g. us-west-004>`, `S3_FORCE_PATH_STYLE=false`.
 
 **2. Run migrations against Neon** (from your machine, one-time)
 ```bash
@@ -354,7 +354,7 @@ Assumes managed-fallback embeddings on ingest + query (OpenAI `text-embedding-3-
 
 | Users | Hosting (front+BFF+API) | Workers (worker+obs) | Postgres | Redis | Qdrant | Storage+CDN | AI (managed) | **Total/mo** |
 |-------|------------------------|----------------------|----------|-------|--------|-------------|--------------|--------------|
-| **10** | $0 (CF Pages + Render free) | ~$5–10 (Fly always-on) | $0 (Neon) | $0 (Upstash) | $0 (Qdrant free) | $0 (R2 free) | ~$1–5 | **~$6–20** |
+| **10** | $0 (CF Pages + Render free) | ~$5–10 (Fly always-on) | $0 (Neon) | $0 (Upstash) | $0 (Qdrant free) | $0 (B2 free 10GB) | ~$1–5 | **~$6–20** |
 | **100** | $0–7 (Render Starter for BFF) | ~$10–20 | $0–19 (Neon) | $0–10 | $0 (still <1GB likely) | $0–5 | ~$10–40 | **~$30–100** |
 | **1,000** | ~$25 (paid API+BFF, no cold start) | ~$40 | ~$69 (Neon Scale) | ~$10–30 | ~$25 (paid cluster) | ~$5–15 | ~$100–400 | **~$275–600** |
 | **10,000** | ~$150–400 (K8s, HPA 3–20) | ~$150 (KEDA ≤20) | ~$300+ (HA Postgres) | ~$100 | ~$150+ | ~$50 | ~$1,000–5,000 | **~$2,000–6,000+** |
@@ -409,7 +409,7 @@ Assumes managed-fallback embeddings on ingest + query (OpenAI `text-embedding-3-
 
 ### 🔴 Critical (block production)
 
-Remediation status as of the follow-up work (2026-07-21): **C1, C2, C3, C5, C6 — DONE & verified. C4 — code done, key rotation is an operator action. M5 (Dockerfile drift) fixed in passing.** Chosen deployment path: free-tier (Cloudflare Pages + Render/Fly + Neon/Upstash/Qdrant Cloud/R2), so the K8s manifests are the scale-later option.
+Remediation status as of the follow-up work (2026-07-21): **C1, C2, C3, C5, C6 — DONE & verified. C4 — code done, key rotation is an operator action. M5 (Dockerfile drift) fixed in passing.** Chosen deployment path: free-tier (Cloudflare Pages + Render/Fly + Neon/Upstash/Qdrant Cloud/Backblaze B2), so the K8s manifests are the scale-later option.
 
 | ID | Issue | Risk | Fix | Status |
 |----|-------|------|-----|--------|
@@ -455,7 +455,7 @@ Remediation status (2026-07-21 follow-up): **M1–M6 — ALL DONE & verified.**
 | M3 | K8s missing NetworkPolicy / PodSecurity / dedicated ServiceAccounts | Lateral movement, over-privileged pods | Added default-deny-ingress + platform-api ingress-allow NetworkPolicies, PSA `restricted` enforce label (all workloads already comply), and a dedicated `meshify` ServiceAccount with `automountServiceAccountToken: false` on all deployments + the migrate Job. kustomize validated. | ✅ DONE |
 | M4 | No metrics/tracing/alerting stack | Blind in prod | platform-api exposes Prometheus `/metrics` (prom-client: process/nodejs + `http_request_duration_seconds` by method/route/status), token-gated by `METRICS_TOKEN`. Added `infrastructure/kubernetes/monitoring/` ServiceMonitor + PrometheusRule (5xx rate, p95, down, not-ready, queue backlog) kept out of base kustomize, and `docs/operations/OBSERVABILITY.md` (Grafana Cloud for Render, ServiceMonitor for K8s). +3 tests; verified live. Worker HTTP metrics + OTel tracing noted as further steps. | ✅ DONE |
 | M5 | Hand-maintained Dockerfile COPY lists | Silent breakage on dep-graph change | Migrated the 4 Node app Dockerfiles to `pnpm deploy --prod` — runtime derived from the actual dep graph, no COPY lists (−206 lines). Images ~10% smaller; migrate Job path updated. All build + run non-root, verified. | ✅ DONE |
-| M6 | No DB backup/PITR or Qdrant snapshot policy | Data loss | `docs/operations/BACKUP_DR.md` — Postgres (Neon PITR) is the source of truth, R2 durable, Qdrant/Redis derived/ephemeral; RPO/RTO targets, full-restore runbook, and the critical encryption-key backup note. | ✅ DONE |
+| M6 | No DB backup/PITR or Qdrant snapshot policy | Data loss | `docs/operations/BACKUP_DR.md` — Postgres (Neon PITR) is the source of truth, B2 durable, Qdrant/Redis derived/ephemeral; RPO/RTO targets, full-restore runbook, and the critical encryption-key backup note. | ✅ DONE |
 
 ### 🟢 Nice to Have
 

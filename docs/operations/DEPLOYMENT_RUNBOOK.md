@@ -1,7 +1,7 @@
 # Meshify — Deployment Runbook (A–Z)
 
 Zero-to-live for the **free-tier path**: **Render** (5 app services) + **Cloudflare**
-(DNS/CDN/TLS + edge headers) + managed **Neon / Upstash / Qdrant Cloud / Cloudflare R2**
+(DNS/CDN/TLS + edge headers) + managed **Neon / Upstash / Qdrant Cloud / Backblaze B2**
 + **RocketRide cloud**. Do the steps in order; each names the exact commands and the
 env vars it sets. Companion docs: [`render.yaml`](../../render.yaml) (the Blueprint),
 [PRODUCTION_DEPLOYMENT_AUDIT.md](PRODUCTION_DEPLOYMENT_AUDIT.md) (§7 = full env table,
@@ -18,7 +18,7 @@ env vars it sets. Companion docs: [`render.yaml`](../../render.yaml) (the Bluepr
 
 ## A. Prerequisites
 - **Tools:** `git`, `node 22`, `pnpm 9`, `docker` (for the optional local boot), `openssl`, the `gh` CLI (optional), `flyctl`/`kubectl` only if you take those paths.
-- **Accounts:** GitHub, Render, Cloudflare (+ a domain on it), Neon, Upstash, Qdrant Cloud, Clerk (production instance), RocketRide; optionally a GitHub App and a Slack App.
+- **Accounts:** GitHub, Render, Cloudflare (+ a domain on it), Backblaze (B2), Neon, Upstash, Qdrant Cloud, Clerk (production instance), RocketRide; optionally a GitHub App and a Slack App.
 - Repo pushed to GitHub (CI builds/pushes images to GHCR on `main`).
 
 ## B. (Optional) prove it locally first
@@ -51,7 +51,7 @@ values are rejected at boot in production.
 | **Neon** (Postgres) | New project → copy the **pooled** connection string | `DATABASE_URL` |
 | **Upstash** (Redis) | New DB → copy the TLS URL | `REDIS_URL` (`rediss://…`) |
 | **Qdrant Cloud** | New free cluster → URL + API key | `QDRANT_URL`, `QDRANT_API_KEY` |
-| **Cloudflare R2** | Bucket `meshify-documents` + S3 API token | `S3_ENDPOINT` (`https://<acct>.r2.cloudflarestorage.com`), `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION=auto`, `S3_FORCE_PATH_STYLE=false` |
+| **Backblaze B2** | Create a **private** bucket `meshify-documents`; create an **Application Key** scoped to it. Note the bucket's endpoint + region. | `S3_ENDPOINT` (`https://s3.<region>.backblazeb2.com`), `S3_REGION` (the real region, e.g. `us-west-004` — **not** `auto`), `S3_ACCESS_KEY_ID` (B2 `keyID`), `S3_SECRET_ACCESS_KEY` (B2 `applicationKey`), `S3_FORCE_PATH_STYLE=false` |
 | **RocketRide** | Use the managed cloud engine (verified reachable) | `ROCKETRIDE_URI=https://api.rocketride.ai`, `ROCKETRIDE_APIKEY`, `ROCKETRIDE_OPENAI_KEY` |
 
 ## E. Apply database migrations (once now, and every release)
@@ -125,7 +125,7 @@ Two options:
 
 ## N. Backups & DR (see BACKUP_DR.md)
 - Enable **Neon PITR** (choose retention ≥ your RPO); create a branch before risky migrations.
-- Schedule **Qdrant Cloud snapshots**; R2 is durable (enable versioning if you want overwrite recovery).
+- Schedule **Qdrant Cloud snapshots**; B2 is durable (enable Object Lock / file versioning if you want overwrite recovery).
 - **Back up the crypto keys out-of-band** — a DB restore is useless without them.
 
 ## O. CI/CD — wire the deploy workflow (see deploy.yml)

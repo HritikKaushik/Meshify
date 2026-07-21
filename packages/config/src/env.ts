@@ -51,7 +51,7 @@ const envSchema = z.object({
 	QDRANT_URL: z.string().url(),
 	QDRANT_API_KEY: z.string().optional(),
 
-	// S3-compatible object storage (MinIO locally, S3/R2/Spaces in prod)
+	// S3-compatible object storage (MinIO locally, Backblaze B2/S3/Spaces in prod)
 	S3_ENDPOINT: z.string().url(),
 	S3_REGION: z.string().default('us-east-1'),
 	S3_BUCKET: z.string().min(1),

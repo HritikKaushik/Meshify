@@ -2,7 +2,7 @@
 # allow for the platform-api's HTTP port. Result: the worker and observability
 # pods (which have no HTTP surface) accept no inbound connections at all, and the
 # API is only reachable on its port. Egress is intentionally NOT restricted — the
-# apps talk to MANAGED external services (Neon/Upstash/Qdrant/R2/RocketRide) whose
+# apps talk to MANAGED external services (Neon/Upstash/Qdrant/B2/RocketRide) whose
 # IPs vary, so locking egress by CIDR is brittle; tighten it per-environment if
 # your managed providers publish stable ranges.
 apiVersion: networking.k8s.io/v1

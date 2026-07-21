@@ -122,10 +122,10 @@ envVarGroups:
         sync: false
       - key: QDRANT_API_KEY
         sync: false
-      - key: S3_ENDPOINT # Cloudflare R2
+      - key: S3_ENDPOINT # Backblaze B2 — https://s3.<region>.backblazeb2.com
         sync: false
-      - key: S3_REGION
-        value: auto
+      - key: S3_REGION # B2 region, e.g. us-west-004 (must match the endpoint; NOT "auto")
+        sync: false
       - key: S3_BUCKET
         value: meshify-documents
       - key: S3_ACCESS_KEY_ID
