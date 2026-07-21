@@ -54,6 +54,7 @@ import { GitHubAppAuth, GitHubRepoClient } from '@meshify/github';
 import { HttpSlackClient } from '@meshify/slack';
 import { QdrantSearchClient } from '@meshify/vector-store';
 import { PipelineRegistry, RocketRideClientPool, RocketRideRagService } from '@meshify/rocketride-gateway';
+import { startMetricsServer } from './observability/metrics-server.js';
 import { processDocumentIngestJob } from './processors/document-ingest.processor.js';
 import { processRepoIngestJob } from './processors/repo-ingest.processor.js';
 import { processRepoSyncJob } from './processors/repo-sync.processor.js';
@@ -370,8 +371,18 @@ async function bootstrap(): Promise<void> {
 
 	logger.info({ queues: workers.map((w) => w.name) }, 'worker listening');
 
+	// Metrics/health HTTP surface (queue depth + process metrics).
+	const metricsServer = startMetricsServer({
+		port: env.WORKER_METRICS_PORT,
+		token: env.METRICS_TOKEN,
+		connection: bullRedis,
+		queueNames: workers.map((w) => w.name),
+	});
+	logger.info({ port: env.WORKER_METRICS_PORT }, 'worker metrics listening');
+
 	const shutdown = async (signal: string) => {
 		logger.info({ signal }, 'shutting down');
+		await metricsServer.close();
 		await Promise.all(workers.map((w) => w.close()));
 		await sourceSyncQueue.close();
 		await maintenanceQueue.close();

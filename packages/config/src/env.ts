@@ -18,6 +18,9 @@ const envSchema = z.object({
 	// Gates the Prometheus /metrics endpoint. Set in production and configure the
 	// same bearer token on the scraper; unset leaves /metrics open (dev only).
 	METRICS_TOKEN: z.string().optional(),
+	// Port for the worker's own metrics/health HTTP server (the worker otherwise
+	// has no HTTP surface). Scraped for queue-depth + process metrics.
+	WORKER_METRICS_PORT: z.coerce.number().int().positive().default(9091),
 
 	// BFF (Clerk session proxy — apps/bff). Optional here so platform-api/worker
 	// aren't forced to set them; apps/bff validates its own required-ness at boot.

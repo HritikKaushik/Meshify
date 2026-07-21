@@ -13,6 +13,7 @@ kubectl -n meshify apply -f infrastructure/kubernetes/monitoring/
 ```
 
 - `servicemonitor.yaml` — scrapes platform-api `/metrics` (token-gated via `METRICS_TOKEN` from the `meshify-secrets` Secret).
+- `podmonitor.yaml` — scrapes the worker's `/metrics` pod-port directly (the worker has no Service).
 - `prometheusrule.yaml` — starter alerts (target down, 5xx rate, p95 latency, not-ready, queue backlog). Tune thresholds to your traffic.
 
 For the Render/Cloudflare (non-K8s) path, scrape `/metrics` with a Grafana Cloud

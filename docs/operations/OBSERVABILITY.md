@@ -6,6 +6,10 @@
   `http_request_duration_seconds{method,route,status}`. The `route` label is the
   matched pattern (e.g. `/v1/projects/:projectId/documents/:documentId`), so
   cardinality stays bounded regardless of real ids.
+- **worker `/metrics`** (on `WORKER_METRICS_PORT`, default 9091) — Node/process
+  defaults plus `meshify_queue_jobs{queue,state}` (BullMQ counts per queue for
+  `waiting`/`active`/`delayed`/`failed`, read live on each scrape). Same
+  `METRICS_TOKEN` gate. The worker also serves `/healthz` there for liveness.
 - **Health** — `/health/live` (process-only) and `/health/ready` (checks
   pg/redis/qdrant). Used by liveness/readiness probes and the deploy smoke test.
 - **Structured logs** — pino JSON on stdout from every app (credential-safe
@@ -48,8 +52,13 @@ a `PrometheusRule` (starter alerts).
 - **WorkerQueueBacklogGrowing** — BullMQ wait list > 500 for 10m (wire to your queue/Redis metric source).
 
 ## Gaps / next steps
-- **Worker metrics** aren't exported over HTTP yet (the worker has no HTTP
-  surface). Queue depth is available via Redis/BullMQ and drives KEDA autoscaling;
-  add a small metrics listener or a Redis exporter to alert on it directly.
-- **Distributed tracing** (OpenTelemetry across BFF→API→RocketRide) is not wired;
-  the RocketRide pipeline traces cover the AI path.
+- **Deeper tracing granularity** — OpenTelemetry auto-instrumentation is wired
+  (see below); custom spans around the AI/RAG path could add detail beyond the
+  RocketRide pipeline traces.
+
+## Distributed tracing (OpenTelemetry)
+platform-api, bff, and worker auto-instrument via OpenTelemetry when
+`OTEL_EXPORTER_OTLP_ENDPOINT` is set (HTTP/OTLP), and are a no-op otherwise.
+Point it at a collector / Grafana Tempo / Honeycomb, e.g.
+`OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318`. `OTEL_SERVICE_NAME` is
+set per app automatically.

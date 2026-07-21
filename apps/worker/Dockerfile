@@ -16,6 +16,10 @@ FROM base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /prod ./
-# No HEALTHCHECK — the worker has no HTTP surface; restart-on-exit only.
 USER node
+EXPOSE 9091
+# The worker now has a small metrics/health HTTP server (queue depth + process
+# metrics). Liveness hits its /healthz — answers from this process alone.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+	CMD node -e "fetch('http://127.0.0.1:'+(process.env.WORKER_METRICS_PORT||9091)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/main.js"]
