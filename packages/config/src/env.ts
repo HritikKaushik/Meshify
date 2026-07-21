@@ -52,7 +52,14 @@ const envSchema = z.object({
 	QDRANT_API_KEY: z.string().optional(),
 
 	// S3-compatible object storage (MinIO locally, Backblaze B2/S3/Spaces in prod)
-	S3_ENDPOINT: z.string().url(),
+	// Backblaze's console shows the endpoint scheme-less (e.g. s3.us-east-005.backblazeb2.com),
+	// so accept a bare host and default it to https:// before validating as a URL — a
+	// scheme-less value would otherwise fail .url() and crash the app at boot.
+	S3_ENDPOINT: z
+		.string()
+		.min(1)
+		.transform((v) => (/^https?:\/\//i.test(v) ? v : `https://${v}`))
+		.pipe(z.string().url()),
 	S3_REGION: z.string().default('us-east-1'),
 	S3_BUCKET: z.string().min(1),
 	S3_ACCESS_KEY_ID: z.string().min(1),
