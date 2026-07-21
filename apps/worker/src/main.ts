@@ -1,3 +1,4 @@
+import '@meshify/telemetry'; // MUST be first — instruments http/express/pg before they load
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { Redis } from 'ioredis';

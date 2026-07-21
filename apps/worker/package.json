@@ -26,7 +26,8 @@
 		"ioredis": "^5.4.1",
 		"pg": "^8.13.1",
 		"prom-client": "^15.1.3",
-		"tar": "^7.4.3"
+		"tar": "^7.4.3",
+		"@meshify/telemetry": "workspace:*"
 	},
 	"devDependencies": {
 		"@meshify/testing": "workspace:*",

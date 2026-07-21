@@ -1,3 +1,4 @@
+import '@meshify/telemetry'; // MUST be first — instruments http/express/pg before they load
 import express, { Router } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';

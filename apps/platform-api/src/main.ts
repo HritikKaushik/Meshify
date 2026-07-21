@@ -1,3 +1,4 @@
+import '@meshify/telemetry'; // MUST be first — instruments http/express/pg before they load
 import express from 'express';
 import { pinoHttp } from 'pino-http';
 import pg from 'pg';
