@@ -25,6 +25,8 @@ spec:
         app.kubernetes.io/part-of: meshify
     spec:
       restartPolicy: Never
+      serviceAccountName: meshify
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

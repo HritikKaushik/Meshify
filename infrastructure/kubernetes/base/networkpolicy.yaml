@@ -1,0 +1,38 @@
+# Default-deny INGRESS for every pod in the namespace, then a single explicit
+# allow for the platform-api's HTTP port. Result: the worker and observability
+# pods (which have no HTTP surface) accept no inbound connections at all, and the
+# API is only reachable on its port. Egress is intentionally NOT restricted — the
+# apps talk to MANAGED external services (Neon/Upstash/Qdrant/R2/RocketRide) whose
+# IPs vary, so locking egress by CIDR is brittle; tighten it per-environment if
+# your managed providers publish stable ranges.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    app.kubernetes.io/part-of: meshify
+spec:
+  podSelector: {} # all pods
+  policyTypes:
+    - Ingress
+  # No ingress rules → deny all inbound.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-platform-api-ingress
+  labels:
+    app.kubernetes.io/part-of: meshify
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: platform-api
+  policyTypes:
+    - Ingress
+  ingress:
+    # The API is a public, key-authenticated surface reached via the Ingress
+    # controller; allow inbound to its HTTP port. Scope `from` to the ingress
+    # controller's namespace in a hardened cluster if you know its label.
+    - ports:
+        - protocol: TCP
+          port: 3000
