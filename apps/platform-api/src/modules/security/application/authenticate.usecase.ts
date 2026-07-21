@@ -22,7 +22,15 @@ export class AuthenticateApiKeyUseCase {
 		private readonly pepper: string
 	) {}
 
-	async execute(authorizationHeader: string | undefined): Promise<AuthContext> {
+	/**
+	 * @param authorizationHeader the raw `Authorization` header (Bearer msk_…).
+	 * @param orgRoleHeader the BFF-forwarded, trusted `X-Meshify-Org-Role`
+	 *   (`admin`/`member`). ABSENT means a direct API-key caller (a server
+	 *   credential that never passes through the BFF) — treated as full-access.
+	 *   The BFF always sets this header authoritatively from the Clerk session,
+	 *   overwriting any browser-supplied value, so a member cannot forge `admin`.
+	 */
+	async execute(authorizationHeader: string | undefined, orgRoleHeader?: string): Promise<AuthContext> {
 		const presented = extractBearer(authorizationHeader);
 		if (!presented || !looksLikeApiKey(presented)) {
 			throw new AuthenticationError('Missing or malformed API key');
@@ -40,7 +48,8 @@ export class AuthenticateApiKeyUseCase {
 		// Fire-and-forget; swallow errors so telemetry never gates authentication.
 		void this.apiKeys.touch(key.id).catch(() => undefined);
 
-		return { orgId: key.orgId, keyId: key.id, scopes: key.scopes };
+		const isOrgAdmin = orgRoleHeader === undefined ? true : orgRoleHeader === 'admin';
+		return { orgId: key.orgId, keyId: key.id, scopes: key.scopes, isOrgAdmin };
 	}
 }
 

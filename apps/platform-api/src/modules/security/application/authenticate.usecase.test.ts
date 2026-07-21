@@ -29,8 +29,24 @@ describe('AuthenticateApiKeyUseCase', () => {
 
 		const auth = await new AuthenticateApiKeyUseCase(repo, PEPPER).execute(`Bearer ${plaintext}`);
 
-		expect(auth).toEqual({ orgId: 'org-1', keyId: 'key-1', scopes: ['read'] });
+		// No forwarded role header ⇒ direct server-key caller ⇒ full access.
+		expect(auth).toEqual({ orgId: 'org-1', keyId: 'key-1', scopes: ['read'], isOrgAdmin: true });
 		expect(touch).toHaveBeenCalledWith('key-1');
+	});
+
+	it.each([
+		['admin role → org admin', 'admin', true],
+		['member role → not org admin', 'member', false],
+		['unknown role → not org admin', 'something-else', false],
+		['no role header → full access (direct server key)', undefined, true],
+	])('derives isOrgAdmin from the forwarded org role: %s', async (_label, roleHeader, expected) => {
+		const { plaintext } = generateApiKey();
+		const hash = hashApiKey(PEPPER, plaintext);
+		const { repo } = fakeRepo({ [hash]: activeKey() });
+
+		const auth = await new AuthenticateApiKeyUseCase(repo, PEPPER).execute(`Bearer ${plaintext}`, roleHeader);
+
+		expect(auth.isOrgAdmin).toBe(expected);
 	});
 
 	it.each([

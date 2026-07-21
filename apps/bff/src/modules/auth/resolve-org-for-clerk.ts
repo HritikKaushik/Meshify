@@ -8,9 +8,19 @@ declare global {
 	// eslint-disable-next-line @typescript-eslint/no-namespace
 	namespace Express {
 		interface Request {
-			meshify?: { meshifyOrgId: string; apiKey: string };
+			meshify?: { meshifyOrgId: string; apiKey: string; orgRole: 'admin' | 'member' };
 		}
 	}
+}
+
+/**
+ * Maps a Clerk session org role to Meshify's coarse admin/member. Clerk's
+ * built-in admin role is `org:admin`; every other role (including `org:member`
+ * and any custom role) is treated as a non-admin member. The proxy forwards
+ * this to platform-api, which gates org-admin actions on it.
+ */
+function toMeshifyRole(clerkOrgRole: string | null | undefined): 'admin' | 'member' {
+	return clerkOrgRole === 'org:admin' ? 'admin' : 'member';
 }
 
 export interface ResolveOrgForClerkDeps {
@@ -43,11 +53,12 @@ export function resolveOrgForClerk(deps: ResolveOrgForClerkDeps) {
 			});
 			return;
 		}
+		const orgRole = toMeshifyRole(auth.orgRole);
 
 		try {
 			const existing = await links.findByClerkOrgId(clerkOrgId);
 			if (existing) {
-				req.meshify = { meshifyOrgId: existing.orgId, apiKey: existing.apiKeyPlaintext };
+				req.meshify = { meshifyOrgId: existing.orgId, apiKey: existing.apiKeyPlaintext, orgRole };
 				next();
 				return;
 			}
@@ -61,7 +72,7 @@ export function resolveOrgForClerk(deps: ResolveOrgForClerkDeps) {
 				encryptionKey: deps.encryptionKey,
 			});
 			deps.logger.info({ clerkOrgId, meshifyOrgId: link.orgId }, 'auto-provisioned Meshify org for new Clerk organization');
-			req.meshify = { meshifyOrgId: link.orgId, apiKey: link.apiKeyPlaintext };
+			req.meshify = { meshifyOrgId: link.orgId, apiKey: link.apiKeyPlaintext, orgRole };
 			next();
 		} catch (err) {
 			deps.logger.error({ err, clerkOrgId }, 'failed to resolve/provision Meshify org for Clerk session');

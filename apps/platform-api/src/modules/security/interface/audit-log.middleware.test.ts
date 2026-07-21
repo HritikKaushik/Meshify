@@ -9,7 +9,7 @@ function recorder() {
 	return { repo, records };
 }
 
-const AUTH = { orgId: 'org-1', keyId: 'key-1', scopes: [] };
+const AUTH = { orgId: 'org-1', keyId: 'key-1', scopes: [], isOrgAdmin: true };
 
 describe('auditLogMiddleware', () => {
 	it('records a mutating request on finish with org, actor key, project, ip and status', async () => {

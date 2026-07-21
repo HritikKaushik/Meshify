@@ -1,0 +1,80 @@
+# Tag-triggered production deploy. Push a version tag (e.g. `v1.2.0`) to run it.
+#
+# SCAFFOLD — the actual rollout step is intentionally left as a placeholder
+# because it depends on the hosting platform you wire up (see the deployment
+# runbook in docs/operations/). What IS encoded here is the safe ORDER every
+# production deploy must follow: migrate the database FIRST, then roll out, then
+# smoke-test. Fill in the marked steps and the referenced repository secrets.
+name: Deploy
+
+on:
+  push:
+    tags: ["v*"]
+
+# Never run two production deploys at once.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production # gate on a GitHub Environment (approvals + scoped secrets)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Apply pending schema migrations BEFORE any new code serves traffic.
+      # Migrations must be backward-compatible with the currently-running version
+      # (expand/contract) so the old pods keep working during the rollout.
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: pnpm --filter @meshify/data-access migrate
+
+  rollout:
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      # REQUIRED: replace with your platform's deploy trigger. The images for this
+      # tag are already built/pushed to GHCR by ci.yml. Examples:
+      #
+      #   Render (deploy hooks, one per service):
+      #     curl -fsS "${{ secrets.RENDER_DEPLOY_HOOK_PLATFORM_API }}"
+      #     curl -fsS "${{ secrets.RENDER_DEPLOY_HOOK_BFF }}"
+      #     curl -fsS "${{ secrets.RENDER_DEPLOY_HOOK_WORKER }}"
+      #     curl -fsS "${{ secrets.RENDER_DEPLOY_HOOK_OBSERVABILITY }}"
+      #     # web: Cloudflare Pages redeploys from the repo automatically.
+      #
+      #   Fly.io:
+      #     flyctl deploy --image ghcr.io/${{ github.repository_owner }}/meshify-platform-api:${{ github.ref_name }}
+      #
+      #   Kubernetes (scale-later path): bump overlays/prod image tags, run the
+      #     migrate Job, then `kubectl apply -k overlays/prod`.
+      - name: Trigger rollout
+        run: echo "TODO: trigger the hosting platform deploy for tag ${{ github.ref_name }}"
+
+  smoke:
+    needs: rollout
+    runs-on: ubuntu-latest
+    steps:
+      # Give the rollout a moment, then confirm the public app answers and the API
+      # is ready. Fail the deploy (and alert) if either is unhealthy.
+      - name: Smoke test
+        env:
+          APP_URL: ${{ vars.PROD_APP_URL }} # e.g. https://app.yourdomain.com
+        run: |
+          set -e
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/api/health" || true)
+            echo "attempt $i: /api/health → $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "smoke test failed: /api/health never returned 200"; exit 1

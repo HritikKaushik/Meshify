@@ -1,0 +1,153 @@
+# Render Blueprint for the free-tier deployment path (see
+# docs/operations/DEPLOYMENT_RUNBOOK.md). Deploys the 5 Meshify services from
+# their Dockerfiles; the stateful dependencies (Postgres, Redis, Qdrant, object
+# storage, RocketRide) are MANAGED and referenced by env var — this Blueprint
+# does NOT provision them.
+#
+# Free-tier caveats (be honest with yourself):
+#   - Free `web` services SPIN DOWN after ~15 min idle (≈30s cold start). Fine
+#     for a demo; move to a paid instance ($7/mo) before real users.
+#   - Render `worker` (background) services are PAID. On a strict $0 budget, run
+#     the worker + observability on Fly.io instead (a small always-on machine);
+#     everything else here is unchanged.
+#   - `observability` MUST stay at 1 instance (no leader election) — never scale.
+#
+# Secrets: everything marked `sync: false` is set once in the Render dashboard
+# (or via `render env`), never committed. Generate the crypto keys with
+# `openssl rand -base64 32` — placeholders are rejected at boot in production.
+
+services:
+  # ---- Public browser origin: SPA + single-origin /api proxy to the BFF -------
+  - type: web
+    name: meshify-web
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      # Where nginx forwards /api. Render exposes a service's internal address;
+      # point this at the BFF service.
+      - key: BFF_UPSTREAM
+        value: http://meshify-bff:3001
+      # Public (publishable) Clerk key — Render makes service env vars available
+      # as Docker build args, so this reaches the Vite build (ARG in the Dockerfile).
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
+
+  # ---- Clerk-session auth proxy ----------------------------------------------
+  - type: web
+    name: meshify-bff
+    runtime: docker
+    dockerfilePath: ./apps/bff/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BFF_PORT
+        value: "3001"
+      - key: PLATFORM_API_ORIGIN
+        value: http://meshify-platform-api:3000
+      # REQUIRED in prod: the public origin the browser loads (the web service's
+      # URL / your custom domain) — the CSRF guard's allowlist.
+      - key: APP_ORIGIN
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: ORG_KEY_ENCRYPTION_KEY
+        sync: false
+      # Must be byte-identical to platform-api's value (peppers the same API keys).
+      - key: PLATFORM_API_KEY_PEPPER
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+
+  # ---- Core API (API-key authenticated) --------------------------------------
+  - type: web
+    name: meshify-platform-api
+    runtime: docker
+    dockerfilePath: ./apps/platform-api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PLATFORM_PORT
+        value: "3000"
+      - fromGroup: meshify-backend
+
+  # ---- Ingestion worker (Render background worker = PAID; or run on Fly) ------
+  - type: worker
+    name: meshify-worker
+    runtime: docker
+    dockerfilePath: ./apps/worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - fromGroup: meshify-backend
+
+  # ---- RocketRide pipeline-trace subscriber (SINGLE instance, never scale) ----
+  - type: worker
+    name: meshify-observability
+    runtime: docker
+    dockerfilePath: ./apps/observability/Dockerfile
+    dockerContext: .
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - fromGroup: meshify-backend
+
+# Shared backend secrets/config for platform-api + worker + observability. Set
+# each `sync: false` value once in the dashboard; it fans out to all three.
+envVarGroups:
+  - name: meshify-backend
+    envVars:
+      - key: PLATFORM_API_KEY_PEPPER # identical to the BFF's value
+        sync: false
+      - key: ORG_KEY_ENCRYPTION_KEY
+        sync: false
+      - key: INTEGRATION_ENCRYPTION_KEY
+        sync: false
+      - key: DATABASE_URL # Neon (pooled connection string)
+        sync: false
+      - key: REDIS_URL # Upstash (rediss:// TLS)
+        sync: false
+      - key: QDRANT_URL # Qdrant Cloud
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: S3_ENDPOINT # Cloudflare R2
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_BUCKET
+        value: meshify-documents
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_FORCE_PATH_STYLE
+        value: "false"
+      - key: ROCKETRIDE_URI # managed cloud engine
+        value: https://api.rocketride.ai
+      - key: ROCKETRIDE_APIKEY
+        sync: false
+      - key: ROCKETRIDE_OPENAI_KEY # managed embeddings/LLM fallback
+        sync: false
+      # GitHub App (optional — only if the github provider is used)
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_APP_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_APP_WEBHOOK_SECRET
+        sync: false
+      - key: GITHUB_APP_CLIENT_ID
+        sync: false
+      - key: GITHUB_APP_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_APP_SLUG
+        sync: false

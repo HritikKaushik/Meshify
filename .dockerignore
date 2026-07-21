@@ -1,0 +1,36 @@
+# Keep the Docker build context small and — critically — keep local secrets and
+# build junk OUT of image layers. Without this, the root .env (real credentials)
+# and every node_modules/dist would be shipped into the build context.
+**/node_modules
+**/dist
+**/.turbo
+.turbo
+coverage
+graphify-out
+
+# Never send env files or secrets into the build context.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+infrastructure/kubernetes/**/app-secrets.yaml
+
+# Stale TS build metadata MUST be excluded: if a host-built tsconfig.tsbuildinfo
+# lands in the context, in-image `tsc -b` thinks the project is up to date and
+# skips emitting dist/, producing an image with no compiled output. Docker ignore
+# patterns are path-based (not basename-anywhere like .gitignore), so the `**/`
+# prefix is required to catch nested files.
+**/*.tsbuildinfo
+
+# VCS / tooling / docs not needed to build any image.
+.git
+.github
+.vscode
+.idea
+**/*.log
+**/.DS_Store
+docs
+tests
+pipelines
+scripts/sync-rocketride-port.mjs

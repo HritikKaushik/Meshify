@@ -1,20 +1,16 @@
 import type { AuthContext } from '@meshify/data-access';
 
 /**
- * The single authorization hook for managing AI providers. Centralized so that
- * when RBAC lands, ONLY this function changes — every mutating LLM route calls
- * `requireLlmAdmin`, no scattered role checks.
+ * The single authorization hook for managing AI providers. Centralized so every
+ * mutating LLM route calls `requireLlmAdmin` — no scattered role checks.
  *
- * TODO(RBAC): platform-api currently has no role concept. Every authenticated
- * request carries an org-scoped API key (the BFF resolves a Clerk session to one
- * org key = full org access), and `AuthContext.scopes` is not yet populated with
- * granular scopes. So today this returns `true`, preserving existing behavior:
- * any authenticated org member may manage providers. When roles arrive, implement
- * this as e.g. `return auth.scopes.includes('llm:admin')` or a Clerk org-role
- * check threaded through the BFF — nothing else needs to change.
+ * Org-admin is decided by `AuthContext.isOrgAdmin`, which the auth guard derives
+ * from the BFF-forwarded Clerk org role (org:admin → true, org:member → false).
+ * A direct API-key caller (a server credential that never passes through the
+ * BFF) carries no role header and is treated as full-access.
  */
-export function canManageLLMProviders(_auth: AuthContext): boolean {
-	return true;
+export function canManageLLMProviders(auth: AuthContext): boolean {
+	return auth.isOrgAdmin;
 }
 
 export class LlmProviderForbiddenError extends Error {

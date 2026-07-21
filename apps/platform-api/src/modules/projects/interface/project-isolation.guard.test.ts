@@ -17,7 +17,7 @@ describe('projectIsolationGuard', () => {
 	it('attaches req.project and calls next when the project belongs to the caller org', async () => {
 		const res = mockResponse();
 		const next = vi.fn();
-		const r = req({ orgId: 'org-1', keyId: 'k', scopes: [] });
+		const r = req({ orgId: 'org-1', keyId: 'k', scopes: [], isOrgAdmin: true });
 		await projectIsolationGuard(getProjectReturning(project('org-1')))(r, res, next);
 
 		expect(r.project?.id).toBe('p1');
@@ -27,7 +27,7 @@ describe('projectIsolationGuard', () => {
 	it('returns 404 (not 403) when the project belongs to another org — no cross-tenant probing', async () => {
 		const res = mockResponse();
 		const next = vi.fn();
-		await projectIsolationGuard(getProjectReturning(project('org-2')))(req({ orgId: 'org-1', keyId: 'k', scopes: [] }), res, next);
+		await projectIsolationGuard(getProjectReturning(project('org-2')))(req({ orgId: 'org-1', keyId: 'k', scopes: [], isOrgAdmin: true }), res, next);
 
 		expect(res.statusCode).toBe(404);
 		expect(next).not.toHaveBeenCalled();
@@ -36,7 +36,7 @@ describe('projectIsolationGuard', () => {
 	it('returns 404 when the project does not exist', async () => {
 		const res = mockResponse();
 		const next = vi.fn();
-		await projectIsolationGuard(getProjectReturning(undefined))(req({ orgId: 'org-1', keyId: 'k', scopes: [] }), res, next);
+		await projectIsolationGuard(getProjectReturning(undefined))(req({ orgId: 'org-1', keyId: 'k', scopes: [], isOrgAdmin: true }), res, next);
 		expect(res.statusCode).toBe(404);
 	});
 

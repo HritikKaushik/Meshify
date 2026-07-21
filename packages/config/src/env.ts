@@ -20,6 +20,12 @@ const envSchema = z.object({
 	// aren't forced to set them; apps/bff validates its own required-ness at boot.
 	BFF_PORT: z.coerce.number().int().positive().default(3001),
 	PLATFORM_API_ORIGIN: z.string().url().optional(),
+	// Public origin(s) the browser loads the web app from — comma-separated for
+	// multiple (e.g. app + marketing domains). The BFF's CSRF guard rejects any
+	// state-changing request whose Origin/Referer isn't in this list. Optional in
+	// the shared schema; apps/bff requires it in production and defaults to the
+	// Vite dev origin (http://localhost:5174) otherwise.
+	APP_ORIGIN: z.string().optional(),
 	CLERK_SECRET_KEY: z.string().optional(),
 	CLERK_PUBLISHABLE_KEY: z.string().optional(),
 	ORG_KEY_ENCRYPTION_KEY: z.string().min(32, 'ORG_KEY_ENCRYPTION_KEY must be at least 32 chars').optional(),
@@ -95,6 +101,47 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+/**
+ * Crypto secrets that must be high-entropy in production. The zod schema only
+ * enforces LENGTH — a long placeholder like `change-me-to-a-random-32-char-string`
+ * passes it — so this catches obviously-weak values before they protect real data.
+ */
+const PRODUCTION_STRONG_SECRETS = ['PLATFORM_API_KEY_PEPPER', 'ORG_KEY_ENCRYPTION_KEY', 'INTEGRATION_ENCRYPTION_KEY'] as const;
+
+/** Substrings that mark a value as a template/dev placeholder, never a real secret. */
+const PLACEHOLDER_MARKERS = ['change-me', 'changeme', 'replace_me', 'replace-me', 'your-', 'example', 'placeholder', 'local-', 'dev-', 'test-'];
+
+function weaknessReason(value: string): string | undefined {
+	const lower = value.toLowerCase();
+	const marker = PLACEHOLDER_MARKERS.find((m) => lower.includes(m));
+	if (marker) return `looks like a placeholder (contains "${marker}")`;
+	// A real random 32-byte key (base64/hex) has many distinct characters; a
+	// trivial value ("aaaa…", "0000…", a short word repeated) has very few.
+	if (new Set(value).size < 10) return 'too few distinct characters to be a random key';
+	return undefined;
+}
+
+/**
+ * In production, reject weak/placeholder crypto secrets. These keys pepper API-key
+ * hashes and encrypt every org's provider credentials — a guessable value makes
+ * the whole vault brute-forceable, so failing at boot is far safer than running.
+ */
+function assertStrongProductionSecrets(env: Env): void {
+	if (env.NODE_ENV !== 'production') return;
+	const weak: string[] = [];
+	for (const name of PRODUCTION_STRONG_SECRETS) {
+		const value = env[name];
+		if (!value) continue; // presence is enforced elsewhere (schema / per-app boot checks)
+		const reason = weaknessReason(value);
+		if (reason) weak.push(`  - ${name}: ${reason}`);
+	}
+	if (weak.length > 0) {
+		throw new Error(
+			`Weak secret(s) rejected in production (generate with \`openssl rand -base64 32\`):\n${weak.join('\n')}`
+		);
+	}
+}
+
 let cached: Env | undefined;
 
 /**
@@ -109,6 +156,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
 		const issues = result.error.issues.map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`).join('\n');
 		throw new Error(`Invalid environment configuration:\n${issues}`);
 	}
+
+	assertStrongProductionSecrets(result.data);
 
 	cached = result.data;
 	return cached;

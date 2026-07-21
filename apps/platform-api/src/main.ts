@@ -72,6 +72,8 @@ import { PostgresApiKeyRepository, PostgresAuditLogRepository } from '@meshify/d
 import { AuthenticateApiKeyUseCase } from './modules/security/application/authenticate.usecase.js';
 import { authGuard } from './modules/security/interface/auth.guard.js';
 import { RedisRateLimiter } from './modules/security/infrastructure/redis-rate-limiter.js';
+import { InMemoryRateLimiter } from './modules/security/infrastructure/in-memory-rate-limiter.js';
+import { FallbackRateLimiter } from './modules/security/infrastructure/fallback-rate-limiter.js';
 import { rateLimitGuard } from './modules/security/interface/rate-limit.guard.js';
 import { auditLogMiddleware } from './modules/security/interface/audit-log.middleware.js';
 import {
@@ -289,8 +291,13 @@ async function bootstrap(): Promise<void> {
 	const webhookEventRepository = new PostgresWebhookEventRepository(pgPool);
 	const webhookEventsQueue = createWebhookEventsQueue(bullRedis);
 	// Webhooks are pre-auth, so the per-key limiter can't apply — use a
-	// per-provider fixed window generous enough for bursty pushes.
-	const webhookLimiter = new RedisRateLimiter(redis, 600, 60);
+	// per-provider fixed window generous enough for bursty pushes. Falls back to an
+	// in-process limiter if Redis is down rather than dropping throttling.
+	const webhookLimiter = new FallbackRateLimiter(
+		new RedisRateLimiter(redis, 600, 60),
+		new InMemoryRateLimiter(600, 60),
+		(err) => logger.warn({ err }, 'webhook rate limiter fell back to in-memory (redis unavailable)')
+	);
 
 	const attachSlackWorkspace = new AttachSlackWorkspaceUseCase(integrationRepository, knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, credentialVault, slackClient);
 	const connectRepositoryFromIntegration = new ConnectRepositoryFromIntegrationUseCase(
@@ -354,7 +361,11 @@ async function bootstrap(): Promise<void> {
 	const apiKeyRepository = new PostgresApiKeyRepository(pgPool);
 	const auditLogRepository = new PostgresAuditLogRepository(pgPool);
 	const authenticate = new AuthenticateApiKeyUseCase(apiKeyRepository, env.PLATFORM_API_KEY_PEPPER);
-	const rateLimiter = new RedisRateLimiter(redis, env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC);
+	const rateLimiter = new FallbackRateLimiter(
+		new RedisRateLimiter(redis, env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC),
+		new InMemoryRateLimiter(env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC),
+		(err) => logger.warn({ err }, 'rate limiter fell back to in-memory (redis unavailable)')
+	);
 
 	const app = express();
 	// Honour X-Forwarded-For for accurate client IPs in audit logs (behind a

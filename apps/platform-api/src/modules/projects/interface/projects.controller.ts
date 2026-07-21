@@ -8,6 +8,7 @@ import type { GetProjectStatsUseCase } from '../application/get-project-stats.us
 import type { ListProjectsUseCase } from '../application/list-projects.usecase.js';
 import { createProjectSchema } from './dto.js';
 import { projectIsolationGuard } from './project-isolation.guard.js';
+import { OrgAdminForbiddenError, requireOrgAdmin } from '../../security/authorization/org-authorization.js';
 import type { Project } from '@meshify/data-access';
 
 function toResponse(project: Project) {
@@ -70,9 +71,14 @@ export function createProjectsController(deps: {
 
 	router.delete('/v1/projects/:projectId', projectIsolationGuard(deps.getProject), async (req, res) => {
 		try {
+			requireOrgAdmin(req.auth!, 'delete projects');
 			await deps.deleteProject.execute(req.project!.id);
 			res.status(204).send();
 		} catch (err) {
+			if (err instanceof OrgAdminForbiddenError) {
+				res.status(403).json({ error: err.message });
+				return;
+			}
 			if (err instanceof ProjectNotFoundError) {
 				res.status(404).json({ error: err.message });
 				return;

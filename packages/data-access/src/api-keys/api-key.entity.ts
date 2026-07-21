@@ -18,6 +18,14 @@ export interface AuthContext {
 	orgId: string;
 	keyId: string;
 	scopes: string[];
+	/**
+	 * Whether this request may perform org-admin actions (manage AI providers,
+	 * delete projects, manage connectors/integrations). Derived from the
+	 * BFF-forwarded Clerk org role: a Clerk `org:admin` → true, `org:member` →
+	 * false. A request with no forwarded role is a direct API-key caller (a
+	 * server credential issued out-of-band) and is treated as full-access.
+	 */
+	isOrgAdmin: boolean;
 }
 
 const KEY_PREFIX = 'msk_';

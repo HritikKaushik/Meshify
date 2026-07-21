@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
 import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
+import { OrgAdminForbiddenError, requireOrgAdmin } from '../../security/authorization/org-authorization.js';
 import type { ListConnectorsUseCase } from '../application/list-connectors.usecase.js';
 import { ConnectorNotFoundError, type DeleteConnectorUseCase } from '../application/delete-connector.usecase.js';
 
@@ -25,9 +26,14 @@ export function createConnectorsController(deps: {
 
 	router.delete('/v1/projects/:projectId/connectors/:connectorId', guard, async (req, res) => {
 		try {
+			requireOrgAdmin(req.auth!, 'disconnect knowledge sources');
 			await deps.deleteConnector.execute({ project: req.project!, connectorId: req.params.connectorId as string });
 			res.status(204).send();
 		} catch (err) {
+			if (err instanceof OrgAdminForbiddenError) {
+				res.status(403).json({ error: err.message });
+				return;
+			}
 			if (err instanceof ConnectorNotFoundError) {
 				res.status(404).json({ error: err.message });
 				return;

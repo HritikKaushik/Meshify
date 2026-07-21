@@ -48,9 +48,11 @@ function buildApp(configured = true) {
 
 	const app = express();
 	app.use(express.json());
-	// Stub authGuard: every request is an authenticated member of org-1.
+	// Stub authGuard: every request is an authenticated org-1 admin (the flow
+	// includes disconnect, which is org-admin-gated). isOrgAdmin mirrors what the
+	// real authGuard derives from the BFF-forwarded org role.
 	app.use((req: Request, _res: Response, next: NextFunction) => {
-		(req as unknown as { auth: { orgId: string } }).auth = { orgId: 'org-1' };
+		(req as unknown as { auth: { orgId: string; isOrgAdmin: boolean } }).auth = { orgId: 'org-1', isOrgAdmin: true };
 		next();
 	});
 	app.use(

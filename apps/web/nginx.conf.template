@@ -1,0 +1,65 @@
+# Rendered at container start by the nginx image's envsubst entrypoint: only real
+# env vars (BFF_UPSTREAM) are substituted; nginx's own $uri/$host are preserved.
+# The result is a STATIC proxy_pass target, so no runtime resolver is needed.
+#
+# NOTE on headers: nginx `add_header` does NOT inherit into a location that sets
+# its own add_header — it replaces the whole set. Because `/` internally redirects
+# to `= /index.html` via try_files, the security headers must be repeated in every
+# location that also sets a Cache-Control header, or the app HTML would ship with
+# none. They are grouped below for that reason.
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Applies to /api/ and any location WITHOUT its own add_header.
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # Entry HTML: never cached, so new deploys are picked up immediately.
+    location = /index.html {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options DENY always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+    }
+
+    # Hash-named build assets are immutable — cache them hard.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options DENY always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        try_files $uri =404;
+    }
+
+    # Single-origin bridge: the browser only ever talks to THIS origin. Anything
+    # under /api is streamed to the Clerk-authenticated BFF, so there is no CORS
+    # surface and the browser never holds a platform-api or provider credential.
+    location /api/ {
+        proxy_pass ${BFF_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Server-Sent Events (job-progress / integration streams) must not buffer.
+        proxy_set_header Connection '';
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        # Uploads can be large; the ingress/CDN in front may cap this too.
+        client_max_body_size 50m;
+        # The BFF (helmet) also sets these; strip the upstream copies so the client
+        # sees exactly one, from this server block's add_header (inherited here).
+        proxy_hide_header X-Frame-Options;
+        proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header Referrer-Policy;
+    }
+
+    # SPA fallback: client-side routes resolve to index.html.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

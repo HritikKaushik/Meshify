@@ -139,6 +139,42 @@ services:
       postgres:
         condition: service_healthy
 
+  # Clerk-session auth proxy. Holds each org's msk_ key server-side and forwards
+  # authenticated browser calls to platform-api. Only the web container talks to it.
+  bff:
+    build:
+      context: ../..
+      dockerfile: apps/bff/Dockerfile
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgres://meshify:meshify@postgres:5432/meshify
+      PLATFORM_API_ORIGIN: http://platform-api:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      platform-api:
+        condition: service_started
+
+  # Static SPA on nginx; proxies /api → bff so the browser sees a single origin.
+  # The publishable (public) Clerk key is baked at build time — provide it via the
+  # shell or an infrastructure/docker/.env when building through compose:
+  #   VITE_CLERK_PUBLISHABLE_KEY=pk_... docker compose ... build web
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
+    environment:
+      BFF_UPSTREAM: http://bff:3001
+    ports:
+      - "5174:8080"
+    depends_on:
+      - bff
+
 volumes:
   postgres_data:
   redis_data:

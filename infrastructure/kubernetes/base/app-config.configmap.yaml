@@ -19,4 +19,12 @@ data:
   S3_REGION: "us-east-1"
   S3_BUCKET: "meshify-documents"
   S3_FORCE_PATH_STYLE: "false"
+  # Non-secret GitHub App slug (github.com/apps/<slug>) — builds the Connect GitHub
+  # install URL. Set alongside the GITHUB_APP_* secrets if the github provider is used.
+  GITHUB_APP_SLUG: "your-github-app-slug"
+  # Static Slack OAuth callback (non-secret). Set only if the Slack connector is used.
+  # SLACK_REDIRECT_URI: "https://app.yourdomain.com/oauth/slack/callback"
+  # In-cluster self-hosted engine shown here. For the MANAGED CLOUD engine set this
+  # to the cloud endpoint instead, e.g. "https://api.rocketride.ai" (verified
+  # reachable + authenticating), and put the cloud ROCKETRIDE_APIKEY in the Secret.
   ROCKETRIDE_URI: "http://rocketride.meshify.svc.cluster.local:5565"
