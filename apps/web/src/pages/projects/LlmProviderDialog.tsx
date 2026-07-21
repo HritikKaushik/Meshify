@@ -13,7 +13,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
  * Activate, and Disconnect. Holds no provider knowledge — everything is driven by
  * the provider's manifest fetched from the backend. Mirrors ByoaConfigDialog.
  */
-export function LlmProviderDialog({ provider, onClose, onSaved }: { provider: string; onClose: () => void; onSaved: () => void }) {
+export function LlmProviderDialog({
+	provider,
+	onClose,
+	onSaved,
+	onActivate,
+}: {
+	provider: string;
+	onClose: () => void;
+	onSaved: () => void;
+	/** Delegated to the section, which shows the multi-step loader and closes this dialog once the pipeline is built. */
+	onActivate: (providerId: string, displayName?: string) => void;
+}) {
 	const detail = useAsync<LlmProviderDetail>();
 	const [values, setValues] = useState<Record<string, string>>({});
 	const [selectedModel, setSelectedModel] = useState('');
@@ -22,7 +33,6 @@ export function LlmProviderDialog({ provider, onClose, onSaved }: { provider: st
 	const [test, setTest] = useState<LlmTestResult | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [testing, setTesting] = useState(false);
-	const [activating, setActivating] = useState(false);
 	const [removing, setRemoving] = useState(false);
 	const [confirmRemove, setConfirmRemove] = useState(false);
 
@@ -81,20 +91,6 @@ export function LlmProviderDialog({ provider, onClose, onSaved }: { provider: st
 			toast.error((err as Error).message);
 		} finally {
 			setSaving(false);
-		}
-	}
-
-	async function activate() {
-		setActivating(true);
-		try {
-			await api.activateLlmProvider(provider);
-			toast.success(`${d?.displayName ?? provider} is now the active model provider`);
-			onSaved();
-			onClose();
-		} catch (err) {
-			toast.error((err as Error).message);
-		} finally {
-			setActivating(false);
 		}
 	}
 
@@ -246,9 +242,9 @@ export function LlmProviderDialog({ provider, onClose, onSaved }: { provider: st
 						{saving ? 'Saving…' : 'Save'}
 					</Button>
 					{d?.configured && !d.active && (
-						<Button variant="meshAi" disabled={activating} onClick={() => void activate()}>
+						<Button variant="meshAi" onClick={() => onActivate(provider, d.displayName)}>
 							<Zap size={14} className="mr-1.5" />
-							{activating ? 'Activating…' : 'Set active'}
+							Set active
 						</Button>
 					)}
 				</DialogFooter>

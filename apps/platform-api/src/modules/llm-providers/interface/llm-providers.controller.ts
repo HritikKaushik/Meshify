@@ -30,6 +30,11 @@ const testSchema = z.object({
 	model: z.string().optional(),
 });
 
+const activateSchema = z.object({
+	/** The project the caller is about to chat in — its pipeline is warmed synchronously. */
+	projectId: z.string().uuid().optional(),
+});
+
 function mapError(err: unknown, res: import('express').Response, log?: { error: (obj: unknown, msg: string) => void }): void {
 	if (err instanceof LlmProviderNotFoundError || err instanceof LlmProviderConfigNotFoundError) {
 		res.status(404).json({ error: err.message });
@@ -138,11 +143,22 @@ export function createLlmProvidersController(deps: {
 		}
 	});
 
-	// Make this provider the org's single active provider.
+	// Make this provider the org's single active provider. An optional projectId
+	// makes the call block until that project's RocketRide pipeline is (re)built,
+	// so the UI can hold a loader and the user never chats mid-build.
 	router.post('/v1/providers/llm/:provider/activate', async (req, res) => {
+		const parsed = activateSchema.safeParse(req.body ?? {});
+		if (!parsed.success) {
+			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+			return;
+		}
 		try {
 			requireLlmAdmin(req.auth!);
-			const result = await deps.activateLlmProvider.execute({ orgId: req.auth!.orgId, provider: req.params.provider! });
+			const result = await deps.activateLlmProvider.execute({
+				orgId: req.auth!.orgId,
+				provider: req.params.provider!,
+				projectId: parsed.data.projectId,
+			});
 			res.status(200).json(result);
 		} catch (err) {
 			mapError(err, res, req.log);

@@ -19,7 +19,7 @@ export class ActivateLlmProviderUseCase {
 		private readonly notifier: LlmProviderChangeNotifier
 	) {}
 
-	async execute(command: { orgId: string; provider: string }) {
+	async execute(command: { orgId: string; provider: string; projectId?: string }) {
 		const provider = this.registry.get(command.provider);
 		const config = await this.configs.findByOrgAndProvider(command.orgId, command.provider);
 		if (!config) throw new LlmProviderConfigNotFoundError(command.provider);
@@ -33,11 +33,17 @@ export class ActivateLlmProviderUseCase {
 		await this.active.setActive(command.orgId, config.id);
 		await this.notifier.notifyChanged(command.orgId);
 
-		// Warm the org's chat pipelines on RocketRide up front so the first chat
-		// message is fast. Fire-and-forget: the activate response stays snappy while
-		// the pipeline builds in the background. `warmChatPipelines` never throws.
+		// If the caller names the project it is about to chat in, build that
+		// project's RocketRide pipeline SYNCHRONOUSLY and report readiness — the UI
+		// holds a loader on this call so the user never chats mid-build. Then warm
+		// the org's other projects in the background so their first chat is fast too
+		// (the already-warmed one is a cheap cache hit in the sweep).
+		let ready = true;
+		if (command.projectId) {
+			ready = await this.notifier.warmChatPipeline(command.orgId, command.projectId);
+		}
 		void this.notifier.warmChatPipelines(command.orgId);
 
-		return { activeProvider: command.provider, defaultModel: config.defaultModel };
+		return { activeProvider: command.provider, defaultModel: config.defaultModel, ready };
 	}
 }
