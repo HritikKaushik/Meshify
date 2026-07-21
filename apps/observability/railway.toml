@@ -7,7 +7,7 @@
 #     Postgres advisory-lock leader election, but do not scale it deliberately.
 #   • Env: NODE_ENV=production + the shared backend variables.
 [build]
-builder = "dockerfile"
+builder = "DOCKERFILE"
 dockerfilePath = "apps/observability/Dockerfile"
 
 [deploy]

@@ -10,7 +10,7 @@
 #   • On Railway there is NO "background worker = paid" penalty — this is an
 #     ordinary always-on service.
 [build]
-builder = "dockerfile"
+builder = "DOCKERFILE"
 dockerfilePath = "apps/worker/Dockerfile"
 
 [deploy]
