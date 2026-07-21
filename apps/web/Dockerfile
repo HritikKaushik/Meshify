@@ -20,7 +20,7 @@ COPY apps/web apps/web
 ARG VITE_CLERK_PUBLISHABLE_KEY
 RUN VITE_CLERK_PUBLISHABLE_KEY="$VITE_CLERK_PUBLISHABLE_KEY" pnpm --filter @meshify/web build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 # Where nginx forwards /api. Override per environment (compose: http://bff:3001;
 # split hosting: the BFF's internal URL, e.g. Railway http://meshify-bff.railway.internal:3001).
 # Rendered into the config at startup.
