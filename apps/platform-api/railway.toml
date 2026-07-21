@@ -5,7 +5,9 @@
 #   • Root Directory = / (repo root) so the Dockerfile's pnpm-workspace context resolves.
 #   • Private only — do NOT generate a public domain. Reached at
 #     meshify-platform-api.railway.internal:3000 (binds :: by default → IPv6 OK).
-#   • Env: attach the shared backend variables + NODE_ENV=production, PLATFORM_PORT=3000.
+#   • Env: attach the shared backend variables + NODE_ENV=production and PORT=3000.
+#     Railway probes the healthcheck on $PORT — the app binds $PORT when set — so
+#     PORT must equal the port other services dial (…platform-api.railway.internal:3000).
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "apps/platform-api/Dockerfile"

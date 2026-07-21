@@ -440,8 +440,11 @@ async function bootstrap(): Promise<void> {
 	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, attachWorkspace: attachSlackWorkspace, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
 	app.use(createChatController({ getProject, askQuestion, listConversations, updateConversation, deleteConversation, getConversationMessages }));
 
-	const server = app.listen(env.PLATFORM_PORT, () => {
-		logger.info({ port: env.PLATFORM_PORT }, 'platform-api listening');
+	// Railway (and similar PaaS) inject the port to bind as $PORT and probe the
+	// healthcheck there; honor it when present, else the configured PLATFORM_PORT.
+	const port = Number(process.env.PORT) || env.PLATFORM_PORT;
+	const server = app.listen(port, () => {
+		logger.info({ port }, 'platform-api listening');
 	});
 
 	const shutdown = async (signal: string) => {

@@ -109,13 +109,26 @@ Set the OAuth redirect to `https://app.<domain>/oauth/slack/callback`; copy
    this works with no code change. Set the cross-service URLs:
    - `meshify-web` → `BFF_UPSTREAM=http://meshify-bff.railway.internal:3001`
    - `meshify-bff` → `PLATFORM_API_ORIGIN=http://meshify-platform-api.railway.internal:3000`
+   - **Set `PORT` per service to the port above** — `PORT=3000` on platform-api, `PORT=3001`
+     on the BFF. Railway injects `$PORT` and **probes the healthcheck on it**; the apps
+     bind `$PORT` when set. If `PORT` doesn't match the port the caller dials (`:3000`/
+     `:3001`), the deploy fails with **"Healthcheck failed — replicas never became
+     healthy"** even though the build and image push succeeded. (`meshify-web`'s nginx
+     already binds `$PORT`; Railway sets it there automatically.)
 3. **Env vars.** Put the shared backend config (Steps C/D/G) in **Shared Variables** at
-   the project/environment level, then reference them from platform-api, worker, and
-   observability with `${{shared.VAR}}`. **Critical:** make `PLATFORM_API_KEY_PEPPER` a
-   shared variable referenced by **both** the BFF and the backend so the value is
-   byte-identical. Per-service: `NODE_ENV=production`; `PLATFORM_PORT=3000` (API);
-   `BFF_PORT=3001` + `CLERK_SECRET_KEY` + `CLERK_PUBLISHABLE_KEY` + `ORG_KEY_ENCRYPTION_KEY`
-   + `DATABASE_URL` (BFF).
+   the project/environment level, then reference them with `${{shared.VAR}}` from
+   **all four backend services — platform-api, worker, observability, AND the BFF**.
+   > ⚠️ The BFF shares the monolithic env schema, so it **validates the whole backend
+   > env at boot** (`REDIS_URL`, `QDRANT_URL`, `S3_*`, `ROCKETRIDE_*`, …) even though it
+   > doesn't use those services. Give it the full shared set or it exits with
+   > `Invalid environment configuration` and the healthcheck never goes green.
+   **Critical:** make `PLATFORM_API_KEY_PEPPER` a shared variable referenced by **both**
+   the BFF and the backend so the value is byte-identical. Per-service on top of the
+   shared set: `NODE_ENV=production`; `PORT=3000` (API); on the BFF `PORT=3001` +
+   `CLERK_SECRET_KEY` + `CLERK_PUBLISHABLE_KEY` + `PLATFORM_API_ORIGIN` + `APP_ORIGIN`
+   (next step — the BFF also **refuses to boot without it**). A missing required var and
+   a `PORT` mismatch are the two common causes of a "replicas never became healthy"
+   deploy, so set the full env before expecting green.
 4. Set `APP_ORIGIN` on `meshify-bff` to your public app URL (Step K) — the BFF
    **refuses to boot** without it in production (CSRF allowlist).
 5. Set `VITE_CLERK_PUBLISHABLE_KEY` on `meshify-web` — Railway passes service variables

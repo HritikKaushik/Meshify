@@ -123,8 +123,11 @@ async function bootstrap(): Promise<void> {
 	protectedRouter.use(createPlatformApiProxy(bff.platformApiOrigin));
 	app.use('/api/v1', protectedRouter);
 
-	const server = app.listen(env.BFF_PORT, () => {
-		logger.info({ port: env.BFF_PORT }, 'bff listening');
+	// Railway (and similar PaaS) inject the port to bind as $PORT and probe the
+	// healthcheck there; honor it when present, else the configured BFF_PORT.
+	const port = Number(process.env.PORT) || env.BFF_PORT;
+	const server = app.listen(port, () => {
+		logger.info({ port }, 'bff listening');
 	});
 
 	const shutdown = async (signal: string) => {
