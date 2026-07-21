@@ -42,3 +42,17 @@ describe('loadEnv production secret strength', () => {
 		expect(() => loadEnv(baseEnv({ NODE_ENV: 'development', PLATFORM_API_KEY_PEPPER: 'change-me-please-1234' }))).not.toThrow();
 	});
 });
+
+describe('S3_ENDPOINT normalization', () => {
+	beforeEach(() => resetEnvCache());
+
+	it('prepends https:// to a scheme-less endpoint (the format the Backblaze console shows)', () => {
+		const env = loadEnv(baseEnv({ S3_ENDPOINT: 's3.us-east-005.backblazeb2.com' }));
+		expect(env.S3_ENDPOINT).toBe('https://s3.us-east-005.backblazeb2.com');
+	});
+
+	it('leaves an explicit scheme untouched (http for local MinIO)', () => {
+		const env = loadEnv(baseEnv({ S3_ENDPOINT: 'http://localhost:9000' }));
+		expect(env.S3_ENDPOINT).toBe('http://localhost:9000');
+	});
+});
