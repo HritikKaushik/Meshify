@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production # gate on a GitHub Environment (approvals + scoped secrets)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Railway rollout via the CLI. `railway up` builds each service's Dockerfile
       # (per its apps/<svc>/railway.toml) from THIS checked-out tag and deploys it.
       # Auth is a Railway PROJECT TOKEN (Project → Settings → Tokens) scoped to the
