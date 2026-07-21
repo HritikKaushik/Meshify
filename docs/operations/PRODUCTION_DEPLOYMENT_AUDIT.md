@@ -13,7 +13,7 @@ Meshify is a **well-architected** multi-tenant AI knowledge platform. The core s
 
 None of these are architectural dead-ends — they are gaps in an otherwise-solid foundation. With focused work (estimated ~2–3 engineer-weeks for the critical set) this is a genuinely production-ready platform.
 
-**Deployment Readiness Score: 58 / 100 at audit time → 95 / 100** after the Critical + High + Medium remediation plus a follow-up hardening pass (2026-07-21). See §4 for the per-dimension breakdown; the remaining ~5 points are operator-/infra-gated (cloud deploy button, DEK/KEK-KMS, shared-store rate limiter), not blockers.
+**Deployment Readiness Score: 58 / 100 at audit time → 90 / 100** after the Critical + High + Medium remediation and a follow-up hardening pass, on a rigorous re-score (2026-07-21). See §4 for the evidence-based breakdown: code/artifact readiness ≈ 95, but the honest blended number is **90** because nothing has yet run on real GitHub Actions, a real cloud/cluster, or production traffic. The remaining points are all real-environment validation, not code gaps.
 
 ### The 6 things that matter most
 
@@ -130,27 +130,42 @@ Full table in **§7**. Summary:
 
 ---
 
-## 4. Deployment Readiness Score — 95 / 100  (was 58 → 90 → 95)
+## 4. Deployment Readiness Score — 90 / 100 (rigorous re-score)
 
-Re-scored 2026-07-21 after Critical (C1–C6), High (H1–H6), Medium (M1–M6), and the
-follow-up hardening pass (integration boot, deploy rollout, worker metrics, OTel,
-observability leader election, ESLint, per-org keys + RBAC scopes). Residuals are
-called out — nothing remaining is a launch blocker.
+> **Methodology (stricter than the earlier 90→95 passes).** Each dimension scores
+> /10. A point is only credited for what is **verified** — by an automated test, a
+> live smoke, or code that is provably correct — not for what merely exists. Points
+> are explicitly withheld for anything **not yet proven in a real environment**
+> (the CI has never run on GitHub Actions; nothing has been deployed to a real
+> cloud/cluster; no production traffic). This is *readiness to deploy*, not
+> *proven-in-production*. The honest number is **90** — I'm revising the optimistic
+> 95 down, because "unverified against real platforms" is a real deduction.
 
-| Dimension | Orig | 90 | Now | What changed / residual |
-|-----------|:---:|:---:|:---:|-------------------------|
-| Architecture & tenant isolation | 9 | 9 | **9** | Already sound; structural isolation + correct trust boundaries. |
-| Secrets management | 9 | 10 | **10** | `.dockerignore` + prod fail-closed on weak secrets; stray backend secrets removed from `apps/web/.env`; rotation checklist doc. |
-| Backend security (API, crypto, webhooks) | 8 | 9 | **9** | + per-org key derivation (v3) for the org API key; RBAC scopes enforced. −1: the CredentialVault is still single-master (true per-tenant needs a DEK/KEK or KMS — documented seam in ENCRYPTION.md). |
-| Edge / BFF security | 3 | 9 | **9** | CSRF + helmet + per-user edge limit + upload cap. −1: multi-instance BFF rate limiting still needs a shared store. |
-| Authorization / RBAC | 2 | 9 | **10** | Clerk org-role RBAC **plus** API-key scope enforcement (least-privilege server keys; `requireScope`). |
-| **Deployability** | 3 | 9 | **10** | Full-stack docker-compose integration boot verified end-to-end (all services healthy, migrations via the deploy path, the whole web→bff→platform-api chain). Only the literal cloud button remains (operator). |
-| Infra hardening (K8s) | 9 | 10 | **10** | NetworkPolicy + PSA + ServiceAccounts + non-root images. |
-| CI/CD maturity | 4 | 8 | **9** | audit + gitleaks + Trivy + Dependabot; **real** ESLint gate; deploy rollout now fires Render hooks (working-if-configured). −1: the rollout is Render-specific and unverified against a live account. |
-| Observability / ops | 5 | 8 | **9** | platform-api + **worker** `/metrics`, **OTel tracing** (opt-in), **leader election** (observability now safe to scale), alerts, backup/DR. −1: OTel unverified against a real collector; tracing granularity is auto-instrument only. |
-| Config & docs completeness | 6 | 9 | **10** | Env gaps filled; deployment / backup-DR / observability / encryption / key-rotation runbooks. |
+**Verification legend:** ✅ verified (test/live) · 🟢 correct by construction ·
+🟡 built but unproven in a real environment · ⏳ operator-gated.
 
-**Interpretation:** every gap the audit could act on is closed and verified (`turbo typecheck build test` 50/50; ESLint 0 errors; full-stack boot healthy; `/metrics` scraped live; leader election, CSRF, per-org keys, and scopes all unit- + integration-tested). The remaining ~5 points are **inherently operator- or infra-gated**: pressing the cloud-deploy button, verifying the Render rollout / an OTel collector against real accounts, the shared-store BFF rate limiter, and a DEK/KEK-or-KMS master for true per-tenant crypto isolation. None block launch.
+| Dimension | Score | Evidence & residual |
+|-----------|:---:|---------------------|
+| Architecture & tenant isolation | **9** | ✅ Structural isolation (404-not-403 guards, org-scoped queries), clean browser→BFF→API trust boundary. −1: single crypto master; BYOA keys reach RocketRide in plaintext (expected, but noted). |
+| Secrets management | **10** | ✅ Nothing in git (clean history), publishable-only bundle, `.dockerignore`, prod fail-closed on weak secrets, stray backend secrets removed from `apps/web/.env`. No code gap remains. |
+| Backend security (crypto, API, webhooks) | **9** | ✅ AES-256-GCM vault, scrypt+salt, v3 per-org key (org API key), timing-safe webhook HMAC + replay window, parameterized SQL, rate-limiter fail-closed. −1: the CredentialVault is still single-master (true per-tenant = DEK/KEK/KMS, see ENCRYPTION.md). |
+| Edge / BFF security | **9** | ✅ CSRF Origin guard, helmet, per-user edge limit, upload cap, single-origin. −1: the BFF edge limiter is in-process — multiple BFF replicas need a shared (Redis) store. |
+| Authorization / RBAC | **9** | ✅ Clerk org-role → `isOrgAdmin` gating provider mgmt + destructive ops; API-key scopes enforced (least-privilege). −1: `requireScope` exists but isn't wired into per-route capabilities beyond admin — no granular permission matrix yet. |
+| Deployability | **9** | ✅ All 5 images build + run non-root; `pnpm deploy`; **full-stack compose boot healthy end-to-end** (web→bff→platform-api chain + migrations). 🟡 −1: never deployed to a real Render/Cloudflare account — the `render.yaml` build-arg/internal-DNS specifics are unproven against the live platform. |
+| Infra hardening (K8s) | **9** | 🟢 NetworkPolicy + PSA `restricted` + ServiceAccounts + non-root + HPA/KEDA/PDB, kustomize-validated. 🟡 −1: never applied to a live cluster; the prod ingress host is still a `REPLACE-ME` placeholder. |
+| CI/CD maturity | **8** | 🟢 lint + `pnpm audit` + gitleaks + Trivy + Dependabot + image builds + migration-gated deploy workflow. 🟡 −2: **the workflows have never run on GitHub Actions** (validated locally only), and the deploy rollout is Render-specific + unverified. |
+| Observability / ops | **8** | ✅ platform-api + worker `/metrics` scraped live; leader election tested live. 🟡 −2: OTel tracing is wired but **unproven against a real collector**; alert thresholds are untuned starter values; no dashboards. |
+| Config & docs completeness | **10** | ✅ Full env schema coverage; A-Z deployment runbook + backup-DR + observability + encryption + key-rotation runbooks. |
+
+**Score: 90 / 100.** Split by confidence: **code & artifact readiness ≈ 95** (nearly everything is built, unit-tested, and locally integration-verified); **operationally-proven ≈ 0** (nothing has run on real Actions, a real cloud, or a real cluster yet). The blended 90 reflects that the only thing standing between "ready" and "proven" is executing the real deploy — which is operator-gated.
+
+**What moves each remaining point (all real-environment validation):**
+1. First **GitHub Actions run** green (CI + the scanning jobs) → +CI/CD.
+2. First **cloud deploy** via `render.yaml` + smoke passing → +Deployability.
+3. **OTel traces** landing in a real collector; tuned alerts + a dashboard → +Observability.
+4. **Shared-store BFF rate limiter** (Redis) for horizontal BFF scaling → +Edge.
+5. **DEK/KEK or KMS** master + vault per-org context → +Backend security.
+6. A live **K8s apply** (if/when that path is used) with a real ingress host → +Infra.
 
 ---
 
