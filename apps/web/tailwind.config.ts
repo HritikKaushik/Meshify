@@ -134,6 +134,7 @@ export default {
 				dash: { to: { strokeDashoffset: '-240' } },
 				fade: { '0%': { opacity: '0', transform: 'translateY(4px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
 				shimmer: { '100%': { transform: 'translateX(100%)' } },
+				scroll: { to: { transform: 'translate(calc(-50% - 0.5rem))' } },
 			},
 			animation: {
 				meshpulse: 'meshpulse 1.6s infinite',
@@ -148,6 +149,7 @@ export default {
 				dash: 'dash 9s linear infinite',
 				fade: 'fade .22s ease-out both',
 				shimmer: 'shimmer 1.6s infinite',
+				scroll: 'scroll var(--animation-duration, 40s) var(--animation-direction, forwards) linear infinite',
 			},
 		},
 	},
