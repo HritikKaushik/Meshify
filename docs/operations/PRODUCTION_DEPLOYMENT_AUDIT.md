@@ -426,16 +426,16 @@ Remediation status (2026-07-21 follow-up): **H1, H2, H3, H5, H6 — DONE & verif
 
 ### 🟡 Medium Priority
 
-Remediation status (2026-07-21 follow-up): **M1, M2 — DONE & verified. M3–M6 open.**
+Remediation status (2026-07-21 follow-up): **M1–M6 — ALL DONE & verified.**
 
 | ID | Issue | Risk | Fix | Status |
 |----|-------|------|-----|--------|
 | M1 | zod validation missing on documents/jobs/connectors/webhooks controllers | Malformed input reaches use cases | Added a reusable `requireUuidParams` guard (`apps/platform-api/src/http/`) applied to documents(`documentId`)/jobs(`jobId`)/connectors(`connectorId`)/integrations(`integrationId`) — a non-UUID id now returns 400 instead of a Postgres `uuid`-syntax 500. Webhooks stay signature-verified (that IS their validation). +5 tests. | ✅ DONE |
 | M2 | No upload size/type limit at BFF edge | Oversized/abusive uploads streamed through | Added `maxBodySize(50MB)` on the BFF `/api/v1` — rejects an oversized declared `Content-Length` with 413 before streaming (no buffering), matching the nginx `client_max_body_size` and platform-api's multer cap. +4 tests. | ✅ DONE |
-| M3 | K8s missing NetworkPolicy / PodSecurity / dedicated ServiceAccounts | Lateral movement, over-privileged pods | Add default-deny NetworkPolicies, PSA `restricted` namespace label, per-app SA with `automountServiceAccountToken: false` | 1–2 d |
-| M4 | No metrics/tracing/alerting stack | Blind in prod | Add Prometheus ServiceMonitor/OTel + alerts on `/health/ready`, queue depth, error rate | 2–3 d |
-| M5 | Hand-maintained Dockerfile COPY lists | Silent breakage on dep-graph change | Migrate to `pnpm deploy --prod` per app | 1 d |
-| M6 | No DB backup/PITR or Qdrant snapshot policy | Data loss | Enable Neon PITR; schedule Qdrant snapshots; document restore | 0.5 d |
+| M3 | K8s missing NetworkPolicy / PodSecurity / dedicated ServiceAccounts | Lateral movement, over-privileged pods | Added default-deny-ingress + platform-api ingress-allow NetworkPolicies, PSA `restricted` enforce label (all workloads already comply), and a dedicated `meshify` ServiceAccount with `automountServiceAccountToken: false` on all deployments + the migrate Job. kustomize validated. | ✅ DONE |
+| M4 | No metrics/tracing/alerting stack | Blind in prod | platform-api exposes Prometheus `/metrics` (prom-client: process/nodejs + `http_request_duration_seconds` by method/route/status), token-gated by `METRICS_TOKEN`. Added `infrastructure/kubernetes/monitoring/` ServiceMonitor + PrometheusRule (5xx rate, p95, down, not-ready, queue backlog) kept out of base kustomize, and `docs/operations/OBSERVABILITY.md` (Grafana Cloud for Render, ServiceMonitor for K8s). +3 tests; verified live. Worker HTTP metrics + OTel tracing noted as further steps. | ✅ DONE |
+| M5 | Hand-maintained Dockerfile COPY lists | Silent breakage on dep-graph change | Migrated the 4 Node app Dockerfiles to `pnpm deploy --prod` — runtime derived from the actual dep graph, no COPY lists (−206 lines). Images ~10% smaller; migrate Job path updated. All build + run non-root, verified. | ✅ DONE |
+| M6 | No DB backup/PITR or Qdrant snapshot policy | Data loss | `docs/operations/BACKUP_DR.md` — Postgres (Neon PITR) is the source of truth, R2 durable, Qdrant/Redis derived/ephemeral; RPO/RTO targets, full-restore runbook, and the critical encryption-key backup note. | ✅ DONE |
 
 ### 🟢 Nice to Have
 
