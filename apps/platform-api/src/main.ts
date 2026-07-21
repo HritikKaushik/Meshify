@@ -443,7 +443,10 @@ async function bootstrap(): Promise<void> {
 	// Railway (and similar PaaS) inject the port to bind as $PORT and probe the
 	// healthcheck there; honor it when present, else the configured PLATFORM_PORT.
 	const port = Number(process.env.PORT) || env.PLATFORM_PORT;
-	const server = app.listen(port, () => {
+	// Bind :: (all IPv6, dual-stack — also accepts IPv4). Railway's private network is
+	// IPv6-only, so a service bound to 0.0.0.0 is unreachable at <name>.railway.internal
+	// even though the loopback healthcheck passes — see the note in apps/bff/src/main.ts.
+	const server = app.listen(port, '::', () => {
 		logger.info({ port }, 'platform-api listening');
 	});
 
