@@ -16,7 +16,7 @@
 		"@meshify/data-access": "workspace:*",
 		"@meshify/shared": "workspace:*",
 		"express": "^4.21.1",
-		"express-rate-limit": "^8.6.0",
+		"express-rate-limit": "^8.6.1",
 		"helmet": "^8.3.0",
 		"http-proxy-middleware": "^3.0.3",
 		"pg": "^8.13.1",
@@ -27,8 +27,8 @@
 	"devDependencies": {
 		"@types/express": "^5.0.0",
 		"@types/node": "^22.9.0",
-		"@types/pg": "^8.11.10",
-		"tsx": "^4.19.2",
+		"@types/pg": "^8.20.3",
+		"tsx": "^4.23.1",
 		"typescript": "^5.6.3",
 		"vitest": "^3.2.6"
 	}
