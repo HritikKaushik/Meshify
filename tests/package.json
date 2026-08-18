@@ -12,8 +12,8 @@
 	"devDependencies": {
 		"@meshify/data-access": "workspace:*",
 		"@meshify/testing": "workspace:*",
-		"@types/pg": "^8.11.10",
-		"pg": "^8.13.1",
+		"@types/pg": "^8.21.0",
+		"pg": "^8.23.0",
 		"vitest": "^3.2.6"
 	}
 }
