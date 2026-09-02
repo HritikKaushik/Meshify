@@ -112,7 +112,7 @@ jobs:
       # Fail only on FIXABLE high/critical CVEs — unfixable base-image noise
       # shouldn't block a release; a fixable one means "rebuild on a newer base".
       - name: Scan image (Trivy)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           severity: HIGH,CRITICAL
@@ -160,7 +160,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=web
 
       - name: Scan image (Trivy)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           severity: HIGH,CRITICAL
