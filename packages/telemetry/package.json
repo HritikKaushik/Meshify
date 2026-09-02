@@ -13,9 +13,9 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@opentelemetry/auto-instrumentations-node": "^0.52.1",
-		"@opentelemetry/exporter-trace-otlp-http": "^0.55.0",
-		"@opentelemetry/sdk-node": "^0.55.0"
+		"@opentelemetry/auto-instrumentations-node": "^0.80.0",
+		"@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+		"@opentelemetry/sdk-node": "^0.222.0"
 	},
 	"devDependencies": {
 		"@types/node": "^22.9.0",
