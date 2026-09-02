@@ -56,3 +56,21 @@ describe('S3_ENDPOINT normalization', () => {
 		expect(env.S3_ENDPOINT).toBe('http://localhost:9000');
 	});
 });
+
+describe('PLATFORM_API_ORIGIN normalization', () => {
+	beforeEach(() => resetEnvCache());
+
+	it('prepends http:// to a bare host:port (the form a Render fromService hostport reference yields)', () => {
+		const env = loadEnv(baseEnv({ PLATFORM_API_ORIGIN: 'meshify-platform-api-ab1c:3000' }));
+		expect(env.PLATFORM_API_ORIGIN).toBe('http://meshify-platform-api-ab1c:3000');
+	});
+
+	it('leaves a full URL untouched', () => {
+		const env = loadEnv(baseEnv({ PLATFORM_API_ORIGIN: 'https://api.internal.example.com' }));
+		expect(env.PLATFORM_API_ORIGIN).toBe('https://api.internal.example.com');
+	});
+
+	it('stays undefined when unset (only the BFF requires it)', () => {
+		expect(loadEnv(baseEnv()).PLATFORM_API_ORIGIN).toBeUndefined();
+	});
+});

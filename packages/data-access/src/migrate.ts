@@ -8,6 +8,15 @@ import { loadEnv } from '@meshify/config';
 // schema and the code that owns it version together.
 const MIGRATIONS_DIR = path.resolve(fileURLToPath(import.meta.url), '../../migrations');
 
+// Serializes concurrent runners. On a PaaS every service can run this migrator as
+// its pre-deploy step (see render.yaml), and a release deploys several services at
+// once - so two runners racing on the same file would each try the DDL and one
+// would fail on the schema_migrations primary key. Holding a session-level
+// advisory lock for the whole run makes the second wait, then skip what the first
+// applied. hashtext() keeps the key distinct from the observability leader lock.
+// Session-level ⇒ run against a direct (non-transaction-pooled) connection.
+const MIGRATION_LOCK_KEY = "hashtext('meshify:data-access:migrate')";
+
 async function ensureMigrationsTable(client: pg.PoolClient): Promise<void> {
 	await client.query(`
 		create table if not exists schema_migrations (
@@ -28,6 +37,7 @@ async function main(): Promise<void> {
 	const client = await pool.connect();
 
 	try {
+		await client.query(`select pg_advisory_lock(${MIGRATION_LOCK_KEY})`);
 		await ensureMigrationsTable(client);
 		const already = await appliedMigrations(client);
 
@@ -55,6 +65,7 @@ async function main(): Promise<void> {
 
 		console.log('Migrations complete.');
 	} finally {
+		await client.query(`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`).catch(() => undefined);
 		client.release();
 		await pool.end();
 	}

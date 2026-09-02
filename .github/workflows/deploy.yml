@@ -1,90 +1,134 @@
-# Tag-triggered production deploy. Push a version tag (e.g. `v1.2.0`) to run it.
+# Tag-triggered production deploy to Render. Push a version tag (e.g. `v1.2.0`)
+# - or run it manually from the Actions tab - to roll out the tagged commit.
 #
-# SCAFFOLD — the actual rollout step is intentionally left as a placeholder
-# because it depends on the hosting platform you wire up (see the deployment
-# runbook in docs/operations/). What IS encoded here is the safe ORDER every
-# production deploy must follow: migrate the database FIRST, then roll out, then
-# smoke-test. Fill in the marked steps and the referenced repository secrets.
+# How it works (see render.yaml for the topology):
+#   1. platform-api is deployed FIRST and the workflow waits until it is `live`.
+#      Its Render pre-deploy step applies pending SQL migrations inside the built
+#      image before the new version takes traffic, so the schema is always ahead
+#      of the code. Migrations are expand/contract (backward-compatible), so the
+#      still-running old versions keep working meanwhile.
+#   2. The other four services deploy in parallel; every one runs the same
+#      (advisory-locked, idempotent) migrator as its own pre-deploy step, so order
+#      no longer matters for them.
+#   3. Each deploy is polled through the Render API until `live` - a failed build,
+#      pre-deploy or health check fails THIS workflow instead of silently leaving
+#      the previous version running.
+#   4. A smoke test confirms the public web → BFF → API chain answers.
+#
+# Setup (GitHub repo → Settings):
+#   Environment `production`  - optional required reviewers = a manual approval gate.
+#   Secret  RENDER_API_KEY    - Render Dashboard → Account Settings → API Keys.
+#   Variable PROD_APP_URL     - the public web URL, e.g. https://meshify-web.onrender.com
+#                               (used by the smoke test; skipped with a warning if unset).
+# With RENDER_API_KEY unset the rollout is a no-op warning, never a failure, so the
+# workflow can be wired up incrementally.
 name: Deploy
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 # Never run two production deploys at once.
 concurrency:
   group: production-deploy
   cancel-in-progress: false
 
+env:
+  RENDER_API: https://api.render.com/v1
+
 jobs:
-  migrate:
+  rollout:
     runs-on: ubuntu-latest
     environment: production # gate on a GitHub Environment (approvals + scoped secrets)
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      COMMIT: ${{ github.sha }}
+      REF: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # Apply pending schema migrations BEFORE any new code serves traffic.
-      # Migrations must be backward-compatible with the currently-running version
-      # (expand/contract) so the old pods keep working during the rollout.
-      - name: Run database migrations
-        env:
-          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-        run: pnpm --filter @meshify/data-access migrate
-
-  rollout:
-    needs: migrate
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-      # Railway rollout via the CLI. `railway up` builds each service's Dockerfile
-      # (per its apps/<svc>/railway.toml) from THIS checked-out tag and deploys it.
-      # Auth is a Railway PROJECT TOKEN (Project → Settings → Tokens) scoped to the
-      # production environment, stored as the RAILWAY_TOKEN repo secret. If it is
-      # unset this step is a no-op warning — never a failure — so you can wire it up
-      # incrementally (or rely on Railway's native GitHub auto-deploy instead and
-      # delete this step). Deploy order: API → BFF → consumers → web (the migrate
-      # Job already ran in the job above; migrations are backward-compatible).
-      #
-      # On other platforms replace this step: Fly.io →
-      #   flyctl deploy --image ghcr.io/${{ github.repository_owner }}/meshify-<svc>:${{ github.ref_name }}
-      # Kubernetes → bump overlays/prod image tags and `kubectl apply -k overlays/prod`.
-      - name: Trigger Railway deploys
-        env:
-          REF: ${{ github.ref_name }}
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Deploy to Render (platform-api first, then the rest) and wait until live
         run: |
           set -euo pipefail
-          if [ -z "${RAILWAY_TOKEN:-}" ]; then
-            echo "::warning::RAILWAY_TOKEN not set — nothing was rolled out. Set a Railway project token to enable automated deploys, or replace this step for your platform."
+          if [ -z "${RENDER_API_KEY:-}" ]; then
+            echo "::warning::RENDER_API_KEY not set - nothing was rolled out. Add the secret to enable automated Render deploys (see render.yaml)."
             exit 0
           fi
-          npm install -g @railway/cli >/dev/null 2>&1
-          for name in meshify-platform-api meshify-bff meshify-worker meshify-observability meshify-web; do
-            echo "→ deploying $name for $REF"
-            railway up --service "$name" --ci
+
+          api() { curl -sS --fail-with-body -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "$@"; }
+
+          # Exact-name lookup (the name filter is a prefix match, so re-filter with jq).
+          service_id() {
+            api "$RENDER_API/services?name=$1&limit=50" \
+              | jq -r --arg n "$1" '.[] | select(.service.name == $n) | .service.id' | head -n1
+          }
+
+          # Trigger a deploy of the tagged commit; prints the deploy id.
+          trigger() {
+            api -X POST -H "Content-Type: application/json" \
+              -d "{\"clearCache\":\"do_not_clear\",\"commitId\":\"$COMMIT\"}" \
+              "$RENDER_API/services/$1/deploys" | jq -r '.id'
+          }
+
+          # Poll one deploy until it is live (≤ 30 min); fail on any terminal error state.
+          wait_live() { # service-id deploy-id name
+            for _ in $(seq 1 120); do
+              status=$(api "$RENDER_API/services/$1/deploys/$2" | jq -r '.status')
+              case "$status" in
+                live) echo "✓ $3 is live ($2)"; return 0 ;;
+                build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                  echo "::error::$3 deploy $2 ended with status '$status' - see the Render dashboard"; return 1 ;;
+                *) echo "· $3: $status" ;;
+              esac
+              sleep 15
+            done
+            echo "::error::$3 deploy $2 did not go live within 30 minutes"; return 1
+          }
+
+          deploy() { # name → records the service + deploy ids in /tmp for wait_live
+            local sid did
+            sid=$(service_id "$1")
+            if [ -z "$sid" ]; then echo "::error::Render service '$1' not found (create it from render.yaml first)"; return 1; fi
+            did=$(trigger "$sid")
+            if [ -z "$did" ] || [ "$did" = "null" ]; then echo "::error::Render did not return a deploy id for $1"; return 1; fi
+            echo "→ $1 ($sid): deploy $did of $COMMIT ($REF)"
+            printf '%s\n' "$did" > "/tmp/deploy-$1.id"
+            printf '%s\n' "$sid" > "/tmp/service-$1.id"
+          }
+
+          # 1. Core API first - its pre-deploy step migrates the database.
+          deploy meshify-platform-api
+          wait_live "$(cat /tmp/service-meshify-platform-api.id)" "$(cat /tmp/deploy-meshify-platform-api.id)" meshify-platform-api
+
+          # 2. Everything else in parallel.
+          for name in meshify-bff meshify-worker meshify-observability meshify-web; do
+            deploy "$name"
           done
-          echo "Triggered Railway deploys."
+          failed=0
+          for name in meshify-bff meshify-worker meshify-observability meshify-web; do
+            wait_live "$(cat /tmp/service-$name.id)" "$(cat /tmp/deploy-$name.id)" "$name" || failed=1
+          done
+          [ "$failed" -eq 0 ] || { echo "::error::one or more services failed to deploy"; exit 1; }
+          echo "All services live at $COMMIT ($REF)."
 
   smoke:
     needs: rollout
     runs-on: ubuntu-latest
     steps:
-      # Give the rollout a moment, then confirm the public app answers and the API
-      # is ready. Fail the deploy (and alert) if either is unhealthy.
+      # Confirm the public chain (web nginx → BFF → platform-api /health/ready)
+      # answers 200. Render private services only get TCP probes, so this is the
+      # readiness signal for the whole stack. Fails the deploy (and alerts) if unhealthy.
       - name: Smoke test
         env:
-          APP_URL: ${{ vars.PROD_APP_URL }} # e.g. https://app.yourdomain.com
+          APP_URL: ${{ vars.PROD_APP_URL }} # e.g. https://meshify-web.onrender.com
         run: |
           set -e
+          if [ -z "${APP_URL:-}" ]; then
+            echo "::warning::PROD_APP_URL variable not set - smoke test skipped."
+            exit 0
+          fi
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/api/health" || true)
-            echo "attempt $i: /api/health → $code"
+            echo "attempt $i: $APP_URL/api/health → $code"
             [ "$code" = "200" ] && exit 0
             sleep 10
           done

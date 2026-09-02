@@ -15,10 +15,10 @@ special blast radius, called out below.
 | `ROCKETRIDE_GEMINI_KEY` | Google AI Studio | Managed Gemini path only |
 | `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET` | Slack app config | Re-verify webhook signatures with the new signing secret; existing OAuth tokens unaffected |
 | `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_SECRET` | GitHub App settings | Installation tokens re-mint automatically; webhook HMAC uses the new secret |
-| `S3_SECRET_ACCESS_KEY`, `QDRANT_API_KEY`, `DATABASE_URL` (password), `REDIS_URL` (password) | Backblaze B2 (Application Keys) / Qdrant Cloud / Neon / Upstash consoles | Update env + redeploy; no data change |
+| `S3_SECRET_ACCESS_KEY`, `QDRANT_API_KEY`, `DATABASE_URL` (password), `REDIS_URL` (password) | Backblaze B2 (Application Keys) / Qdrant Cloud / Render Postgres + Key Value (or Neon / Upstash) consoles | Update env + redeploy; on Render the DB/Redis URLs are Blueprint references and follow a credential rotation automatically |
 
-Standard flow: create the new key → set it in the secret store (Railway variables /
-K8s Secret) → redeploy → revoke the old key.
+Standard flow: create the new key → set it in the secret store (Render environment
+group `meshify-backend` / Railway variables / K8s Secret) → redeploy → revoke the old key.
 
 ## `PLATFORM_API_KEY_PEPPER` — ⚠️ invalidates all issued API keys
 It peppers every stored API-key hash, so rotating it makes **every `msk_` key

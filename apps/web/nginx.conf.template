@@ -2,18 +2,30 @@
 # env vars (BFF_UPSTREAM, PORT, NGINX_LOCAL_RESOLVERS) are substituted; nginx's own
 # $uri/$host/$request_uri are preserved (they are not in the environment). PORT
 # defaults to 8080 (Dockerfile ENV) but is overridden by the value the host injects
-# — Railway assigns a $PORT for public services and routes to it.
+# - PaaS platforms (Render, Railway) assign a $PORT for public services and route to it.
 #
 # The /api upstream is resolved at REQUEST time (resolver + a variable in
 # proxy_pass), not at boot: a static target makes nginx refuse to start if the BFF
 # name is briefly unresolvable — the norm on platforms with dynamic internal DNS
-# (Railway `*.railway.internal`, a not-yet-deployed BFF, a rolling restart).
+# (Render's `<service>-<hash>` private hostnames, Railway `*.railway.internal`, a
+# not-yet-deployed BFF, a rolling restart).
 #
 # NOTE on headers: nginx `add_header` does NOT inherit into a location that sets
 # its own add_header — it replaces the whole set. Because `/` internally redirects
 # to `= /index.html` via try_files, the security headers must be repeated in every
 # location that also sets a Cache-Control header, or the app HTML would ship with
 # none. They are grouped below for that reason.
+
+# BFF_UPSTREAM may be a full URL (`http://bff:3001` - compose, K8s, Railway) OR a
+# bare `host:port` (what a Render Blueprint `fromService: hostport` reference
+# yields, since Render can't interpolate a scheme in front of it). Normalize both
+# to a URL here, once, at config-render time: the map source is the substituted
+# literal, so `default` adds the scheme and the regex branch passes a URL through.
+map "${BFF_UPSTREAM}" $bff_upstream {
+    default        "http://${BFF_UPSTREAM}";
+    "~^https?://"  "${BFF_UPSTREAM}";
+}
+
 server {
     listen ${PORT};
     server_name _;
@@ -47,12 +59,11 @@ server {
     # surface and the browser never holds a platform-api or provider credential.
     location /api/ {
         # Request-time resolution (see header note). NGINX_LOCAL_RESOLVERS is set by
-        # the image entrypoint from /etc/resolv.conf — Railway internal DNS, Docker's
-        # 127.0.0.11, or kube-dns, whichever the platform provides. `valid=10s`
-        # re-resolves as the BFF's private IP changes across deploys; ipv6 is on by
-        # default, which Railway's IPv6 private network needs.
+        # the image entrypoint from /etc/resolv.conf - the platform's private DNS
+        # (Render, Railway), Docker's 127.0.0.11, or kube-dns, whichever is in use.
+        # `valid=10s` re-resolves as the BFF's private IP changes across deploys;
+        # ipv6 stays on by default (Railway's private network is IPv6-only).
         resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
-        set $bff_upstream ${BFF_UPSTREAM};
         # $request_uri = the full original path+query (e.g. /api/v1/x?y), so the /api
         # prefix is preserved exactly as the static target did — no prefix stripping.
         proxy_pass $bff_upstream$request_uri;

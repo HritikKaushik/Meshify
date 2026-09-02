@@ -2,19 +2,19 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
   pull_request:
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         # version is read from packageManager in package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
@@ -28,10 +28,11 @@ jobs:
       - name: Typecheck, build, test
         run: pnpm exec turbo run typecheck build test
 
-      # Full dependency audit (prod + dev). The tree is currently clean at high+;
-      # dev/build tooling (vitest/vite/esbuild) was upgraded past its advisories.
-      # If a future dev-only advisory has no fix yet and must ship, narrow this
-      # back to `--prod` (dev tooling isn't in the images or run in prod).
+      # Full dependency audit (prod + dev). Transitive-only advisories that the
+      # dependents haven't re-released for are lifted with scoped `pnpm.overrides`
+      # in package.json (one per vulnerable major). If a future dev-only advisory
+      # has no fix yet and must ship, narrow this to `--prod` (dev tooling isn't in
+      # the images or run in prod) rather than lowering the level.
       - name: Audit dependencies
         run: pnpm audit --audit-level=high
 
@@ -40,12 +41,29 @@ jobs:
   secret-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history so gitleaks can scan past commits
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The Render Blueprint is deploy config: a typo there fails only at Blueprint
+  # sync time, in the Dashboard. Validate it against Render's published JSON
+  # schema so a broken render.yaml never reaches main.
+  blueprint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Validate render.yaml against Render's schema
+        run: |
+          curl -fsSL https://render.com/schema/render.yaml.json -o /tmp/render.schema.json
+          # Render's schema is draft 2020-12 and uses `format: uri`, so run ajv non-strict with ajv-formats.
+          npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv validate --spec=draft2020 --strict=false -c ajv-formats --all-errors \
+            -s /tmp/render.schema.json -d render.yaml
 
   # Build (and, on main, publish) the deployable backend images. Catches
   # Dockerfile/packaging regressions that the JS build can't — e.g. a missing
@@ -65,21 +83,21 @@ jobs:
       REGISTRY: ghcr.io
       IMAGE: ghcr.io/${{ github.repository_owner }}/meshify-${{ matrix.app }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # Only authenticate/push on main; PRs from forks can't access packages:write.
       - name: Log in to GHCR
         if: github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
@@ -94,7 +112,7 @@ jobs:
       # Fail only on FIXABLE high/critical CVEs — unfixable base-image noise
       # shouldn't block a release; a fixable one means "rebuild on a newer base".
       - name: Scan image (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           severity: HIGH,CRITICAL
@@ -114,20 +132,20 @@ jobs:
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/meshify-web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
         if: github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/web/Dockerfile
@@ -142,7 +160,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=web
 
       - name: Scan image (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ github.sha }}
           severity: HIGH,CRITICAL

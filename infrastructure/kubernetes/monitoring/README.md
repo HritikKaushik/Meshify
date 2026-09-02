@@ -16,5 +16,6 @@ kubectl -n meshify apply -f infrastructure/kubernetes/monitoring/
 - `podmonitor.yaml` — scrapes the worker's `/metrics` pod-port directly (the worker has no Service).
 - `prometheusrule.yaml` — starter alerts (target down, 5xx rate, p95 latency, not-ready, queue backlog). Tune thresholds to your traffic.
 
-For the Railway (non-K8s) path, scrape `/metrics` with a Grafana Cloud
-Agent instead — see [docs/operations/OBSERVABILITY.md](../../../docs/operations/OBSERVABILITY.md).
+For the Render / Railway (non-K8s) paths, scrape `/metrics` with a Grafana Cloud
+agent running inside the platform's private network instead - see
+[docs/operations/OBSERVABILITY.md](../../../docs/operations/OBSERVABILITY.md).

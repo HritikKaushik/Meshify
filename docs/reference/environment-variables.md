@@ -69,8 +69,11 @@ These form the deployment's **managed** GitHub registration. The managed provide
 | Variable | Used by | Notes |
 | --- | --- | --- |
 | `NODE_ENV` | all | `development` / `production` |
-| `PLATFORM_PORT`, `PLATFORM_LOG_LEVEL`, `PLATFORM_API_ORIGIN` | api / bff | API port, log level, proxy target |
+| `PLATFORM_PORT`, `PLATFORM_LOG_LEVEL` | api | API port, log level |
+| `PLATFORM_API_ORIGIN` | bff | Proxy target: a full URL, or a bare `host:port` (defaulted to `http://` - the form a Render Blueprint `fromService: hostport` reference yields) |
 | `BFF_PORT` | bff | BFF listen port |
+| `PORT` | api, bff, web | When a PaaS injects it, the process binds `PORT` instead of `PLATFORM_PORT` / `BFF_PORT` (nginx likewise) |
+| `BFF_UPSTREAM` | web (nginx) | Where `/api` is proxied: a full URL or a bare `host:port` (scheme added by `nginx.conf.template`) |
 | `VITE_CLERK_PUBLISHABLE_KEY` | web | Read by Vite, not `config` |
 
 ## Best Practices
