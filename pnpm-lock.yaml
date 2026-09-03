@@ -457,6 +457,9 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.6
+        version: 3.2.7(@types/node@22.20.1)(jiti@1.21.7)(tsx@4.23.0)(yaml@2.9.0)
 
   packages/object-storage:
     dependencies:

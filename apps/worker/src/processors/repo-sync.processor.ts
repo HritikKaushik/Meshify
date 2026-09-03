@@ -3,6 +3,7 @@ import type { Job } from 'bullmq';
 import { apiKeyEnvVarFor, embeddingProviderFromProfile, parseGitHubUrl } from '@meshify/data-access';
 import type { FileRepository, PipelineJobRepository, ProjectRepository, RepositoryRepository } from '@meshify/data-access';
 import type { GitHubRepoClient } from '@meshify/github';
+import { CompareTooLargeError } from '@meshify/github';
 import type { JobEventPublisher, RepoSyncJobPayload } from '@meshify/queues';
 import type { PipelineRegistry, RagPort } from '@meshify/rocketride-gateway';
 import { detectLanguage, hashContent, isBinaryBuffer, isDeniedPath } from '@meshify/providers';
@@ -63,7 +64,16 @@ export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: Rep
 
 		await progress.stage('Comparing changes', 20);
 		await deps.repositories.updateSyncStatus(repositoryId, 'cloning');
-		const changes = await deps.github.compare(owner, repo, repository.lastSyncedCommit, head.headSha);
+		let changes: Awaited<ReturnType<typeof deps.github.compare>>;
+		try {
+			changes = await deps.github.compare(owner, repo, repository.lastSyncedCommit, head.headSha);
+		} catch (err) {
+			// GitHub truncates diffs at 300 files. This legacy lane cannot re-ingest by
+			// itself, so fail without touching the cursor (nothing is skipped) and say
+			// what to do; the provider-platform sync lane falls back automatically.
+			if (err instanceof CompareTooLargeError) throw new Error(`${err.message}. Run a full repository re-ingest; the sync cursor stays at ${repository.lastSyncedCommit}.`);
+			throw err;
+		}
 
 		const removedPaths = changes.filter((c) => c.status === 'removed').map((c) => c.path);
 		const renamedFromPaths = changes.filter((c) => c.status === 'renamed' && c.previousPath).map((c) => c.previousPath!);

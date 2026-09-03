@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CompareTooLargeError } from '@meshify/github';
 import { createHash } from 'node:crypto';
 import { executeGitHubSync, type GitHubRepoTransport, type GitHubSyncDeps } from './sync.js';
 import { ConnectorEngine, type ContentLedger, type KnowledgeItem, type KnowledgeWriter, type SyncContext } from '../index.js';
@@ -80,6 +81,7 @@ function harness(opts: {
 	transport: Partial<GitHubRepoTransport>;
 	scan?: GitHubSyncDeps['scanArchive'];
 	ledgerSeed?: Map<string, string>;
+	listByRepository?: NonNullable<GitHubSyncDeps['files']['listByRepository']>;
 }) {
 	const repo = opts.repo ?? repoRow();
 	const calls = { markSynced: [] as Array<[string | null, string | null]>, status: [] as string[], filesUpserted: [] as string[], filesDeleted: [] as string[][] };
@@ -93,6 +95,7 @@ function harness(opts: {
 		files: {
 			upsert: async (input) => void calls.filesUpserted.push(input.path),
 			markDeleted: async (_id, paths) => void calls.filesDeleted.push(paths),
+			listByRepository: opts.listByRepository,
 		},
 		repoTransport: () => ({
 			getHead: async () => ({ defaultBranch: 'main', headSha: 'newsha' }),
@@ -158,6 +161,30 @@ describe('executeGitHubSync', () => {
 		expect(h.writer.embedded).toEqual(['src/renamed-to.ts', 'src/old.ts']);
 		expect(summary.itemsRemoved).toBe(2);
 		expect(summary.itemsUpserted).toBe(2);
+		expect(h.calls.markSynced).toEqual([['newsha', 'main']]);
+	});
+
+	it('incremental: falls back to a full re-ingest when the GitHub diff is truncated, retiring files that left the tree', async () => {
+		const h = harness({
+			transport: {
+				compare: async () => {
+					throw new CompareTooLargeError('oldsha', 'newsha', 300);
+				},
+			},
+			scan: async () => [{ path: 'src/a.ts', buffer: Buffer.from('aaa'), language: 'typescript', sizeBytes: 3, contentHash: sha('aaa'), isReadme: false }],
+			listByRepository: async () => [
+				{ path: 'src/a.ts', status: 'embedded' },
+				{ path: 'src/stale.ts', status: 'embedded' },
+				{ path: 'src/already-gone.ts', status: 'deleted' },
+			],
+		});
+		const summary = await h.engine.execute(provider(h.deps) as never, syncCtx('incremental'));
+
+		expect(h.writer.embedded).toEqual(['src/a.ts']);
+		expect(h.calls.filesDeleted).toEqual([['src/stale.ts']]);
+		expect(h.writer.deleted).toContain('src/stale.ts');
+		expect(summary.itemsUpserted).toBe(1);
+		// The cursor advanced to the new head only because the whole tree was re-ingested.
 		expect(h.calls.markSynced).toEqual([['newsha', 'main']]);
 	});
 
