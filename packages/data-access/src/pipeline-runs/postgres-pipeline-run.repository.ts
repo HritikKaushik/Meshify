@@ -78,4 +78,14 @@ export class PostgresPipelineRunRepository implements PipelineRunRepository {
 			[input.runId, input.pipeId, input.op, input.component, JSON.stringify(input.trace), input.seq]
 		);
 	}
+
+	async deleteEndedBefore(before: Date): Promise<number> {
+		const result = await this.pool.query(
+			`delete from pipeline_runs
+			 where (ended_at is not null and ended_at < $1)
+			    or (ended_at is null and started_at is not null and started_at < $1)`,
+			[before]
+		);
+		return result.rowCount ?? 0;
+	}
 }

@@ -50,6 +50,8 @@ function harness(provider: Provider, integrationOverrides: Parameters<typeof bui
 	// passes that instant (a date-triggered flake).
 	const vault = new CredentialVault(credentials, fakeCipher, () => NOW);
 	const enqueued: unknown[] = [];
+	/** Cutoffs the retention task handed to the pipeline-run and audit-log sweeps. */
+	const retentionCutoffs: Array<[string, Date]> = [];
 	/** BullMQ jobs the fake source-sync queue "knows" (id -> current state) for the stuck-running reaper. */
 	const queueJobs = new Map<string, string>();
 	const deps: MaintenanceProcessorDeps = {
@@ -69,9 +71,22 @@ function harness(provider: Provider, integrationOverrides: Parameters<typeof bui
 		registrations: { resolveForIntegration: async () => fakeRegistration() } as never,
 		bus: new InMemoryPlatformEventBus(),
 		logger: { info: () => undefined, warn: () => undefined },
+		pipelineRuns: {
+			deleteEndedBefore: async (before: Date) => {
+				retentionCutoffs.push(['runs', before]);
+				return 2;
+			},
+		},
+		auditLogs: {
+			deleteBefore: async (before: Date) => {
+				retentionCutoffs.push(['audits', before]);
+				return 5;
+			},
+		},
+		retention: { pipelineRunDays: 30, auditLogDays: 365 },
 		now: () => NOW,
 	};
-	return { deps, vault, credentials, enqueued, integration, queueJobs };
+	return { deps, vault, credentials, enqueued, integration, queueJobs, retentionCutoffs };
 }
 
 const jobFor = (task: 'refresh' | 'health' | 'retention') => ({ data: { task } }) as Job<IntegrationMaintenanceJobPayload>;
@@ -165,6 +180,16 @@ describe('processMaintenanceJob', () => {
 
 		await processMaintenanceJob(jobFor('retention'), h.deps);
 		expect(events.events.size).toBe(0);
+	});
+
+	it('retention: prunes pipeline runs and audit log entries older than their configured ages', async () => {
+		const h = harness(fakeProvider({}));
+		await processMaintenanceJob(jobFor('retention'), h.deps);
+		const day = 24 * 3600 * 1000;
+		expect(h.retentionCutoffs).toEqual([
+			['runs', new Date(NOW.getTime() - 30 * day)],
+			['audits', new Date(NOW.getTime() - 365 * day)],
+		]);
 	});
 
 	it('retention: keeps failed deliveries (the webhook dead-letter record) three times longer than processed ones', async () => {

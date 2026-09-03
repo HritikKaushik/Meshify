@@ -7,6 +7,7 @@ function fakeRepo() {
 	const ended: Array<{ projectId: string; source: string }> = [];
 	const traces: PipelineRunTraceInput[] = [];
 	const repo: PipelineRunRepository = {
+		deleteEndedBefore: async () => 0,
 		async upsertFromSnapshot(s) {
 			snapshots.push(s);
 			return 'run-1';

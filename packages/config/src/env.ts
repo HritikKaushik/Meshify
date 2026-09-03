@@ -54,6 +54,12 @@ const envSchema = z.object({
 	RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
 	RATE_LIMIT_KEY_MAX: z.coerce.number().int().positive().default(1200),
 
+	// Retention for the observability and audit tables, swept daily by the
+	// worker's maintenance task. Pipeline run traces are bulky diagnostics;
+	// audit logs are kept a year by default (tune to your compliance regime).
+	PIPELINE_RUN_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+	AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
+
 	// How many proxy hops in front of this process are trusted when reading the
 	// client address from X-Forwarded-For (Express `trust proxy`). Count only
 	// proxies that append their own entry: platform-api sits behind the BFF,

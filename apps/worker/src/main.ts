@@ -22,6 +22,8 @@ import {
 	PostgresSyncCursorRepository,
 	PostgresWebhookEventRepository,
 	PostgresOAuthStateRepository,
+	PostgresAuditLogRepository,
+	PostgresPipelineRunRepository,
 	PostgresProviderRegistrationRepository,
 	PostgresProviderRegistrationCredentialRepository,
 	encryptSecret,
@@ -308,6 +310,9 @@ async function bootstrap(): Promise<void> {
 		registrations: registrationService,
 		bus: platformEventBus,
 		logger,
+		pipelineRuns: new PostgresPipelineRunRepository(pgPool),
+		auditLogs: new PostgresAuditLogRepository(pgPool),
+		retention: { pipelineRunDays: env.PIPELINE_RUN_RETENTION_DAYS, auditLogDays: env.AUDIT_LOG_RETENTION_DAYS },
 	};
 
 	const documentWorker = new Worker<DocumentIngestJobPayload>(

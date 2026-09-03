@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { Job, Queue } from 'bullmq';
 import type {
+	AuditLogRepository,
 	IntegrationCredentialRepository,
 	IntegrationRepository,
 	KnowledgeConnector,
 	KnowledgeConnectorRepository,
 	OAuthStateRepository,
 	PipelineJobRepository,
+	PipelineRunRepository,
 	WebhookEventRepository,
 } from '@meshify/data-access';
 import type { IntegrationMaintenanceJobPayload, SourceSyncJobPayload, WebhookEventJobPayload } from '@meshify/queues';
@@ -28,6 +30,10 @@ export interface MaintenanceProcessorDeps {
 	registrations: ProviderRegistrationService;
 	bus: PlatformEventBus;
 	logger: { info: (obj: unknown, msg: string) => void; warn: (obj: unknown, msg: string) => void };
+	/** Age-based retention for the observability and audit tables (see the retention task). */
+	pipelineRuns: Pick<PipelineRunRepository, 'deleteEndedBefore'>;
+	auditLogs: Pick<AuditLogRepository, 'deleteBefore'>;
+	retention: { pipelineRunDays: number; auditLogDays: number };
 	now?: () => Date;
 }
 
@@ -56,12 +62,15 @@ export async function processMaintenanceJob(job: Job<IntegrationMaintenanceJobPa
 			await sweepHealth(deps);
 			return;
 		case 'retention': {
+			const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 			const events = await deps.webhookEvents.deleteTerminalBefore(
 				new Date(now.getTime() - WEBHOOK_RETENTION_MS),
 				new Date(now.getTime() - FAILED_WEBHOOK_RETENTION_MS)
 			);
 			const states = await deps.oauthStates.deleteExpiredBefore(new Date(now.getTime() - STATE_RETENTION_MS));
-			deps.logger.info({ events, states }, 'maintenance retention swept');
+			const runs = await deps.pipelineRuns.deleteEndedBefore(daysAgo(deps.retention.pipelineRunDays));
+			const audits = await deps.auditLogs.deleteBefore(daysAgo(deps.retention.auditLogDays));
+			deps.logger.info({ events, states, runs, audits }, 'maintenance retention swept');
 			return;
 		}
 	}

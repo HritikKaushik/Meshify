@@ -48,6 +48,7 @@ root). Keep secrets in the root `.env` (git-ignored); commit only `.env.example`
 | `ORG_KEY_ENCRYPTION_KEY` | bff, api, worker | Encrypts org API keys at rest; also signs Slack OAuth `state` + encrypts Slack tokens |
 | `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_SEC` | api | Requests per window per end user (BFF traffic) or per API key (direct callers) |
 | `RATE_LIMIT_KEY_MAX` | api | Ceiling per window across every user sharing one API key (default 1200) |
+| `PIPELINE_RUN_RETENTION_DAYS`, `AUDIT_LOG_RETENTION_DAYS` | worker | Daily retention sweeps: pipeline runs/traces (default 30) and audit log entries (default 365) older than this are deleted |
 | `TRUST_PROXY_HOPS` | api, bff | Proxy hops trusted when reading the client IP from `X-Forwarded-For` (api: 1 = the BFF; bff on Render: 2 = web nginx + load balancer) |
 
 ### GitHub App (managed provider registration)
