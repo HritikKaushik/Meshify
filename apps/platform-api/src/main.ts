@@ -103,6 +103,7 @@ import { DisconnectLlmProviderUseCase } from './modules/llm-providers/applicatio
 import { ListLlmModelsUseCase } from './modules/llm-providers/application/list-llm-models.usecase.js';
 import { LlmResolutionService } from './modules/llm-providers/infrastructure/llm-resolution.service.js';
 import { InProcessLlmProviderChangeNotifier } from './modules/llm-providers/infrastructure/in-process-llm-provider-change-notifier.js';
+import { RedisLlmProviderChangeNotifier } from './modules/llm-providers/infrastructure/redis-llm-provider-change-notifier.js';
 import { createLlmProvidersController } from './modules/llm-providers/interface/llm-providers.controller.js';
 import {
 	COMING_SOON_PROVIDERS,
@@ -344,7 +345,14 @@ async function bootstrap(): Promise<void> {
 	// AI Providers use cases. The change notifier invalidates the resolution cache
 	// and the org's cached chat pipelines on connect/activate/disconnect, so a
 	// provider switch takes effect on the next chat turn with no restart.
-	const llmChangeNotifier = new InProcessLlmProviderChangeNotifier(llmResolutionService, projectRepository, chatPipelineResolver, logger);
+	// Local caches drop on this replica, and the change is replicated over Redis
+	// so every other API replica drops its cached provider and chat pipelines too.
+	const llmChangeNotifier = new RedisLlmProviderChangeNotifier(
+		new InProcessLlmProviderChangeNotifier(llmResolutionService, projectRepository, chatPipelineResolver, logger),
+		redis,
+		platformEventsRedis,
+		logger
+	);
 	const listLlmProviders = new ListLlmProvidersUseCase(llmRegistry, llmProviderConfigRepository, activeLlmProviderRepository);
 	const getLlmProvider = new GetLlmProviderUseCase(llmRegistry, llmProviderConfigRepository, activeLlmProviderRepository, llmCredentialVault);
 	const connectLlmProvider = new ConnectLlmProviderUseCase(llmRegistry, llmProviderConfigRepository, llmCredentialVault, llmChangeNotifier);
