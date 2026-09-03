@@ -7,6 +7,7 @@ import type { GitHubRepoClient } from '@meshify/github';
 import type { JobEventPublisher, RepoIngestJobPayload } from '@meshify/queues';
 import type { IngestFile, PipelineRegistry, RagPort } from '@meshify/rocketride-gateway';
 import { scanExtractedRepo, withExtractedArchive, type ScannedFile } from '@meshify/providers';
+import { repositoryLockKey, withExecutionLock, type ExecutionLock } from '../execution-lock.js';
 import { JobProgress } from './job-progress.js';
 
 export interface RepoIngestProcessorDeps {
@@ -25,6 +26,8 @@ export interface RepoIngestProcessorDeps {
 	qdrantPort: number;
 	/** See QdrantTargetConfig.apiKey — required whenever RocketRide runs as a managed cloud service. */
 	qdrantApiKey?: string;
+	/** Serializes ingest/sync per repository across worker replicas (see withExecutionLock). */
+	lock: ExecutionLock;
 }
 
 const SEND_BATCH_SIZE = 25;
@@ -36,7 +39,11 @@ const SEND_BATCH_SIZE = 25;
  * stream the retained files through the project's RocketRide code-ingest
  * pipeline into the proj_<id>_code Qdrant collection.
  */
-export async function processRepoIngestJob(job: Job<RepoIngestJobPayload>, deps: RepoIngestProcessorDeps): Promise<void> {
+export async function processRepoIngestJob(job: Job<RepoIngestJobPayload>, deps: RepoIngestProcessorDeps, token?: string): Promise<void> {
+	return withExecutionLock(job, token, deps.lock, repositoryLockKey(job.data.repositoryId), () => runRepoIngest(job, deps));
+}
+
+async function runRepoIngest(job: Job<RepoIngestJobPayload>, deps: RepoIngestProcessorDeps): Promise<void> {
 	const { pipelineJobId, repositoryId, projectId } = job.data;
 	const progress = new JobProgress(deps.pipelineJobs, deps.jobEvents, { jobId: pipelineJobId, projectId, jobType: 'clone_repo', title: 'Repository' });
 

@@ -7,6 +7,7 @@ import { CompareTooLargeError } from '@meshify/github';
 import type { JobEventPublisher, RepoSyncJobPayload } from '@meshify/queues';
 import type { PipelineRegistry, RagPort } from '@meshify/rocketride-gateway';
 import { detectLanguage, hashContent, isBinaryBuffer, isDeniedPath } from '@meshify/providers';
+import { repositoryLockKey, withExecutionLock, type ExecutionLock } from '../execution-lock.js';
 import { JobProgress } from './job-progress.js';
 
 export interface RepoSyncProcessorDeps {
@@ -23,6 +24,8 @@ export interface RepoSyncProcessorDeps {
 	qdrantPort: number;
 	/** See QdrantTargetConfig.apiKey — required whenever RocketRide runs as a managed cloud service. */
 	qdrantApiKey?: string;
+	/** Serializes ingest/sync per repository across worker replicas (see withExecutionLock). */
+	lock: ExecutionLock;
 }
 
 /**
@@ -35,7 +38,11 @@ export interface RepoSyncProcessorDeps {
  * the reindex step. Retrieval quality degrades gracefully (stale chunks may
  * still be cited) rather than sync being blocked on it.
  */
-export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: RepoSyncProcessorDeps): Promise<void> {
+export async function processRepoSyncJob(job: Job<RepoSyncJobPayload>, deps: RepoSyncProcessorDeps, token?: string): Promise<void> {
+	return withExecutionLock(job, token, deps.lock, repositoryLockKey(job.data.repositoryId), () => runRepoSync(job, deps));
+}
+
+async function runRepoSync(job: Job<RepoSyncJobPayload>, deps: RepoSyncProcessorDeps): Promise<void> {
 	const { pipelineJobId, repositoryId, projectId } = job.data;
 	const progress = new JobProgress(deps.pipelineJobs, deps.jobEvents, { jobId: pipelineJobId, projectId, jobType: 'sync_repo', title: 'Repository' });
 

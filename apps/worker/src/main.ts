@@ -77,6 +77,7 @@ import {
 } from '@meshify/providers';
 import type { KnowledgeConnector } from '@meshify/data-access';
 import { processSourceSyncJob } from './processors/source-sync.processor.js';
+import { PgAdvisoryExecutionLock } from './execution-lock.js';
 import { processWebhookEventJob } from './processors/webhook-event.processor.js';
 import { processMaintenanceJob } from './processors/integration-maintenance.processor.js';
 import { ProjectKnowledgeWriter } from './processors/knowledge-writer.js';
@@ -114,6 +115,8 @@ async function bootstrap(): Promise<void> {
 	const repositories = new PostgresRepositoryRepository(pgPool);
 	const files = new PostgresFileRepository(pgPool);
 	const pipelineJobs = new PostgresPipelineJobRepository(pgPool);
+	// One sync per connector/repository at a time, across every worker replica.
+	const executionLock = new PgAdvisoryExecutionLock(pgPool);
 	const connectors = new PostgresKnowledgeConnectorRepository(pgPool);
 	const slackWorkspaces = new PostgresSlackWorkspaceRepository(pgPool);
 	const slackChannels = new PostgresSlackChannelRepository(pgPool);
@@ -249,6 +252,7 @@ async function bootstrap(): Promise<void> {
 		bus: platformEventBus,
 		logger,
 		ledgers,
+		lock: executionLock,
 		writerFor: async (projectId: string) => {
 			const project = await projects.findById(projectId);
 			if (!project) throw new Error(`Project "${projectId}" not found`);
@@ -327,43 +331,53 @@ async function bootstrap(): Promise<void> {
 
 	const repoIngestWorker = new Worker<RepoIngestJobPayload>(
 		REPO_INGEST_QUEUE,
-		(job) =>
-			processRepoIngestJob(job, {
-				repositories,
-				files,
-				projects,
-				pipelineJobs,
-				storage,
-				github,
-				pipelineRegistry,
-				rag,
-				jobEvents,
-				codeChunkSize: CODE_CHUNK_SIZE,
-				qdrantHost,
-				qdrantPort,
-				qdrantApiKey,
-			}),
+		(job, token) =>
+			processRepoIngestJob(
+				job,
+				{
+					repositories,
+					files,
+					projects,
+					pipelineJobs,
+					storage,
+					github,
+					pipelineRegistry,
+					rag,
+					jobEvents,
+					codeChunkSize: CODE_CHUNK_SIZE,
+					qdrantHost,
+					qdrantPort,
+					qdrantApiKey,
+					lock: executionLock,
+				},
+				token
+			),
 		// Repo ingestion is archive-sized work (extraction + full-tree embedding); keep concurrency low.
 		{ connection: bullRedis, concurrency: 2 }
 	);
 
 	const repoSyncWorker = new Worker<RepoSyncJobPayload>(
 		REPO_SYNC_QUEUE,
-		(job) =>
-			processRepoSyncJob(job, {
-				repositories,
-				files,
-				projects,
-				pipelineJobs,
-				github,
-				pipelineRegistry,
-				rag,
-				jobEvents,
-				codeChunkSize: CODE_CHUNK_SIZE,
-				qdrantHost,
-				qdrantPort,
-				qdrantApiKey,
-			}),
+		(job, token) =>
+			processRepoSyncJob(
+				job,
+				{
+					repositories,
+					files,
+					projects,
+					pipelineJobs,
+					github,
+					pipelineRegistry,
+					rag,
+					jobEvents,
+					codeChunkSize: CODE_CHUNK_SIZE,
+					qdrantHost,
+					qdrantPort,
+					qdrantApiKey,
+					lock: executionLock,
+				},
+				token
+			),
 		{ connection: bullRedis, concurrency: 3 }
 	);
 
@@ -373,7 +387,7 @@ async function bootstrap(): Promise<void> {
 
 	// The provider platform's generic sync lane; legacy per-provider workers
 	// above remain only to drain in-flight jobs enqueued before the cutover.
-	const sourceSyncWorker = new Worker<SourceSyncJobPayload>(SOURCE_SYNC_QUEUE, (job) => processSourceSyncJob(job, sourceSyncDeps), { connection: bullRedis, concurrency: 3 });
+	const sourceSyncWorker = new Worker<SourceSyncJobPayload>(SOURCE_SYNC_QUEUE, (job, token) => processSourceSyncJob(job, sourceSyncDeps, token), { connection: bullRedis, concurrency: 3 });
 	const webhookEventsWorker = new Worker<WebhookEventJobPayload>(WEBHOOK_EVENTS_QUEUE, (job) => processWebhookEventJob(job, webhookDeps), { connection: bullRedis, concurrency: 5 });
 	const maintenanceWorker = new Worker<IntegrationMaintenanceJobPayload>(INTEGRATION_MAINTENANCE_QUEUE, (job) => processMaintenanceJob(job, maintenanceDeps), { connection: bullRedis, concurrency: 1 });
 
