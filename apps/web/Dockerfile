@@ -6,7 +6,7 @@
 # /api to the BFF (single-origin — see nginx.conf.template). The same dist/ can
 # instead be uploaded to Cloudflare Pages/Netlify if you prefer a managed CDN;
 # this image is the portable, self-hostable path that fits compose/K8s.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 RUN corepack enable
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
