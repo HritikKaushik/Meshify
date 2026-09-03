@@ -45,10 +45,23 @@ const envSchema = z.object({
 	CLERK_PUBLISHABLE_KEY: z.string().optional(),
 	ORG_KEY_ENCRYPTION_KEY: z.string().min(32, 'ORG_KEY_ENCRYPTION_KEY must be at least 32 chars').optional(),
 
-	// Rate limiting (fixed-window per API key, backed by Redis). Defaults suit a
-	// modest single-tenant deployment; raise for higher-throughput clients.
+	// Rate limiting (fixed window, backed by Redis). RATE_LIMIT_MAX applies per
+	// end user (BFF traffic) or per API key (direct callers) each window;
+	// RATE_LIMIT_KEY_MAX is the ceiling across every user sharing one API key
+	// (an org's whole budget). Defaults suit a modest deployment; raise for
+	// higher-throughput clients.
 	RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
 	RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
+	RATE_LIMIT_KEY_MAX: z.coerce.number().int().positive().default(1200),
+
+	// How many proxy hops in front of this process are trusted when reading the
+	// client address from X-Forwarded-For (Express `trust proxy`). Count only
+	// proxies that append their own entry: platform-api sits behind the BFF,
+	// which overwrites the header with the address it resolved (1); the BFF on
+	// Render sits behind the web nginx and Render's load balancer (2). Trusting
+	// more hops than exist lets a client spoof its address; fewer reports the
+	// proxy's address as the client.
+	TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
 
 	// Postgres
 	DATABASE_URL: z.string().url(),

@@ -50,6 +50,7 @@ describe('webhook receiver (e2e over real HTTP, mounted exactly like main.ts)', 
 				webhookQueue: { add: async (_n: string, payload: { webhookEventId: string }, opts: { jobId?: string }) => void enqueued.push({ payload, opts }) } as never,
 				registrations,
 				limiter: { hit: async () => ({ allowed: true }) },
+				sourceLimiter: { hit: async () => ({ allowed: true }) },
 				logger: { warn: () => undefined, error: () => undefined },
 			})
 		);

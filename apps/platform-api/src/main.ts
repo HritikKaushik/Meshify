@@ -294,14 +294,15 @@ async function bootstrap(): Promise<void> {
 	// the worker; secret verification resolves via the registration layer.
 	const webhookEventRepository = new PostgresWebhookEventRepository(pgPool);
 	const webhookEventsQueue = createWebhookEventsQueue(bullRedis);
-	// Webhooks are pre-auth, so the per-key limiter can't apply — use a
-	// per-provider fixed window generous enough for bursty pushes. Falls back to an
-	// in-process limiter if Redis is down rather than dropping throttling.
-	const webhookLimiter = new FallbackRateLimiter(
-		new RedisRateLimiter(redis, 600, 60),
-		new InMemoryRateLimiter(600, 60),
-		(err) => logger.warn({ err }, 'webhook rate limiter fell back to in-memory (redis unavailable)')
-	);
+	// Webhooks are pre-auth, so the per-key limiter can't apply. Two fixed
+	// windows instead: a per-provider ceiling that bounds the signature/secret
+	// work one endpoint can be made to do, and a per-source-address bucket so a
+	// single flooding source is cut off before it can starve the provider's real
+	// deliveries out of that ceiling. Both fall back to an in-process limiter if
+	// Redis is down rather than dropping throttling.
+	const webhookFallback = (err: unknown) => logger.warn({ err }, 'webhook rate limiter fell back to in-memory (redis unavailable)');
+	const webhookLimiter = new FallbackRateLimiter(new RedisRateLimiter(redis, 3000, 60), new InMemoryRateLimiter(3000, 60), webhookFallback);
+	const webhookSourceLimiter = new FallbackRateLimiter(new RedisRateLimiter(redis, 600, 60), new InMemoryRateLimiter(600, 60), webhookFallback);
 
 	const attachSlackWorkspace = new AttachSlackWorkspaceUseCase(integrationRepository, knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, credentialVault, slackClient);
 	const connectRepositoryFromIntegration = new ConnectRepositoryFromIntegrationUseCase(
@@ -365,16 +366,24 @@ async function bootstrap(): Promise<void> {
 	const apiKeyRepository = new PostgresApiKeyRepository(pgPool);
 	const auditLogRepository = new PostgresAuditLogRepository(pgPool);
 	const authenticate = new AuthenticateApiKeyUseCase(apiKeyRepository, env.PLATFORM_API_KEY_PEPPER);
+	const rateLimiterFallback = (err: unknown) => logger.warn({ err }, 'rate limiter fell back to in-memory (redis unavailable)');
 	const rateLimiter = new FallbackRateLimiter(
 		new RedisRateLimiter(redis, env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC),
 		new InMemoryRateLimiter(env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC),
-		(err) => logger.warn({ err }, 'rate limiter fell back to in-memory (redis unavailable)')
+		rateLimiterFallback
+	);
+	const keyCeilingLimiter = new FallbackRateLimiter(
+		new RedisRateLimiter(redis, env.RATE_LIMIT_KEY_MAX, env.RATE_LIMIT_WINDOW_SEC),
+		new InMemoryRateLimiter(env.RATE_LIMIT_KEY_MAX, env.RATE_LIMIT_WINDOW_SEC),
+		rateLimiterFallback
 	);
 
 	const app = express();
-	// Honour X-Forwarded-For for accurate client IPs in audit logs (behind a
-	// load balancer / ingress). Rate limits key on the API key, not the IP.
-	app.set('trust proxy', true);
+	// Client IPs (audit logs, the webhook source limiter) come from
+	// X-Forwarded-For. Trust exactly the configured number of hops - the BFF
+	// overwrites the header with the address it resolved, so 1 by default -
+	// rather than `true`, which believed whatever the client put there.
+	app.set('trust proxy', env.TRUST_PROXY_HOPS);
 	app.use(pinoHttp({ logger }));
 
 	// Prometheus: time every request (mounted early) and expose /metrics (public,
@@ -393,6 +402,7 @@ async function bootstrap(): Promise<void> {
 			webhookQueue: webhookEventsQueue,
 			registrations: providerRegistrationService,
 			limiter: webhookLimiter,
+			sourceLimiter: webhookSourceLimiter,
 			logger,
 		})
 	);
@@ -405,7 +415,7 @@ async function bootstrap(): Promise<void> {
 	// Everything below requires a valid API key, is rate-limited per key, and
 	// (for mutations) audited. Order matters: authenticate → throttle → audit.
 	app.use(authGuard(authenticate));
-	app.use(rateLimitGuard(rateLimiter));
+	app.use(rateLimitGuard(rateLimiter, keyCeilingLimiter));
 	app.use(auditLogMiddleware(auditLogRepository));
 
 	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
