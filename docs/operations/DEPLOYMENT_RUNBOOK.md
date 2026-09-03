@@ -86,10 +86,11 @@ The Blueprint prompts for it before the web service exists, so enter your best g
    | `meshify-bff` | `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY` | step D |
    | `meshify-web` | `VITE_CLERK_PUBLISHABLE_KEY` | step D (same `pk_live_…`) |
 
-   The env group's `sync: false` keys are **not** prompted for; the group is created
-   with them empty. Fill them in immediately after Apply (step 3b):
+   The env group's `sync: false` keys are **not** prompted for and are **not created**
+   (the group only gets its generated and literal keys). Add them, key and value,
+   immediately after Apply (step 3b):
 
-   | Set on `meshify-backend` (Environment Groups) | Key | From |
+   | Add on `meshify-backend` (Environment Groups → Edit → Add Environment Variable) | Key | From |
    |---|---|---|
    | Qdrant | `QDRANT_URL`, `QDRANT_API_KEY` | step C |
    | B2 | `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | step C |
@@ -106,9 +107,9 @@ The Blueprint prompts for it before the web service exists, so enter your best g
    services so the referenced port is the one the app binds.
 3. **Deploy Blueprint.** Render creates the resources and builds all five Dockerfiles
    from the repo root (the pnpm-workspace build context).
-   **3b. Straight away**, open *Environment Groups → meshify-backend* and fill the
-   empty keys from the second table above (the generated crypto keys are already
-   there). Until they are set, each Node service's first deploy fails at its
+   **3b. Straight away**, open *Environment Groups → meshify-backend → Edit* and add
+   the eight keys from the second table above (the generated crypto keys are already
+   there), then *Save Changes*. Until they are set, each Node service's first deploy fails at its
    pre-deploy step with `Invalid environment configuration`; once filled, trigger
    *Manual Deploy* on the four Node services (or push a tag, step J).
    Render then runs each Node service's **pre-deploy command**

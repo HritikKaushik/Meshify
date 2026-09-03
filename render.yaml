@@ -30,9 +30,9 @@
 #   • `sync: false` = the value is never stored in git. Render prompts for the
 #     SERVICE-level ones (APP_ORIGIN, CLERK_*, VITE_CLERK_PUBLISHABLE_KEY) on the
 #     "Deploy Blueprint" form, but NOT for the ones inside the env group: those are
-#     created empty, so fill Environment Groups -> meshify-backend right after Apply
-#     (the first deploys fail their pre-deploy env validation until you do, then
-#     redeploy). `generateValue: true` = Render mints a random 256-bit secret
+#     not created at all, so ADD them (key + value) under Environment Groups ->
+#     meshify-backend right after Apply (the first deploys fail their pre-deploy env
+#     validation until you do, then redeploy). `generateValue: true` = Render mints a random 256-bit secret
 #     (back the four crypto keys up out-of-band - see docs/operations/BACKUP_DR.md).
 #   • Releases: autoDeployTrigger is "off" on every service; the tag-driven
 #     .github/workflows/deploy.yml triggers ordered, verified deploys through the Render
