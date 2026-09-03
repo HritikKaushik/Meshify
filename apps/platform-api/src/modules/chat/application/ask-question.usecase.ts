@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ChatRepository, MessageCitation, Project } from '@meshify/data-access';
 import type { ChatAnswer, ChatHistoryTurn, RagPort } from '@meshify/rocketride-gateway';
+import { RocketRidePipelineTimeoutError } from '@meshify/rocketride-gateway';
 import type { ChatPipelineResolver } from './chat-pipeline.port.js';
 import type { ChatContextRetriever } from './chat-context-retriever.port.js';
 import { noopCitationEnricher, type CitationEnricher } from './citation-enricher.port.js';
@@ -103,7 +104,10 @@ export class AskQuestionUseCase {
 		const pipelineToken = await this.chatPipelines.resolve(command.project);
 		try {
 			return await this.rag.ask(pipelineToken, { question: prompt, history });
-		} catch {
+		} catch (err) {
+			// A timed-out engine is not a stale token: re-asking would tie up a second
+			// unbounded call and double the user's wait. Surface it as-is.
+			if (err instanceof RocketRidePipelineTimeoutError) throw err;
 			this.chatPipelines.invalidate(command.project);
 			const freshToken = await this.chatPipelines.resolve(command.project);
 			return await this.rag.ask(freshToken, { question: prompt, history });
