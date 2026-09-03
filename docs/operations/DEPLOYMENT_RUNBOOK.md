@@ -77,16 +77,27 @@ The Blueprint prompts for it before the web service exists, so enter your best g
    (Blueprint file path: `render.yaml`, the default). All seven resources are created in
    **one region** (`ohio` in the file; change all seven together if you prefer another  - 
    private networking only works within a region).
-2. Render shows the plan and prompts for every `sync: false` value:
+2. Render shows the plan (env group, database, Key Value, five services) and prompts
+   inline for the **service-level** `sync: false` values only:
 
    | Prompted on | Key | From |
    |---|---|---|
-   | `meshify-backend` group | `QDRANT_URL`, `QDRANT_API_KEY` | step C |
-   | `meshify-backend` group | `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | step C |
-   | `meshify-backend` group | `ROCKETRIDE_APIKEY`, `ROCKETRIDE_OPENAI_KEY` | step C |
    | `meshify-bff` | `APP_ORIGIN` | step E |
    | `meshify-bff` | `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY` | step D |
    | `meshify-web` | `VITE_CLERK_PUBLISHABLE_KEY` | step D (same `pk_live_…`) |
+
+   The env group's `sync: false` keys are **not** prompted for and are **not created**
+   (the group only gets its generated and literal keys). Add them, key and value,
+   immediately after Apply (step 3b):
+
+   | Add on `meshify-backend` (Environment Groups → Edit → Add Environment Variable) | Key | From |
+   |---|---|---|
+   | Qdrant | `QDRANT_URL`, `QDRANT_API_KEY` | step C |
+   | B2 | `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | step C |
+   | RocketRide | `ROCKETRIDE_APIKEY`, `ROCKETRIDE_OPENAI_KEY` | step C |
+
+   A card must be on file (Render prompts for it: paid instances need payment
+   information; the check is a temporary $1 authorization).
 
    Everything else is wired by the file: `DATABASE_URL` / `REDIS_URL` reference the
    Render Postgres / Key Value instances, `PLATFORM_API_ORIGIN` and `BFF_UPSTREAM`
@@ -94,24 +105,45 @@ The Blueprint prompts for it before the web service exists, so enter your best g
    a random suffix, e.g. `meshify-bff-ab1c`, which is why they are `fromService`
    references and never literals), and `PORT` is pinned to 3000/3001 on the two private
    services so the referenced port is the one the app binds.
-3. **Apply.** Render builds all five Dockerfiles from the repo root (the pnpm-workspace
-   build context), then runs each Node service's **pre-deploy command**
+3. **Deploy Blueprint.** Render creates the resources and builds all five Dockerfiles
+   from the repo root (the pnpm-workspace build context).
+   **3b. Straight away**, open *Environment Groups → meshify-backend → Edit* and add
+   the eight keys from the second table above (the generated crypto keys are already
+   there), then *Save Changes*. Until they are set, each Node service's first deploy fails at its
+   pre-deploy step with `Invalid environment configuration`; once filled, trigger
+   *Manual Deploy* on the four Node services (or push a tag, step J).
+   Render then runs each Node service's **pre-deploy command**
    (`node node_modules/@meshify/data-access/dist/migrate.js`) before starting it - that
    is where the 16 SQL migrations are applied on the fresh database. The migrator holds
    a Postgres advisory lock, so the four services running it at the same time serialize
    (one applies, the others wait and skip). Watch each service's **Logs → pre-deploy**
    if a deploy fails at that stage.
-4. Common first-deploy failures:
+4. If the first sync **fails** (it will, until step 3b is done), later resources in
+   the plan are *canceled*, not created. Run **Manual sync** on the Blueprint and
+   **Approve** its plan to create them. Values you typed on the original form are
+   applied only by that first sync: a service created by a later sync comes up
+   **without** its prompted values, so add them on the service's *Environment* tab
+   (`meshify-bff`: `APP_ORIGIN`, `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`;
+   `meshify-web`: `VITE_CLERK_PUBLISHABLE_KEY`, a build-time value, so redeploy to
+   rebuild) and *Manual Deploy* it.
+5. Common first-deploy failures:
    - **`Invalid environment configuration`** in a Node service's logs → a prompted value
      is malformed (e.g. `QDRANT_URL` without `https://`, an `S3_REGION` of `auto`).
      Fix it in *Environment Groups → meshify-backend* and redeploy.
    - **`Weak secret(s) rejected in production`** → someone replaced a generated crypto
      key with a placeholder. Use `openssl rand -base64 32`.
    - **BFF `Missing required BFF environment variables: APP_ORIGIN`** → step E.
-   - **502 on `/api/*`** but the SPA loads → the BFF is still deploying, or its
-     `PLATFORM_API_ORIGIN` / the web's `BFF_UPSTREAM` reference is off. Both values
-     are visible on the service's *Environment* tab; the private address of a service
-     is shown under *Connect → Internal*.
+   - **502 on `/api/*`** but the SPA loads → check the web service's logs. `meshify-bff
+     could not be resolved (3: Host not found)` means nginx got the short private
+     hostname (Render's `fromService: host` is the bare service name) and could not
+     qualify it: nginx's `resolver` ignores the DNS search domain
+     (`own-<workspace>.svc.cluster.local`) that every other process uses. The image's
+     `docker-entrypoint.d/10-qualify-upstream.envsh` handles this at startup; if you
+     run an older image, set `BFF_UPSTREAM` on `meshify-web` to
+     `meshify-bff.<search-domain>:3001` (read the search domain from `/etc/resolv.conf`
+     in the service's *Shell* tab). Otherwise the BFF is still deploying, or its
+     `PLATFORM_API_ORIGIN` / the web's `BFF_UPSTREAM` reference is off; both are on the
+     service's *Environment* tab.
 
 ## G. First-deploy verification (smoke tests)
 ```bash

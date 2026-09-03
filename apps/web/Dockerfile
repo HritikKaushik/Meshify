@@ -39,6 +39,10 @@ ENV PORT=8080
 # (guarded off by default). The /api location's request-time resolver needs it so
 # the container boots even when the BFF's internal DNS is briefly unresolvable.
 ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+# Startup hook (sourced by the image entrypoint before envsubst): qualifies a bare
+# BFF_UPSTREAM host with the DNS search domain on Kubernetes-style platforms such
+# as Render, where nginx's resolver would otherwise fail on the short name.
+COPY --chmod=0755 apps/web/docker-entrypoint.d/10-qualify-upstream.envsh /docker-entrypoint.d/10-qualify-upstream.envsh
 COPY apps/web/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 EXPOSE 8080
