@@ -20,7 +20,12 @@ COPY apps/web apps/web
 ARG VITE_CLERK_PUBLISHABLE_KEY
 RUN VITE_CLERK_PUBLISHABLE_KEY="$VITE_CLERK_PUBLISHABLE_KEY" pnpm --filter @meshify/web build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
+# Patch the OS packages to the latest Alpine builds: the Trivy gate fails on fixable
+# HIGH/CRITICAL CVEs and base images lag the Alpine repos. Needs root; drop back.
+USER root
+RUN apk upgrade --no-cache
+USER nginx
 # Where nginx forwards /api. Override per environment (compose: http://bff:3001;
 # split hosting: the BFF's private address - a full URL like Railway's
 # http://meshify-bff.railway.internal:3001, or a bare host:port such as Render's
