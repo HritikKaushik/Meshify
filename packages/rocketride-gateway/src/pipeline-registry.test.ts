@@ -17,6 +17,38 @@ function fakePool(client: Partial<{ getTaskToken: () => Promise<string | undefin
 const never = () => new Promise<never>(() => {}); // hangs forever
 
 describe('PipelineRegistry', () => {
+	it('drops every cached token when the engine connection is lost, so the next ensure reconciles', async () => {
+		let uses = 0;
+		let onDisconnect: ((reason: string) => void) | undefined;
+		const pool = fakePool({ use: async () => ({ token: `tk_${++uses}` }) });
+		(pool as unknown as { onDisconnect: (l: (reason: string) => void) => () => void }).onDisconnect = (l) => {
+			onDisconnect = l;
+			return () => undefined;
+		};
+		const registry = new PipelineRegistry(pool, 200);
+		await registry.ensureChatPipeline(openaiConfig);
+		await registry.ensureChatPipeline(openaiConfig);
+		expect(uses).toBe(1);
+
+		onDisconnect!('engine restarted');
+		expect(await registry.ensureChatPipeline(openaiConfig)).toBe('tk_2');
+	});
+
+	it('bounds the token cache, evicting the least recently used pipeline', async () => {
+		let uses = 0;
+		const registry = new PipelineRegistry(fakePool({ use: async () => ({ token: `tk_${++uses}` }) }), 200, 2);
+		const third: ChatPipelineConfig = { ...openaiConfig, pipelineGuid: '00000000-0000-4000-8000-000000000003' };
+		await registry.ensureChatPipeline(openaiConfig); // guid 1
+		await registry.ensureChatPipeline({ ...openaiConfig, pipelineGuid: GUID2 }); // guid 2
+		await registry.ensureChatPipeline(openaiConfig); // touch guid 1: now guid 2 is the oldest
+		await registry.ensureChatPipeline(third); // evicts guid 2
+		expect(uses).toBe(3);
+		await registry.ensureChatPipeline(openaiConfig); // still cached
+		expect(uses).toBe(3);
+		await registry.ensureChatPipeline({ ...openaiConfig, pipelineGuid: GUID2 }); // evicted: reconciles again
+		expect(uses).toBe(4);
+	});
+
 	it('starts a fresh pipeline (no reconcile) when nothing is running', async () => {
 		const registry = new PipelineRegistry(fakePool({ use: async () => ({ token: 'tk_new' }) }), 200);
 		expect(await registry.ensureChatPipeline(openaiConfig)).toBe('tk_new');

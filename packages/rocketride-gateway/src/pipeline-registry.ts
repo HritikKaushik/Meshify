@@ -44,6 +44,12 @@ interface CachedToken {
  *
  * Every RocketRide call is also bounded by a timeout so a wedged engine surfaces
  * a clear `RocketRidePipelineTimeoutError` instead of hanging indefinitely.
+ *
+ * The token cache is connection-scoped: it is dropped whenever the engine
+ * connection is lost (an engine restart forgets every task, and a cached
+ * token would then fail on every retry until this process restarted) and it
+ * is bounded (least recently used entries evicted past `maxCachedTokens`) so
+ * a long-lived process serving many projects cannot grow it without limit.
  */
 export class PipelineRegistry {
 	private readonly tokenCache = new Map<string, CachedToken>();
@@ -52,8 +58,11 @@ export class PipelineRegistry {
 
 	constructor(
 		private readonly pool: RocketRideClientPool,
-		private readonly opTimeoutMs = DEFAULT_OP_TIMEOUT_MS
-	) {}
+		private readonly opTimeoutMs = DEFAULT_OP_TIMEOUT_MS,
+		private readonly maxCachedTokens = 2000
+	) {
+		pool.onDisconnect?.(() => this.tokenCache.clear());
+	}
 
 	async ensureIngestPipeline(config: IngestPipelineConfig): Promise<string> {
 		return this.ensure(`ingest:${config.pipelineGuid}`, config.pipelineGuid, 'webhook_1', buildIngestPipeline(config));
@@ -70,10 +79,29 @@ export class PipelineRegistry {
 
 	private ensure(cacheKey: string, projectId: string, source: string, pipeline: RocketRidePipeline): Promise<string> {
 		const hash = JSON.stringify(pipeline);
-		const cached = this.tokenCache.get(cacheKey);
+		const cached = this.cachedToken(cacheKey, hash);
 		// Fast path: current definition already running — no lock, no RocketRide call.
-		if (cached && cached.hash === hash) return Promise.resolve(cached.token);
+		if (cached) return Promise.resolve(cached);
 		return this.enqueue(() => this.reconcile(cacheKey, hash, projectId, source, pipeline));
+	}
+
+	/** A cache hit for this exact definition; touching it marks the entry most recently used. */
+	private cachedToken(cacheKey: string, hash: string): string | undefined {
+		const cached = this.tokenCache.get(cacheKey);
+		if (!cached || cached.hash !== hash) return undefined;
+		this.tokenCache.delete(cacheKey);
+		this.tokenCache.set(cacheKey, cached);
+		return cached.token;
+	}
+
+	private remember(cacheKey: string, entry: CachedToken): void {
+		this.tokenCache.delete(cacheKey);
+		this.tokenCache.set(cacheKey, entry);
+		while (this.tokenCache.size > this.maxCachedTokens) {
+			const oldest = this.tokenCache.keys().next().value;
+			if (oldest === undefined) break;
+			this.tokenCache.delete(oldest);
+		}
 	}
 
 	/** Runs `fn` only after every previously-queued reconcile has settled (success or failure). */
@@ -89,8 +117,8 @@ export class PipelineRegistry {
 	private async reconcile(cacheKey: string, hash: string, projectId: string, source: string, pipeline: RocketRidePipeline): Promise<string> {
 		// Re-check under the queue: a reconcile that ran just ahead of us may have
 		// already started this exact definition (the warm-then-chat case).
-		const cached = this.tokenCache.get(cacheKey);
-		if (cached && cached.hash === hash) return cached.token;
+		const cached = this.cachedToken(cacheKey, hash);
+		if (cached) return cached;
 
 		const client = await this.pool.getClient();
 
@@ -108,7 +136,7 @@ export class PipelineRegistry {
 
 		// pipelineTraceLevel:'summary' so the observability ingester receives FLOW events.
 		const { token } = await this.withTimeout(client.use({ pipeline, useExisting: true, pipelineTraceLevel: 'summary' }), 'pipeline start');
-		this.tokenCache.set(cacheKey, { token, hash });
+		this.remember(cacheKey, { token, hash });
 		return token;
 	}
 

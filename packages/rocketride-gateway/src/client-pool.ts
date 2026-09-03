@@ -16,12 +16,23 @@ export interface ClientPoolLogger {
 export class RocketRideClientPool {
 	private client: RocketRideClient | undefined;
 	private connecting: Promise<RocketRideClient> | undefined;
+	private readonly disconnectListeners = new Set<(reason: string) => void>();
 
 	constructor(
 		private readonly env: Env,
 		private readonly logger: ClientPoolLogger,
 		private readonly onEvent?: (event: DAPMessage) => Promise<void>
 	) {}
+
+	/**
+	 * Called whenever the engine connection drops. Consumers holding
+	 * connection-scoped state (the PipelineRegistry's task tokens) reset on it,
+	 * since the engine may have restarted and forgotten every running task.
+	 */
+	onDisconnect(listener: (reason: string) => void): () => void {
+		this.disconnectListeners.add(listener);
+		return () => this.disconnectListeners.delete(listener);
+	}
 
 	async getClient(): Promise<RocketRideClient> {
 		if (this.client?.isConnected()) return this.client;
@@ -66,6 +77,13 @@ export class RocketRideClientPool {
 			onDisconnected: async (reason, hasError) => {
 				if (hasError) this.logger.error({ reason }, 'rocketride connection lost');
 				else this.logger.info({ reason }, 'rocketride disconnected');
+				for (const listener of this.disconnectListeners) {
+					try {
+						listener(String(reason));
+					} catch (err) {
+						this.logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'rocketride disconnect listener failed');
+					}
+				}
 			},
 			onConnectError: async (error) => {
 				this.logger.warn({ error: error.message }, 'rocketride connect attempt failed');
