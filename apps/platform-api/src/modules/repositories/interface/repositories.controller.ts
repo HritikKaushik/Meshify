@@ -1,4 +1,6 @@
-import { Router } from 'express';
+import type { Router } from 'express';
+import { requireUuidParams } from '../../../http/require-uuid-params.js';
+import { createRouter } from '../../../http/router.js';
 import multer from 'multer';
 import { z } from 'zod';
 import type { Repository } from '@meshify/data-access';
@@ -53,7 +55,7 @@ export function createRepositoriesController(deps: {
 	listRepositories: ListRepositoriesUseCase;
 	deleteRepository: DeleteRepositoryUseCase;
 }): Router {
-	const router = Router();
+	const router = createRouter();
 	const guard = projectIsolationGuard(deps.getProject);
 
 	// One route, three intake modes: multipart = ZIP upload, JSON {integrationId,
@@ -117,7 +119,7 @@ export function createRepositoriesController(deps: {
 	});
 
 	// Disconnect a repository — purges its code vectors + archive, then deletes the row (files cascade).
-	router.delete('/v1/projects/:projectId/repositories/:repositoryId', guard, async (req, res) => {
+	router.delete('/v1/projects/:projectId/repositories/:repositoryId', guard, requireUuidParams('repositoryId'), async (req, res) => {
 		try {
 			await deps.deleteRepository.execute({ project: req.project!, repositoryId: req.params.repositoryId as string });
 			res.status(204).send();
@@ -131,7 +133,7 @@ export function createRepositoriesController(deps: {
 		}
 	});
 
-	router.post('/v1/projects/:projectId/repositories/:repositoryId/sync', guard, async (req, res) => {
+	router.post('/v1/projects/:projectId/repositories/:repositoryId/sync', guard, requireUuidParams('repositoryId'), async (req, res) => {
 		try {
 			const result = await deps.syncRepository.execute(req.project!.id, req.params.repositoryId as string);
 			res.status(202).json(result);

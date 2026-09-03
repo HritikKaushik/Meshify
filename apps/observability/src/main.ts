@@ -1,6 +1,6 @@
 import pg from 'pg';
 import { loadEnv } from '@meshify/config';
-import { createLogger } from '@meshify/shared';
+import { createLogger, installProcessGuards } from '@meshify/shared';
 import { PostgresPipelineRunRepository } from '@meshify/data-access';
 import { RocketRideClientPool } from '@meshify/rocketride-gateway';
 import { DapEventHandler } from './dap-event-handler.js';
@@ -15,6 +15,7 @@ import { acquireLeadership } from './leader-election.js';
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'observability' });
+	installProcessGuards(logger);
 
 	// Block until we're the leader — standbys wait here without subscribing.
 	await acquireLeadership(env.DATABASE_URL, logger);

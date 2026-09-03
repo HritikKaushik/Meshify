@@ -1,4 +1,5 @@
-import express, { Router } from 'express';
+import express, { type Router } from 'express';
+import { createRouter } from '../../../http/router.js';
 import type { Queue } from 'bullmq';
 import type { IntegrationRepository, WebhookEventRepository } from '@meshify/data-access';
 import type { WebhookEventJobPayload } from '@meshify/queues';
@@ -37,7 +38,7 @@ export interface WebhookReceiverDeps {
  * enqueue → ACK in milliseconds. All provider API work happens in the worker.
  */
 export function createWebhooksController(deps: WebhookReceiverDeps): Router {
-	const router = Router();
+	const router = createRouter();
 	router.use('/v1/integrations/webhooks', express.raw({ type: () => true, limit: '2mb' }));
 
 	router.post(['/v1/integrations/webhooks/:provider', '/v1/integrations/webhooks/:provider/:registrationId'], async (req, res) => {

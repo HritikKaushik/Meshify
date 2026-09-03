@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import type { Router } from 'express';
+import { createRouter } from '../../../http/router.js';
 import { z } from 'zod';
 import type { Integration } from '@meshify/data-access';
 import { ProviderAuthError, ProviderNotConfiguredError, ProviderNotFoundError } from '@meshify/providers';
@@ -91,7 +92,7 @@ export function createIntegrationsController(deps: {
 	deleteRegistration: DeleteRegistrationUseCase;
 	integrationEvents: IntegrationEventHub;
 }): Router {
-	const router = Router();
+	const router = createRouter();
 	const configSchema = z.object({ values: z.record(z.string(), z.string()) });
 
 	// The marketplace catalog: provider manifests + whether THIS org can operate each.

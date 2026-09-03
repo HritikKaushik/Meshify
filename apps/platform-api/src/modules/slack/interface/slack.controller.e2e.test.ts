@@ -29,6 +29,10 @@ import { createSlackController } from './slack.controller.js';
 const KEY = 'e2e-org-key-encryption-secret-32chars!!';
 const SLACK_CONFIG = { clientId: 'cid', clientSecret: 'sec', redirectUri: 'https://app.example.com/oauth/slack/callback', secret: KEY };
 const NOW = 2_000_000;
+// Route params are validated as UUIDs before any handler runs, so fixtures must use real ones.
+const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
+const OTHER_PROJECT_ID = '22222222-2222-4222-8222-222222222222';
+const UNKNOWN_ID = '33333333-3333-4333-8333-333333333333';
 const fakeExchange = async () => ({ accessToken: 'xoxb-e2e', teamId: 'T-e2e', teamName: 'E2E Team', botUserId: 'B1', scope: 'channels:history' });
 
 /** Builds a real express app mounting the connectors + slack controllers, with auth stubbed to a fixed org. */
@@ -37,7 +41,7 @@ function buildApp(configured = true) {
 	const workspaces = new InMemorySlackWorkspaceRepository();
 	const channels = new InMemorySlackChannelRepository();
 	const conversations = new InMemorySlackConversationRepository();
-	const projects = new InMemoryProjectRepository({ projects: [buildProject({ id: 'proj-1', orgId: 'org-1' })] });
+	const projects = new InMemoryProjectRepository({ projects: [buildProject({ id: PROJECT_ID, orgId: 'org-1' })] });
 	const getProject = new GetProjectUseCase(projects);
 	const enqueued: unknown[] = [];
 	const queue = { add: async (_n: string, payload: unknown) => void enqueued.push(payload) } as never;
@@ -89,7 +93,7 @@ beforeAll(async () => {
 
 afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
-const P = '/v1/projects/proj-1';
+const P = `/v1/projects/${PROJECT_ID}`;
 
 describe('Slack connector — HTTP e2e (OAuth → channels → select → sync → delete)', () => {
 	it('drives the whole flow over real HTTP', async () => {
@@ -99,7 +103,7 @@ describe('Slack connector — HTTP e2e (OAuth → channels → select → sync �
 		expect((await start.json()).authorizeUrl).toContain('slack.com/oauth/v2/authorize');
 
 		// 2) complete OAuth (signed state for proj-1 + fake code exchange)
-		const state = signState({ projectId: 'proj-1' }, KEY, NOW);
+		const state = signState({ projectId: PROJECT_ID }, KEY, NOW);
 		const complete = await fetch(`${base}${P}/connectors/slack/oauth/complete`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
@@ -148,7 +152,7 @@ describe('Slack connector — HTTP e2e (OAuth → channels → select → sync �
 	});
 
 	it('404s a project owned by another org', async () => {
-		const res = await fetch(`${base}/v1/projects/proj-does-not-exist/connectors`);
+		const res = await fetch(`${base}/v1/projects/${OTHER_PROJECT_ID}/connectors`);
 		expect(res.status).toBe(404);
 	});
 

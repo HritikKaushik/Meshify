@@ -4,7 +4,7 @@ import pg from 'pg';
 import { Redis } from 'ioredis';
 import { Worker } from 'bullmq';
 import { loadEnv } from '@meshify/config';
-import { createLogger } from '@meshify/shared';
+import { createLogger, installProcessGuards } from '@meshify/shared';
 import {
 	PostgresDocumentRepository,
 	PostgresFileRepository,
@@ -90,6 +90,7 @@ const CODE_CHUNK_SIZE = 384; // code default per ROCKETRIDE_PIPELINE_RULES.md (2
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'worker' });
+	installProcessGuards(logger);
 
 	// A managed (non-local) Qdrant requires an API key; without it the ingest
 	// pipeline's Qdrant target is built with no auth, RocketRide can't write vectors,
@@ -380,6 +381,10 @@ async function bootstrap(): Promise<void> {
 	for (const worker of workers) {
 		worker.on('completed', (job) => logger.info({ queue: worker.name, jobId: job.id }, 'job completed'));
 		worker.on('failed', (job, err) => logger.error({ queue: worker.name, jobId: job?.id, err: err.message }, 'job failed'));
+		// BullMQ emits 'error' for lock-renewal and connection failures. Without a
+		// listener Node treats it as an unhandled 'error' event and throws, so a
+		// transient Redis blip used to crash the process and every in-flight job.
+		worker.on('error', (err) => logger.error({ queue: worker.name, err }, 'worker error (connection or lock renewal)'));
 	}
 
 	logger.info({ queues: workers.map((w) => w.name) }, 'worker listening');

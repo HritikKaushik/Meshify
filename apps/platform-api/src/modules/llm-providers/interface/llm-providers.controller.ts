@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import type { Router } from 'express';
+import { createRouter } from '../../../http/router.js';
 import { z } from 'zod';
 import {
 	LlmAuthError,
@@ -72,7 +73,7 @@ export function createLlmProvidersController(deps: {
 	disconnectLlmProvider: DisconnectLlmProviderUseCase;
 	listLlmModels: ListLlmModelsUseCase;
 }): Router {
-	const router = Router();
+	const router = createRouter();
 
 	// Catalog: every provider + this org's config/active state (AI Models cards).
 	router.get('/v1/providers/llm', async (req, res) => {

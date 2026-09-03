@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import type { Router } from 'express';
+import { createRouter } from '../../../http/router.js';
 import type { CheckHealthUseCase } from '../application/check-health.usecase.js';
 
 interface HealthLogger {
@@ -6,7 +7,7 @@ interface HealthLogger {
 }
 
 export function createHealthController(checkHealth: CheckHealthUseCase, logger?: HealthLogger): Router {
-	const router = Router();
+	const router = createRouter();
 
 	// Liveness: process is up, no dependency checks.
 	router.get('/health/live', (_req, res) => {
