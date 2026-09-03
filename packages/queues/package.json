@@ -7,13 +7,15 @@
 	"types": "./dist/index.d.ts",
 	"scripts": {
 		"build": "tsc -b",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
 	},
 	"dependencies": {
 		"bullmq": "^5.28.2"
 	},
 	"devDependencies": {
 		"typescript": "^5.6.3",
-		"@types/node": "^22.9.0"
+		"@types/node": "^22.9.0",
+		"vitest": "^3.2.6"
 	}
 }
