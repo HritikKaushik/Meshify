@@ -1,5 +1,7 @@
 import type { GitHubAppAuth } from './github-app-auth.js';
 
+const API_TIMEOUT_MS = 30_000;
+
 /**
  * App-level GitHub operations keyed by installation id (the provider
  * platform's grain), complementing GitHubRepoClient's owner/repo-scoped reads.
@@ -58,7 +60,7 @@ export class GitHubAppClient {
 	 */
 	async exchangeUserCode(code: string): Promise<string> {
 		if (!this.userOAuth) throw new Error('GitHub App user OAuth (client id/secret) is not configured');
-		const res = await fetch(`${this.oauthBaseUrl}/login/oauth/access_token`, {
+		const res = await fetch(`${this.oauthBaseUrl}/login/oauth/access_token`, { signal: AbortSignal.timeout(API_TIMEOUT_MS),
 			method: 'POST',
 			headers: { accept: 'application/json', 'content-type': 'application/json' },
 			body: JSON.stringify({ client_id: this.userOAuth.clientId, client_secret: this.userOAuth.clientSecret, code }),
@@ -73,7 +75,7 @@ export class GitHubAppClient {
 	async listUserInstallationIds(userToken: string): Promise<Set<string>> {
 		const ids = new Set<string>();
 		for (let page = 1; ; page += 1) {
-			const res = await fetch(`${this.apiBaseUrl}/user/installations?per_page=${PAGE_SIZE}&page=${page}`, {
+			const res = await fetch(`${this.apiBaseUrl}/user/installations?per_page=${PAGE_SIZE}&page=${page}`, { signal: AbortSignal.timeout(API_TIMEOUT_MS),
 				headers: { authorization: `Bearer ${userToken}`, accept: 'application/vnd.github+json' },
 			});
 			if (!res.ok) throw new Error(`GitHub user installations lookup failed: ${res.status}`);
@@ -85,7 +87,7 @@ export class GitHubAppClient {
 
 	/** Fetch an installation of THIS app by id — the callback-verification primitive. Throws on 404 (not our installation). */
 	async getInstallation(installationId: string | number): Promise<GitHubInstallation> {
-		const res = await fetch(`${this.apiBaseUrl}/app/installations/${installationId}`, {
+		const res = await fetch(`${this.apiBaseUrl}/app/installations/${installationId}`, { signal: AbortSignal.timeout(API_TIMEOUT_MS),
 			headers: { authorization: `Bearer ${this.auth.appJwt()}`, accept: 'application/vnd.github+json' },
 		});
 		if (!res.ok) {
@@ -112,7 +114,7 @@ export class GitHubAppClient {
 
 	/** Mint a fresh installation access token (~1h lifetime). Callers own caching (the vault does, DB-shared). */
 	async createInstallationToken(installationId: string | number): Promise<InstallationToken> {
-		const res = await fetch(`${this.apiBaseUrl}/app/installations/${installationId}/access_tokens`, {
+		const res = await fetch(`${this.apiBaseUrl}/app/installations/${installationId}/access_tokens`, { signal: AbortSignal.timeout(API_TIMEOUT_MS),
 			method: 'POST',
 			headers: { authorization: `Bearer ${this.auth.appJwt()}`, accept: 'application/vnd.github+json' },
 		});
@@ -127,7 +129,7 @@ export class GitHubAppClient {
 	async listInstallationRepos(installationToken: string): Promise<InstallationRepo[]> {
 		const repos: InstallationRepo[] = [];
 		for (let page = 1; ; page += 1) {
-			const res = await fetch(`${this.apiBaseUrl}/installation/repositories?per_page=${PAGE_SIZE}&page=${page}`, {
+			const res = await fetch(`${this.apiBaseUrl}/installation/repositories?per_page=${PAGE_SIZE}&page=${page}`, { signal: AbortSignal.timeout(API_TIMEOUT_MS),
 				headers: { authorization: `Bearer ${installationToken}`, accept: 'application/vnd.github+json' },
 			});
 			if (!res.ok) {

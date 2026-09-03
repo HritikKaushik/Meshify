@@ -1,5 +1,7 @@
 import { createSign } from 'node:crypto';
 
+const API_TIMEOUT_MS = 30_000;
+
 /**
  * GitHub App authentication without the octokit dependency tree: mint the
  * app JWT (RS256, ≤10 min lifetime per GitHub's rules), resolve the
@@ -45,7 +47,7 @@ export class GitHubAppAuth {
 
 		const jwt = this.appJwt();
 
-		const installationRes = await fetch(`${this.apiBaseUrl}/repos/${owner}/${repo}/installation`, {
+		const installationRes = await fetch(`${this.apiBaseUrl}/repos/${owner}/${repo}/installation`, { signal: AbortSignal.timeout(API_TIMEOUT_MS),
 			headers: { authorization: `Bearer ${jwt}`, accept: 'application/vnd.github+json' },
 		});
 		if (!installationRes.ok) {
@@ -53,7 +55,7 @@ export class GitHubAppAuth {
 		}
 		const installation = (await installationRes.json()) as { id: number };
 
-		const tokenRes = await fetch(`${this.apiBaseUrl}/app/installations/${installation.id}/access_tokens`, {
+		const tokenRes = await fetch(`${this.apiBaseUrl}/app/installations/${installation.id}/access_tokens`, { signal: AbortSignal.timeout(API_TIMEOUT_MS),
 			method: 'POST',
 			headers: { authorization: `Bearer ${jwt}`, accept: 'application/vnd.github+json' },
 		});

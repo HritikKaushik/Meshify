@@ -1,3 +1,4 @@
+import { withTimeout } from './timeout.js';
 import type { RocketRideClientPool } from './client-pool.js';
 import { buildChatPipeline, buildIngestPipeline } from './pipeline-builder/index.js';
 import type { RocketRidePipeline } from './pipeline-builder/rocketride-pipeline.js';
@@ -111,16 +112,7 @@ export class PipelineRegistry {
 		return token;
 	}
 
-	/** Bounds a RocketRide call so an unresponsive engine surfaces a clear error instead of hanging. */
-	private async withTimeout<T>(op: Promise<T>, label: string): Promise<T> {
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		const timeout = new Promise<never>((_, reject) => {
-			timer = setTimeout(() => reject(new RocketRidePipelineTimeoutError(label, this.opTimeoutMs)), this.opTimeoutMs);
-		});
-		try {
-			return await Promise.race([op, timeout]);
-		} finally {
-			if (timer) clearTimeout(timer);
-		}
+	private withTimeout<T>(op: Promise<T>, label: string): Promise<T> {
+		return withTimeout(op, label, this.opTimeoutMs);
 	}
 }

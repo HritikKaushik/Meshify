@@ -4,6 +4,8 @@ export type { ClientPoolLogger } from './client-pool.js';
 export { PipelineRegistry, RocketRidePipelineTimeoutError } from './pipeline-registry.js';
 
 export { RocketRideRagService } from './rag.service.js';
+export type { RagServiceOptions } from './rag.service.js';
+export { withTimeout } from './timeout.js';
 export { FakeRagService } from './rag.service.fake.js';
 export type { RagPort, ChatAnswer, ChatTurnRequest, ChatHistoryTurn, ChatCitation, RetrievedDocument, IngestFile, IngestResult } from './rag.port.js';
 

@@ -1,6 +1,17 @@
 import { Question } from 'rocketride';
 import type { RocketRideClientPool } from './client-pool.js';
 import type { ChatAnswer, ChatTurnRequest, IngestFile, IngestResult, RagPort } from './rag.port.js';
+import { withTimeout } from './timeout.js';
+
+export interface RagServiceOptions {
+	/** Budget for one chat turn (LLM generation included). Default 2 minutes. */
+	chatTimeoutMs?: number;
+	/** Budget for one ingest batch (up to 25 files: parse, chunk, embed, store). Default 10 minutes. */
+	ingestTimeoutMs?: number;
+}
+
+const DEFAULT_CHAT_TIMEOUT_MS = 120_000;
+const DEFAULT_INGEST_TIMEOUT_MS = 600_000;
 
 interface RocketRideAnswerResponse {
 	answers?: string[];
@@ -19,7 +30,16 @@ function extractByLaneType(response: RocketRideAnswerResponse, laneType: string)
 }
 
 export class RocketRideRagService implements RagPort {
-	constructor(private readonly pool: RocketRideClientPool) { }
+	private readonly chatTimeoutMs: number;
+	private readonly ingestTimeoutMs: number;
+
+	constructor(
+		private readonly pool: RocketRideClientPool,
+		options: RagServiceOptions = {}
+	) {
+		this.chatTimeoutMs = options.chatTimeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS;
+		this.ingestTimeoutMs = options.ingestTimeoutMs ?? DEFAULT_INGEST_TIMEOUT_MS;
+	}
 
 	/**
 	 * `turn.question` is the fully-assembled prompt (instructions + retrieved
@@ -37,7 +57,7 @@ export class RocketRideRagService implements RagPort {
 		}
 
 		const start = performance.now();
-		const response = (await client.chat({ token: pipelineToken, question })) as RocketRideAnswerResponse;
+		const response = (await withTimeout(client.chat({ token: pipelineToken, question }), 'chat', this.chatTimeoutMs)) as RocketRideAnswerResponse;
 		const latencyMs = Math.round(performance.now() - start);
 
 		const answers = extractByLaneType(response, 'answers') as string[] | undefined;
@@ -51,9 +71,13 @@ export class RocketRideRagService implements RagPort {
 	async ingestFiles(pipelineToken: string, files: IngestFile[]): Promise<IngestResult> {
 		const client = await this.pool.getClient();
 
-		const results = await client.sendFiles(
-			files.map((f) => ({ file: bufferToFile(f), mimetype: f.mimeType })),
-			pipelineToken
+		const results = await withTimeout(
+			client.sendFiles(
+				files.map((f) => ({ file: bufferToFile(f), mimetype: f.mimeType })),
+				pipelineToken
+			),
+			`ingest of ${files.length} file(s)`,
+			this.ingestTimeoutMs
 		);
 
 		const errors = results.filter((r) => r.action === 'error').map((r) => r.error ?? `Upload failed for ${r.filepath}`);
