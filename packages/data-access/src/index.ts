@@ -97,3 +97,5 @@ export { PostgresClerkOrgLinkRepository } from './provisioning/postgres-clerk-or
 export { provisionOrgForClerk } from './provisioning/provision-org-for-clerk.js';
 export type { ProvisionOrgForClerkInput } from './provisioning/provision-org-for-clerk.js';
 export { encryptSecret, decryptSecret } from './provisioning/secret-encryption.js';
+export { createPgPool, pgPoolOptions } from './db/pool.js';
+export type { PgPoolSettings } from './db/pool.js';

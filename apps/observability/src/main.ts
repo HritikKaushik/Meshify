@@ -1,7 +1,6 @@
-import pg from 'pg';
 import { loadEnv } from '@meshify/config';
 import { createLogger, installProcessGuards } from '@meshify/shared';
-import { PostgresPipelineRunRepository } from '@meshify/data-access';
+import { PostgresPipelineRunRepository, createPgPool } from '@meshify/data-access';
 import { RocketRideClientPool } from '@meshify/rocketride-gateway';
 import { DapEventHandler } from './dap-event-handler.js';
 import { acquireLeadership } from './leader-election.js';
@@ -20,7 +19,7 @@ async function bootstrap(): Promise<void> {
 	// Block until we're the leader — standbys wait here without subscribing.
 	await acquireLeadership(env.DATABASE_URL, logger);
 
-	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
+	const pgPool = createPgPool({ connectionString: env.DATABASE_URL, max: env.PG_POOL_MAX, statementTimeoutMs: env.PG_STATEMENT_TIMEOUT_MS, applicationName: 'observability' }, logger);
 	const runs = new PostgresPipelineRunRepository(pgPool);
 	const handler = new DapEventHandler(runs, logger);
 

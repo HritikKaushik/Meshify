@@ -1,7 +1,6 @@
 import '@meshify/telemetry'; // MUST be first — instruments http/express/pg before they load
 import express from 'express';
 import { pinoHttp } from 'pino-http';
-import pg from 'pg';
 import { Redis } from 'ioredis';
 import { loadEnv } from '@meshify/config';
 import { createLogger, installProcessGuards } from '@meshify/shared';
@@ -12,7 +11,7 @@ import { CheckHealthUseCase } from './modules/health/application/check-health.us
 import { createHealthController } from './modules/health/interface/health.controller.js';
 import { createErrorHandler } from './http/error-handler.js';
 import { createMetrics } from './modules/observability/metrics.js';
-import { PostgresProjectRepository } from '@meshify/data-access';
+import { PostgresProjectRepository, createPgPool } from '@meshify/data-access';
 import { QdrantCollectionProvisioner } from '@meshify/vector-store';
 import { CreateProjectUseCase } from './modules/projects/application/create-project.usecase.js';
 import { DeleteProjectUseCase } from './modules/projects/application/delete-project.usecase.js';
@@ -141,7 +140,7 @@ async function bootstrap(): Promise<void> {
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'platform-api' });
 	installProcessGuards(logger);
 
-	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
+	const pgPool = createPgPool({ connectionString: env.DATABASE_URL, max: env.PG_POOL_MAX, statementTimeoutMs: env.PG_STATEMENT_TIMEOUT_MS, applicationName: 'platform-api' }, logger);
 	const redis = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 });
 	await redis.connect();
 

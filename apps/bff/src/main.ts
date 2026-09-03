@@ -3,9 +3,9 @@ import express, { Router } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { pinoHttp } from 'pino-http';
-import pg from 'pg';
 import { clerkMiddleware, getAuth } from '@clerk/express';
 import { loadEnv } from '@meshify/config';
+import { createPgPool } from '@meshify/data-access';
 import { createLogger, installProcessGuards } from '@meshify/shared';
 import { requireClerkSession } from './modules/auth/clerk-guard.js';
 import { resolveOrgForClerk } from './modules/auth/resolve-org-for-clerk.js';
@@ -55,7 +55,7 @@ async function bootstrap(): Promise<void> {
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'bff' });
 	installProcessGuards(logger);
 
-	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
+	const pgPool = createPgPool({ connectionString: env.DATABASE_URL, max: env.PG_POOL_MAX, statementTimeoutMs: env.PG_STATEMENT_TIMEOUT_MS, applicationName: 'bff' }, logger);
 
 	const app = express();
 	// Client addresses (the pre-auth limiter, what we forward to platform-api)

@@ -1,6 +1,5 @@
 import '@meshify/telemetry'; // MUST be first — instruments http/express/pg before they load
 import { randomUUID } from 'node:crypto';
-import pg from 'pg';
 import { Redis } from 'ioredis';
 import { Worker } from 'bullmq';
 import { loadEnv } from '@meshify/config';
@@ -28,6 +27,7 @@ import {
 	PostgresProviderRegistrationCredentialRepository,
 	encryptSecret,
 	decryptSecret,
+	createPgPool,
 } from '@meshify/data-access';
 import { ObjectStorageClient } from '@meshify/object-storage';
 import {
@@ -107,7 +107,7 @@ async function bootstrap(): Promise<void> {
 		}
 	}
 
-	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
+	const pgPool = createPgPool({ connectionString: env.DATABASE_URL, max: env.PG_POOL_MAX, statementTimeoutMs: env.PG_STATEMENT_TIMEOUT_MS, applicationName: 'worker' }, logger);
 	const bullRedis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 	// Publishes real-time job progress to Redis Pub/Sub (PUBLISH works on a normal connection, so bullRedis is reused).
 	const jobEvents = new JobEventPublisher(bullRedis);

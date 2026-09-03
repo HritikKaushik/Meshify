@@ -73,8 +73,13 @@ const envSchema = z.object({
 	// proxy's address as the client.
 	TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
 
-	// Postgres
+	// Postgres. PG_POOL_MAX bounds the connections each process opens (four
+	// services x replicas must fit the database's connection limit; Render's
+	// starter plan allows about 97). PG_STATEMENT_TIMEOUT_MS cancels a runaway
+	// query server-side instead of letting it pin a connection.
 	DATABASE_URL: z.string().url(),
+	PG_POOL_MAX: z.coerce.number().int().positive().default(10),
+	PG_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
 	// Redis / BullMQ
 	REDIS_URL: z.string().url(),
