@@ -21,6 +21,9 @@
 # yields, since Render can't interpolate a scheme in front of it). Normalize both
 # to a URL here, once, at config-render time: the map source is the substituted
 # literal, so `default` adds the scheme and the regex branch passes a URL through.
+# A bare short hostname is qualified with the DNS search domain beforehand by
+# docker-entrypoint.d/10-qualify-upstream.envsh: the `resolver` below never applies
+# search domains, which on Render/Kubernetes turns "meshify-bff" into a 502.
 map "${BFF_UPSTREAM}" $bff_upstream {
     default        "http://${BFF_UPSTREAM}";
     "~^https?://"  "${BFF_UPSTREAM}";

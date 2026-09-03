@@ -1,0 +1,41 @@
+#!/bin/sh
+# Qualify a bare upstream hostname with the platform's DNS search domain.
+#
+# nginx's `resolver` looks names up literally: it never applies the search
+# domains from /etc/resolv.conf that libc (and therefore Node, curl, getent)
+# use. On Kubernetes-based platforms - Render included - a service's private
+# hostname is a short name ("meshify-bff") that only resolves through the search
+# path ("meshify-bff.<namespace>.svc.cluster.local"), so nginx logs
+# "could not be resolved (3: Host not found)" and answers 502 while every other
+# process in the same container resolves the name fine. Docker Compose's
+# embedded DNS resolves short names directly (no search domain, nothing to do)
+# and Railway's private hosts are FQDNs (skipped).
+#
+# Sourced (not executed) by the nginx image entrypoint before the envsubst step,
+# so the qualified value is what nginx.conf.template renders. Being sourced is
+# why this uses `return`, never `exit`, and touches no shell options.
+qualify_upstream() {
+	upstream="${BFF_UPSTREAM:-}"
+	[ -n "$upstream" ] || return 0
+	scheme=""
+	rest="$upstream"
+	case "$rest" in
+		http://*|https://*) scheme="${rest%%://*}://"; rest="${rest#*://}" ;;
+	esac
+	host="${rest%%:*}"
+	port=""
+	case "$rest" in *:*) port=":${rest#*:}" ;; esac
+	# Already qualified, an IP literal, or empty: leave it alone.
+	case "$host" in ""|*.*|localhost) return 0 ;; esac
+	for domain in $(awk '/^search/ { $1 = ""; print }' /etc/resolv.conf 2>/dev/null); do
+		if getent hosts "$host.$domain" >/dev/null 2>&1; then
+			BFF_UPSTREAM="${scheme}${host}.${domain}${port}"
+			export BFF_UPSTREAM
+			echo "10-qualify-upstream.envsh: BFF_UPSTREAM host '$host' qualified to '$host.$domain' (nginx's resolver does not use DNS search domains)"
+			return 0
+		fi
+	done
+	return 0
+}
+qualify_upstream
+unset -f qualify_upstream

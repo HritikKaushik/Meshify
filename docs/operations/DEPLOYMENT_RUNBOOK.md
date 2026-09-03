@@ -133,10 +133,17 @@ The Blueprint prompts for it before the web service exists, so enter your best g
    - **`Weak secret(s) rejected in production`** → someone replaced a generated crypto
      key with a placeholder. Use `openssl rand -base64 32`.
    - **BFF `Missing required BFF environment variables: APP_ORIGIN`** → step E.
-   - **502 on `/api/*`** but the SPA loads → the BFF is still deploying, or its
-     `PLATFORM_API_ORIGIN` / the web's `BFF_UPSTREAM` reference is off. Both values
-     are visible on the service's *Environment* tab; the private address of a service
-     is shown under *Connect → Internal*.
+   - **502 on `/api/*`** but the SPA loads → check the web service's logs. `meshify-bff
+     could not be resolved (3: Host not found)` means nginx got the short private
+     hostname (Render's `fromService: host` is the bare service name) and could not
+     qualify it: nginx's `resolver` ignores the DNS search domain
+     (`own-<workspace>.svc.cluster.local`) that every other process uses. The image's
+     `docker-entrypoint.d/10-qualify-upstream.envsh` handles this at startup; if you
+     run an older image, set `BFF_UPSTREAM` on `meshify-web` to
+     `meshify-bff.<search-domain>:3001` (read the search domain from `/etc/resolv.conf`
+     in the service's *Shell* tab). Otherwise the BFF is still deploying, or its
+     `PLATFORM_API_ORIGIN` / the web's `BFF_UPSTREAM` reference is off; both are on the
+     service's *Environment* tab.
 
 ## G. First-deploy verification (smoke tests)
 ```bash
