@@ -6,7 +6,7 @@ import { pinoHttp } from 'pino-http';
 import pg from 'pg';
 import { clerkMiddleware, getAuth } from '@clerk/express';
 import { loadEnv } from '@meshify/config';
-import { createLogger } from '@meshify/shared';
+import { createLogger, installProcessGuards } from '@meshify/shared';
 import { requireClerkSession } from './modules/auth/clerk-guard.js';
 import { resolveOrgForClerk } from './modules/auth/resolve-org-for-clerk.js';
 import { csrfOriginGuard } from './modules/security/csrf-origin-guard.js';
@@ -53,6 +53,7 @@ async function bootstrap(): Promise<void> {
 	const env = loadEnv();
 	const bff = requireBffEnv(env);
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'bff' });
+	installProcessGuards(logger);
 
 	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
 

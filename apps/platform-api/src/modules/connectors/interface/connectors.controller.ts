@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import type { Router } from 'express';
+import { createRouter } from '../../../http/router.js';
 import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
 import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
 import { OrgAdminForbiddenError, requireOrgAdmin } from '../../security/authorization/org-authorization.js';
@@ -17,7 +18,7 @@ export function createConnectorsController(deps: {
 	listConnectors: ListConnectorsUseCase;
 	deleteConnector: DeleteConnectorUseCase;
 }): Router {
-	const router = Router();
+	const router = createRouter();
 	const guard = projectIsolationGuard(deps.getProject);
 
 	router.get('/v1/projects/:projectId/connectors', guard, async (req, res) => {

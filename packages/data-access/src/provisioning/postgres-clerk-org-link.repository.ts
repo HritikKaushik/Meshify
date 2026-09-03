@@ -1,4 +1,4 @@
-import type pg from 'pg';
+import type { Queryable } from '../db/queryable.js';
 import type { ClerkOrgLink } from './clerk-org-link.entity.js';
 import type { ClerkOrgLinkRepository, CreateClerkOrgLinkInput } from './clerk-org-link.repository.js';
 import { decryptSecret, encryptSecret } from './secret-encryption.js';
@@ -14,7 +14,7 @@ interface ClerkOrgLinkRow {
 
 export class PostgresClerkOrgLinkRepository implements ClerkOrgLinkRepository {
 	constructor(
-		private readonly pool: pg.Pool,
+		private readonly pool: Queryable,
 		private readonly encryptionKey: string
 	) {}
 
@@ -32,6 +32,19 @@ export class PostgresClerkOrgLinkRepository implements ClerkOrgLinkRepository {
 
 	async findByClerkOrgId(clerkOrgId: string): Promise<ClerkOrgLink | undefined> {
 		const { rows } = await this.pool.query<ClerkOrgLinkRow>('select * from clerk_org_links where clerk_org_id = $1', [clerkOrgId]);
+		const row = rows[0];
+		return row ? this.toDomain(row) : undefined;
+	}
+
+	async createIfAbsent(input: CreateClerkOrgLinkInput): Promise<ClerkOrgLink | undefined> {
+		const encryptedSecret = encryptSecret(this.encryptionKey, input.apiKeyPlaintext, input.orgId);
+		const { rows } = await this.pool.query<ClerkOrgLinkRow>(
+			`insert into clerk_org_links (clerk_org_id, org_id, api_key_id, encrypted_secret)
+			 values ($1, $2, $3, $4)
+			 on conflict (clerk_org_id) do nothing
+			 returning *`,
+			[input.clerkOrgId, input.orgId, input.apiKeyId, encryptedSecret]
+		);
 		const row = rows[0];
 		return row ? this.toDomain(row) : undefined;
 	}

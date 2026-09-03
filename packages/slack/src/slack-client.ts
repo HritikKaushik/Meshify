@@ -1,5 +1,8 @@
 import type { SlackChannelInfo, SlackMessage, SlackUserInfo } from './types.js';
 
+/** Slack Web API calls are bounded so a stalled socket cannot wedge an ingest job. */
+const API_TIMEOUT_MS = 30_000;
+
 export interface HistoryOptions {
 	/** Slack `ts` lower bound (exclusive-ish) — only messages newer than this are returned. Drives incremental sync. */
 	oldest?: string;
@@ -114,7 +117,7 @@ export class HttpSlackClient implements SlackClient {
 
 	private async call(method: string, token: string, params: Record<string, string>): Promise<SlackApiResponse> {
 		for (let attempt = 0; ; attempt++) {
-			const res = await fetch(`${this.apiBaseUrl}/${method}`, {
+			const res = await fetch(`${this.apiBaseUrl}/${method}`, { signal: AbortSignal.timeout(API_TIMEOUT_MS),
 				method: 'POST',
 				headers: {
 					authorization: `Bearer ${token}`,

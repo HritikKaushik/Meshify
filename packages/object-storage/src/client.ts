@@ -31,6 +31,10 @@ export class ObjectStorageClient {
 			// maximally portable across every S3-alternative, a no-op against real S3.
 			requestChecksumCalculation: 'WHEN_REQUIRED',
 			responseChecksumValidation: 'WHEN_REQUIRED',
+			// Bound every call: the SDK's default is no socket timeout, so a black-holed
+			// connection held a worker slot until BullMQ's stall detection (or nothing)
+			// intervened. Uploads of the 50-100 MB maximum objects fit comfortably.
+			requestHandler: { connectionTimeout: 10_000, requestTimeout: 120_000 },
 		});
 	}
 

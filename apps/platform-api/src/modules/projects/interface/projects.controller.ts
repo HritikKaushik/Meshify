@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import type { Router } from 'express';
+import { createRouter } from '../../../http/router.js';
 import type { CreateProjectUseCase } from '../application/create-project.usecase.js';
 import { OrgNotFoundError } from '../application/create-project.usecase.js';
 import type { DeleteProjectUseCase } from '../application/delete-project.usecase.js';
@@ -32,7 +33,7 @@ export function createProjectsController(deps: {
 	getProjectStats: GetProjectStatsUseCase;
 	listProjects: ListProjectsUseCase;
 }): Router {
-	const router = Router();
+	const router = createRouter();
 
 	router.get('/v1/projects', async (req, res) => {
 		const projects = await deps.listProjects.execute(req.auth!.orgId);

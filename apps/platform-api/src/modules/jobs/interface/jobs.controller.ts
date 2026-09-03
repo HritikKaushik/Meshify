@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import type { Router } from 'express';
+import { createRouter } from '../../../http/router.js';
 import type { JobEvent } from '@meshify/queues';
 import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
 import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
@@ -15,7 +16,7 @@ export function createJobsController(deps: {
 	listProjectJobs: ListProjectJobsUseCase;
 	jobEventStream: JobEventStream;
 }): Router {
-	const router = Router();
+	const router = createRouter();
 	const guard = projectIsolationGuard(deps.getProject);
 
 	// Single job status (back-compat; org-scoped).

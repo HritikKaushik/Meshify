@@ -1,4 +1,6 @@
-import { Router } from 'express';
+import type { Router } from 'express';
+import { requireUuidParams } from '../../../http/require-uuid-params.js';
+import { createRouter } from '../../../http/router.js';
 import { z } from 'zod';
 import type { SlackChannel } from '@meshify/data-access';
 import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
@@ -48,7 +50,7 @@ export function createSlackController(deps: {
 	selectChannels: SelectSlackChannelsUseCase;
 	syncSlack: SyncSlackUseCase;
 }): Router {
-	const router = Router();
+	const router = createRouter();
 	const guard = projectIsolationGuard(deps.getProject);
 
 	// Provider-platform attach: bind an org-level Slack integration to this
@@ -96,7 +98,7 @@ export function createSlackController(deps: {
 		}
 	});
 
-	router.get('/v1/projects/:projectId/connectors/slack/:connectorId/channels', guard, async (req, res) => {
+	router.get('/v1/projects/:projectId/connectors/slack/:connectorId/channels', guard, requireUuidParams('connectorId'), async (req, res) => {
 		try {
 			const channels = await deps.listChannels.execute({ projectId: req.project!.id, connectorId: req.params.connectorId as string });
 			res.status(200).json({ channels: channels.map(toChannel) });
@@ -105,7 +107,7 @@ export function createSlackController(deps: {
 		}
 	});
 
-	router.post('/v1/projects/:projectId/connectors/slack/:connectorId/channels', guard, async (req, res) => {
+	router.post('/v1/projects/:projectId/connectors/slack/:connectorId/channels', guard, requireUuidParams('connectorId'), async (req, res) => {
 		const parsed = selectSchema.safeParse(req.body);
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -119,7 +121,7 @@ export function createSlackController(deps: {
 		}
 	});
 
-	router.post('/v1/projects/:projectId/connectors/slack/:connectorId/sync', guard, async (req, res) => {
+	router.post('/v1/projects/:projectId/connectors/slack/:connectorId/sync', guard, requireUuidParams('connectorId'), async (req, res) => {
 		try {
 			const result = await deps.syncSlack.execute({ projectId: req.project!.id, connectorId: req.params.connectorId as string });
 			res.status(202).json(result);

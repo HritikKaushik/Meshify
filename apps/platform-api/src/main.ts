@@ -4,12 +4,13 @@ import { pinoHttp } from 'pino-http';
 import pg from 'pg';
 import { Redis } from 'ioredis';
 import { loadEnv } from '@meshify/config';
-import { createLogger } from '@meshify/shared';
+import { createLogger, installProcessGuards } from '@meshify/shared';
 import { PostgresChecker } from './modules/health/infrastructure/postgres.checker.js';
 import { RedisChecker } from './modules/health/infrastructure/redis.checker.js';
 import { QdrantChecker } from './modules/health/infrastructure/qdrant.checker.js';
 import { CheckHealthUseCase } from './modules/health/application/check-health.usecase.js';
 import { createHealthController } from './modules/health/interface/health.controller.js';
+import { createErrorHandler } from './http/error-handler.js';
 import { createMetrics } from './modules/observability/metrics.js';
 import { PostgresProjectRepository } from '@meshify/data-access';
 import { QdrantCollectionProvisioner } from '@meshify/vector-store';
@@ -136,6 +137,7 @@ import { ConnectRepositoryFromIntegrationUseCase } from './modules/repositories/
 async function bootstrap(): Promise<void> {
 	const env = loadEnv();
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'platform-api' });
+	installProcessGuards(logger);
 
 	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
 	const redis = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 });
@@ -439,6 +441,11 @@ async function bootstrap(): Promise<void> {
 	);
 	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, attachWorkspace: attachSlackWorkspace, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
 	app.use(createChatController({ getProject, askQuestion, listConversations, updateConversation, deleteConversation, getConversationMessages }));
+
+	// Terminal error middleware — MUST be mounted after every controller. Turns any
+	// error a handler throws or rejects with (routers are built with createRouter,
+	// which forwards rejections here) into one JSON error shape.
+	app.use(createErrorHandler(logger));
 
 	// Railway (and similar PaaS) inject the port to bind as $PORT and probe the
 	// healthcheck there; honor it when present, else the configured PLATFORM_PORT.

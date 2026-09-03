@@ -19,6 +19,8 @@ export interface DocumentRepository {
 	statsByProject(projectId: string): Promise<{ total: number; embedded: number; lastUpdatedAt: Date | null }>;
 	/** Dedupe check: an existing document for this project with the same content, regardless of filename. */
 	findByProjectAndHash(projectId: string, contentHash: string): Promise<Document | undefined>;
+	/** Filenames are unique per project (uq_documents_project_filename): the source path that keys a document's vectors. */
+	findByProjectAndFilename(projectId: string, filename: string): Promise<Document | undefined>;
 	updateStatus(id: string, status: DocumentStatus): Promise<void>;
 	/** Remove the document row. Vector/object-storage cleanup is the caller's responsibility (see DeleteDocumentUseCase). */
 	delete(id: string): Promise<void>;

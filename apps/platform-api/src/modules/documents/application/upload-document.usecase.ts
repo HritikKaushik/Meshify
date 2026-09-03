@@ -18,6 +18,26 @@ export interface UploadDocumentCommand {
 	buffer: Buffer;
 }
 
+/** The request itself is unacceptable (empty, too large, unsupported type) — a 400. */
+export class DocumentValidationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'DocumentValidationError';
+	}
+}
+
+/**
+ * A different document with this filename already exists in the project — a 409.
+ * Filenames are the source path that keys a document's vectors, so two documents
+ * sharing one would be indistinguishable at deletion time (uq_documents_project_filename).
+ */
+export class DocumentFilenameConflictError extends Error {
+	constructor(readonly filename: string, readonly existingDocumentId: string) {
+		super(`A document named "${filename}" already exists in this project — delete it first or rename the file`);
+		this.name = 'DocumentFilenameConflictError';
+	}
+}
+
 export interface UploadDocumentResult {
 	document: Document;
 	jobId: string;
@@ -58,11 +78,16 @@ export class UploadDocumentUseCase {
 	}
 
 	async execute(command: UploadDocumentCommand): Promise<UploadDocumentResult> {
-		if (command.buffer.byteLength === 0) throw new Error('Uploaded file is empty');
-		if (command.buffer.byteLength > MAX_UPLOAD_BYTES) throw new Error(`File exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB inline upload limit`);
-		if (!ALLOWED_MIME_TYPES.has(command.mimeType)) throw new Error(`Unsupported MIME type "${command.mimeType}"`);
+		if (command.buffer.byteLength === 0) throw new DocumentValidationError('Uploaded file is empty');
+		if (command.buffer.byteLength > MAX_UPLOAD_BYTES) throw new DocumentValidationError(`File exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB inline upload limit`);
+		if (!ALLOWED_MIME_TYPES.has(command.mimeType)) throw new DocumentValidationError(`Unsupported MIME type "${command.mimeType}"`);
 
-		const sourceType = sourceTypeFromFilename(command.filename);
+		let sourceType;
+		try {
+			sourceType = sourceTypeFromFilename(command.filename);
+		} catch (err) {
+			throw new DocumentValidationError(err instanceof Error ? err.message : 'Unsupported document type');
+		}
 		const contentHash = createHash('sha256').update(command.buffer).digest('hex');
 
 		const existing = await this.documents.findByProjectAndHash(command.projectId, contentHash);
@@ -71,21 +96,38 @@ export class UploadDocumentUseCase {
 			return { document: existing, jobId: '', deduped: true };
 		}
 
+		// Different content under an existing name would collide on the vector
+		// source path; refuse up front (the unique index is the backstop below).
+		const sameName = await this.documents.findByProjectAndFilename(command.projectId, command.filename);
+		if (sameName && sameName.contentHash !== contentHash) throw new DocumentFilenameConflictError(command.filename, sameName.id);
+
 		const connectorId = await this.ensureDocumentsConnector(command.projectId);
 
 		const id = randomUUID();
 		const objectStorageKey = `projects/${command.projectId}/documents/${id}/${command.filename}`;
 		await this.storage.putObject(objectStorageKey, command.buffer, command.mimeType);
 
-		const document = await this.documents.create({
-			id,
-			projectId: command.projectId,
-			connectorId,
-			sourceType,
-			filename: command.filename,
-			objectStorageKey,
-			contentHash,
-		});
+		let document: Document;
+		try {
+			document = await this.documents.create({
+				id,
+				projectId: command.projectId,
+				connectorId,
+				sourceType,
+				filename: command.filename,
+				objectStorageKey,
+				contentHash,
+			});
+		} catch (err) {
+			// Lost a race with a concurrent upload of the same name: the object we
+			// just stored belongs to no row, so remove it before reporting the clash.
+			if (isUniqueViolation(err)) {
+				await this.storage.deleteObject(objectStorageKey).catch(() => undefined);
+				const winner = await this.documents.findByProjectAndFilename(command.projectId, command.filename);
+				throw new DocumentFilenameConflictError(command.filename, winner?.id ?? 'unknown');
+			}
+			throw err;
+		}
 
 		const pipelineJobId = randomUUID();
 		await this.pipelineJobs.create({
@@ -103,4 +145,10 @@ export class UploadDocumentUseCase {
 
 		return { document, jobId: pipelineJobId, deduped: false };
 	}
+}
+
+/** Postgres unique_violation (SQLSTATE 23505) on the per-project filename index. */
+function isUniqueViolation(err: unknown): boolean {
+	const e = err as { code?: string; constraint?: string };
+	return e?.code === '23505' && (e.constraint === undefined || e.constraint === 'uq_documents_project_filename');
 }

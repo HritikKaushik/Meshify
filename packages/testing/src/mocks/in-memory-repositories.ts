@@ -175,6 +175,10 @@ export class InMemoryDocumentRepository implements DocumentRepository {
 			.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
 	}
 
+	async findByProjectAndFilename(projectId: string, filename: string): Promise<Document | undefined> {
+		return [...this.docs.values()].find((d) => d.projectId === projectId && d.filename === filename);
+	}
+
 	async updateStatus(id: string, status: DocumentStatus): Promise<void> {
 		const d = this.docs.get(id);
 		if (d) this.docs.set(id, { ...d, status });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Chat, ChatRepository, ChatSummary, Message, Project } from '@meshify/data-access';
-import { FakeRagService } from '@meshify/rocketride-gateway';
+import { FakeRagService, RocketRidePipelineTimeoutError } from '@meshify/rocketride-gateway';
 import { AskQuestionUseCase, ChatNotFoundError } from './ask-question.usecase.js';
 import type { ChatPipelineResolver } from './chat-pipeline.port.js';
 import type { ChatContextRetriever } from './chat-context-retriever.port.js';
@@ -177,6 +177,28 @@ describe('AskQuestionUseCase', () => {
 		expect(calls).toBe(2);
 		expect(invalidateCalls).toEqual([PROJECT.id]);
 		expect(chats.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+	});
+
+	it('does not retry a timed-out engine call (a second unbounded wait is not a self-heal)', async () => {
+		const chats = new FakeChatRepository();
+		const rag = new FakeRagService();
+		let calls = 0;
+		rag.ask = async () => {
+			calls += 1;
+			throw new RocketRidePipelineTimeoutError('chat', 5);
+		};
+		let invalidateCount = 0;
+		const resolver: ChatPipelineResolver = {
+			resolve: async () => 'pipeline-token-1',
+			invalidate: () => {
+				invalidateCount += 1;
+			},
+		};
+		const usecase = new AskQuestionUseCase(chats, rag, resolver, NO_CONTEXT);
+
+		await expect(usecase.execute({ project: PROJECT, question: 'Slow?' })).rejects.toBeInstanceOf(RocketRidePipelineTimeoutError);
+		expect(calls).toBe(1);
+		expect(invalidateCount).toBe(0);
 	});
 
 	it('propagates the error when the retry also fails, without a second invalidate', async () => {

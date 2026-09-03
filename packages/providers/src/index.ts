@@ -60,7 +60,7 @@ export { executeSlackSync } from './slack/sync.js';
 export type { SlackSyncDeps } from './slack/sync.js';
 export { scanExtractedRepo, detectLanguage, hashContent, isBinaryBuffer, isDeniedPath } from './github/archive/repo-scanner.js';
 export type { ScannedFile } from './github/archive/repo-scanner.js';
-export { withExtractedArchive } from './github/archive/archive-extractor.js';
+export { withExtractedArchive, ArchiveBudgetExceededError, ARCHIVE_LIMITS } from './github/archive/archive-extractor.js';
 export { groupConversations } from './slack/conversation-grouper.js';
 
 // Catalog

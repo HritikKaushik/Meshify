@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { z } from 'zod';
 import type { Project } from '@meshify/data-access';
 import type { GetProjectUseCase } from '../application/get-project.usecase.js';
 
@@ -23,6 +24,8 @@ declare global {
  * probe which project ids exist across tenant boundaries. Requires authGuard
  * to have run first (`req.auth`).
  */
+const UUID = z.string().uuid();
+
 export function projectIsolationGuard(getProject: GetProjectUseCase) {
 	return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 		if (!req.auth) {
@@ -35,14 +38,26 @@ export function projectIsolationGuard(getProject: GetProjectUseCase) {
 			res.status(400).json({ error: 'projectId route parameter is required' });
 			return;
 		}
-
-		const project = await getProject.execute(projectId);
-		if (!project || project.orgId !== req.auth.orgId) {
-			res.status(404).json({ error: `Project "${projectId}" not found` });
+		// Refuse malformed ids before they reach Postgres: compared against a uuid
+		// column they raise "invalid input syntax", and an error thrown from an
+		// async middleware used to escape Express 4 entirely and kill the process.
+		if (!UUID.safeParse(projectId).success) {
+			res.status(400).json({ error: 'Invalid "projectId" — expected a UUID' });
 			return;
 		}
 
-		req.project = project;
-		next();
+		try {
+			const project = await getProject.execute(projectId);
+			if (!project || project.orgId !== req.auth.orgId) {
+				res.status(404).json({ error: `Project "${projectId}" not found` });
+				return;
+			}
+			req.project = project;
+			next();
+		} catch (err) {
+			// Hand infrastructure failures to the terminal error middleware (500 JSON)
+			// rather than letting the rejection escape.
+			next(err);
+		}
 	};
 }

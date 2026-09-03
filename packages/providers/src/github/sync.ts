@@ -1,5 +1,6 @@
 import type { Repository } from '@meshify/data-access';
 import { parseGitHubUrl } from '@meshify/data-access';
+import { CompareTooLargeError } from '@meshify/github';
 import type { IntegrationContext } from '../base/context.js';
 import type { KnowledgeItem, KnowledgeSink } from '../base/knowledge.js';
 import type { SyncContext } from '../base/sync.js';
@@ -26,6 +27,8 @@ export interface GitHubSyncDeps {
 	files: {
 		upsert(input: { id: string; projectId: string; repositoryId: string; path: string; language: string | null; sizeBytes: number; contentHash: string }): Promise<unknown>;
 		markDeleted(repositoryId: string, paths: string[]): Promise<void>;
+		/** Lets a full sync retire rows (and vectors) for files no longer in the tree. Optional for callers that cannot list. */
+		listByRepository?(repositoryId: string): Promise<Array<{ path: string; status: string }>>;
 	};
 	/** Builds the token-bearing transport for one integration (vault-backed installation token). */
 	repoTransport(ctx: IntegrationContext): GitHubRepoTransport;
@@ -113,6 +116,18 @@ async function fullSync(deps: GitHubSyncDeps, ctx: SyncContext, sink: KnowledgeS
 	sink.progress('Embedding repository', 50);
 	await sink.upsert(scanned.map((file) => toItem(file.path, file.buffer, file.contentHash, file.language)));
 
+	// Files that left the tree since the last sync: retire their rows and purge
+	// their vectors, so a full re-ingest (also the fallback for oversized diffs)
+	// never leaves deleted files citable.
+	if (deps.files.listByRepository) {
+		const present = new Set(scanned.map((file) => file.path));
+		const gone = (await deps.files.listByRepository(repository.id)).filter((row) => row.status !== 'deleted' && !present.has(row.path)).map((row) => row.path);
+		if (gone.length > 0) {
+			await deps.files.markDeleted(repository.id, gone);
+			await sink.remove(gone);
+		}
+	}
+
 	// Cursor commit strictly after the embed barrier — a failed flush must retry
 	// from the previous commit, never skip content.
 	await sink.flush();
@@ -131,7 +146,19 @@ async function incrementalSync(deps: GitHubSyncDeps, ctx: SyncContext, sink: Kno
 	sink.progress('Comparing changes', 20);
 	await deps.repos.updateSyncStatus(repository.id, 'cloning');
 	const transport = deps.repoTransport(ctx);
-	const changes = await transport.compare(owner, name, repository.lastSyncedCommit, head.headSha);
+	let changes: Awaited<ReturnType<GitHubRepoTransport['compare']>>;
+	try {
+		changes = await transport.compare(owner, name, repository.lastSyncedCommit, head.headSha);
+	} catch (err) {
+		if (err instanceof CompareTooLargeError) {
+			// The diff is truncated by GitHub; syncing it would silently drop files
+			// past the cut-off and then advance the cursor over them. Re-ingest.
+			sink.progress('Too many changes for an incremental sync — re-ingesting the repository', 25);
+			await fullSync(deps, ctx, sink, target);
+			return;
+		}
+		throw err;
+	}
 
 	const removedPaths = changes.filter((c) => c.status === 'removed').map((c) => c.path);
 	const renamedFromPaths = changes.filter((c) => c.status === 'renamed' && c.previousPath).map((c) => c.previousPath!);
