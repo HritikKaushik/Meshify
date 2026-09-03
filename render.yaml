@@ -157,6 +157,9 @@ services:
         value: "3001"
       - key: OTEL_SERVICE_NAME
         value: bff
+      # X-Forwarded-For hops the BFF trusts: Render's load balancer + the web nginx.
+      - key: TRUST_PROXY_HOPS
+        value: "2"
       # `<api-host>:3000` - packages/config normalizes it to http://<api-host>:3000.
       - key: PLATFORM_API_ORIGIN
         fromService:

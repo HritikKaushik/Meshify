@@ -18,19 +18,24 @@ related:
 The provider platform adds no new services. It needs, on top of the base stack
 (Postgres, Redis, Qdrant, S3, RocketRide):
 
-1. **A public ingress to `platform-api`** for `/v1/integrations/webhooks/*`
-   (providers must reach it). Only platform-api is internet-facing; the BFF and
-   web stay private. Ensure the ingress does **not** buffer or rewrite the
-   webhook request body (signatures cover raw bytes) and passes SSE unbuffered
-   (`X-Accel-Buffering: no` is set by the app).
+1. **A public route for webhook deliveries.** `platform-api` stays private in
+   every supported deployment; the BFF exposes
+   `/api/v1/integrations/webhooks/*` on the public app origin and streams the
+   delivery through to `platform-api` untouched (no session, CSRF, or credential
+   handling on that path - the API verifies the provider signature over the raw
+   bytes itself). Any ingress in front of the BFF must therefore **not** buffer
+   or rewrite request bodies on that path, and must pass SSE unbuffered
+   (`X-Accel-Buffering: no` is set by the app). The web nginx shipped in
+   `apps/web` already satisfies both.
 2. **Managed provider apps**, created once by the operator (never by customers):
    - GitHub App → `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`,
      `GITHUB_APP_WEBHOOK_SECRET`. Its webhook URL →
-     `https://<api-host>/api/v1/integrations/webhooks/github`.
+     `https://<app-host>/api/v1/integrations/webhooks/github` (the public app
+     origin, e.g. `https://meshify-web.onrender.com`).
    - Slack app → `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_REDIRECT_URI`
      (→ the web `/oauth/slack/callback` or generic `/oauth/:provider/callback`),
      `SLACK_SIGNING_SECRET`. Events request URL →
-     `https://<api-host>/api/v1/integrations/webhooks/slack`.
+     `https://<app-host>/api/v1/integrations/webhooks/slack`.
    - Any provider left unconfigured simply shows as "not configured" in the
      marketplace — the platform boots fine without it.
 3. **`INTEGRATION_ENCRYPTION_KEY`** (≥32 chars) — encrypts all integration and

@@ -11,7 +11,7 @@ import { requireClerkSession } from './modules/auth/clerk-guard.js';
 import { resolveOrgForClerk } from './modules/auth/resolve-org-for-clerk.js';
 import { csrfOriginGuard } from './modules/security/csrf-origin-guard.js';
 import { maxBodySize } from './modules/security/max-body-size.js';
-import { createHealthProxy, createPlatformApiProxy } from './modules/proxy/platform-proxy.js';
+import { createHealthProxy, createPlatformApiProxy, createWebhookProxy } from './modules/proxy/platform-proxy.js';
 
 /** Fields the shared env schema marks optional (other apps don't need them) but this app requires. */
 function requireBffEnv(env: ReturnType<typeof loadEnv>) {
@@ -58,6 +58,10 @@ async function bootstrap(): Promise<void> {
 	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
 
 	const app = express();
+	// Client addresses (the pre-auth limiter, what we forward to platform-api)
+	// come from X-Forwarded-For; trust exactly the configured hops in front of
+	// this process (Render: web nginx + load balancer = 2).
+	app.set('trust proxy', env.TRUST_PROXY_HOPS);
 	app.use(pinoHttp({ logger }));
 
 	// Security headers (defense-in-depth). The BFF serves API/proxy responses, not
@@ -85,6 +89,26 @@ async function bootstrap(): Promise<void> {
 	// and platform-api's 50MB multer limit) before streaming anything downstream.
 	app.use('/api/v1', maxBodySize(50 * 1024 * 1024));
 
+	// Pre-auth address limiter: unauthenticated floods (or a scripted client with
+	// no session) are cut off here, before they cost a Clerk session
+	// verification or reach the public webhook passthrough. Generous - a real
+	// user never gets near it - and per address, so it only ever bites one source.
+	app.use(
+		'/api/v1',
+		rateLimit({
+			windowMs: 60_000,
+			limit: 1200,
+			standardHeaders: 'draft-7',
+			legacyHeaders: false,
+			message: { error: 'Rate limit exceeded' },
+		})
+	);
+
+	// Provider webhook deliveries: public, streamed through raw to platform-api,
+	// which verifies the provider signature itself. Mounted BEFORE the CSRF
+	// guard (server-to-server POSTs carry no Origin) and before Clerk.
+	app.use('/api/v1/integrations/webhooks', createWebhookProxy(bff.platformApiOrigin));
+
 	// CSRF guard runs BEFORE Clerk so a forged cross-origin write is rejected with
 	// 403 without spending any auth work on it. Safe methods pass straight through.
 	app.use('/api/v1', csrfOriginGuard(bff.allowedOrigins));
@@ -105,9 +129,10 @@ async function bootstrap(): Promise<void> {
 	// streamed straight through to platform-api. No express.json()/multer here:
 	// this must stay a raw passthrough so multipart uploads aren't buffered.
 	// Per-user edge rate limit, keyed by the Clerk user id (mounted AFTER
-	// requireClerkSession, so the key is always the authenticated user — never a
-	// spoofable IP). In-process store: fine for a single BFF instance; front
-	// multiple replicas with a shared store (e.g. rate-limit-redis) when scaling.
+	// requireClerkSession, so the key is always the authenticated user). The
+	// store is per process; the authoritative per-user and per-org limits live in
+	// platform-api on Redis, so this is only a local backstop and needs no
+	// shared store when the BFF scales out.
 	const edgeRateLimit = rateLimit({
 		windowMs: 60_000,
 		limit: 600,

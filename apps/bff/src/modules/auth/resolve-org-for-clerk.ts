@@ -8,7 +8,7 @@ declare global {
 	// eslint-disable-next-line @typescript-eslint/no-namespace
 	namespace Express {
 		interface Request {
-			meshify?: { meshifyOrgId: string; apiKey: string; orgRole: 'admin' | 'member' };
+			meshify?: { meshifyOrgId: string; apiKey: string; orgRole: 'admin' | 'member'; userId: string };
 		}
 	}
 }
@@ -58,7 +58,7 @@ export function resolveOrgForClerk(deps: ResolveOrgForClerkDeps) {
 		try {
 			const existing = await links.findByClerkOrgId(clerkOrgId);
 			if (existing) {
-				req.meshify = { meshifyOrgId: existing.orgId, apiKey: existing.apiKeyPlaintext, orgRole };
+				req.meshify = { meshifyOrgId: existing.orgId, apiKey: existing.apiKeyPlaintext, orgRole, userId: auth.userId };
 				next();
 				return;
 			}
@@ -72,7 +72,7 @@ export function resolveOrgForClerk(deps: ResolveOrgForClerkDeps) {
 				encryptionKey: deps.encryptionKey,
 			});
 			deps.logger.info({ clerkOrgId, meshifyOrgId: link.orgId }, 'auto-provisioned Meshify org for new Clerk organization');
-			req.meshify = { meshifyOrgId: link.orgId, apiKey: link.apiKeyPlaintext, orgRole };
+			req.meshify = { meshifyOrgId: link.orgId, apiKey: link.apiKeyPlaintext, orgRole, userId: auth.userId };
 			next();
 		} catch (err) {
 			deps.logger.error({ err, clerkOrgId }, 'failed to resolve/provision Meshify org for Clerk session');
