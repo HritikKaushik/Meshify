@@ -118,7 +118,15 @@ The Blueprint prompts for it before the web service exists, so enter your best g
    a Postgres advisory lock, so the four services running it at the same time serialize
    (one applies, the others wait and skip). Watch each service's **Logs → pre-deploy**
    if a deploy fails at that stage.
-4. Common first-deploy failures:
+4. If the first sync **fails** (it will, until step 3b is done), later resources in
+   the plan are *canceled*, not created. Run **Manual sync** on the Blueprint and
+   **Approve** its plan to create them. Values you typed on the original form are
+   applied only by that first sync: a service created by a later sync comes up
+   **without** its prompted values, so add them on the service's *Environment* tab
+   (`meshify-bff`: `APP_ORIGIN`, `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`;
+   `meshify-web`: `VITE_CLERK_PUBLISHABLE_KEY`, a build-time value, so redeploy to
+   rebuild) and *Manual Deploy* it.
+5. Common first-deploy failures:
    - **`Invalid environment configuration`** in a Node service's logs → a prompted value
      is malformed (e.g. `QDRANT_URL` without `https://`, an `S3_REGION` of `auto`).
      Fix it in *Environment Groups → meshify-backend* and redeploy.
