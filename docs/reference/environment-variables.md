@@ -46,6 +46,7 @@ root). Keep secrets in the root `.env` (git-ignored); commit only `.env.example`
 | `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | bff | Session verification |
 | `PLATFORM_API_KEY_PEPPER` | api | HMAC pepper for API-key hashing |
 | `ORG_KEY_ENCRYPTION_KEY` | bff, api, worker | Encrypts org API keys at rest; also signs Slack OAuth `state` + encrypts Slack tokens |
+| `METRICS_TOKEN` | api, worker | Bearer token the scraper sends to `/metrics`; at least 16 chars, required in production (empty leaves `/metrics` open in dev only) |
 | `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_SEC` | api | Requests per window per end user (BFF traffic) or per API key (direct callers) |
 | `RATE_LIMIT_KEY_MAX` | api | Ceiling per window across every user sharing one API key (default 1200) |
 | `PIPELINE_RUN_RETENTION_DAYS`, `AUDIT_LOG_RETENTION_DAYS` | worker | Daily retention sweeps: pipeline runs/traces (default 30) and audit log entries (default 365) older than this are deleted |

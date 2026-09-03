@@ -15,9 +15,13 @@ const envSchema = z.object({
 	// a key the BFF minted.
 	PLATFORM_API_KEY_PEPPER: z.string().min(16, 'PLATFORM_API_KEY_PEPPER must be at least 16 chars'),
 	PLATFORM_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-	// Gates the Prometheus /metrics endpoint. Set in production and configure the
-	// same bearer token on the scraper; unset leaves /metrics open (dev only).
-	METRICS_TOKEN: z.string().optional(),
+	// Gates the Prometheus /metrics endpoint: the scraper sends it as a bearer
+	// token. Required in production (enforced below); unset or empty leaves
+	// /metrics open, which is only acceptable in development.
+	METRICS_TOKEN: z.preprocess(
+		(value) => (value === '' ? undefined : value),
+		z.string().min(16, 'METRICS_TOKEN must be at least 16 chars (generate with `openssl rand -base64 32`)').optional()
+	),
 	// Port for the worker's own metrics/health HTTP server (the worker otherwise
 	// has no HTTP surface). Scraped for queue-depth + process metrics.
 	WORKER_METRICS_PORT: z.coerce.number().int().positive().default(9091),
@@ -188,6 +192,18 @@ function assertStrongProductionSecrets(env: Env): void {
 	}
 }
 
+/**
+ * /metrics exposes process internals and queue depths; in production it must
+ * never be open. The Blueprint and the Kubernetes secrets template both set
+ * the token - a missing value means a deployment that forgot to.
+ */
+function assertProductionMetricsToken(env: Env): void {
+	if (env.NODE_ENV !== 'production') return;
+	if (!env.METRICS_TOKEN) {
+		throw new Error('METRICS_TOKEN is required in production: it gates the Prometheus /metrics endpoint (generate with `openssl rand -base64 32`).');
+	}
+}
+
 let cached: Env | undefined;
 
 /**
@@ -204,6 +220,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
 	}
 
 	assertStrongProductionSecrets(result.data);
+	assertProductionMetricsToken(result.data);
 
 	cached = result.data;
 	return cached;
