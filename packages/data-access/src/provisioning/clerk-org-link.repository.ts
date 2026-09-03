@@ -11,4 +11,10 @@ export interface CreateClerkOrgLinkInput {
 export interface ClerkOrgLinkRepository {
 	findByClerkOrgId(clerkOrgId: string): Promise<ClerkOrgLink | undefined>;
 	create(input: CreateClerkOrgLinkInput): Promise<ClerkOrgLink>;
+	/**
+	 * Inserts the link unless one already exists for `clerkOrgId`, in which case it
+	 * returns undefined without touching the row (`on conflict do nothing`). Lets a
+	 * provisioning transaction detect that it lost a first-sign-in race.
+	 */
+	createIfAbsent(input: CreateClerkOrgLinkInput): Promise<ClerkOrgLink | undefined>;
 }

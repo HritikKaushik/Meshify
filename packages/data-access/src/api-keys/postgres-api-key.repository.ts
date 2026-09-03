@@ -1,4 +1,4 @@
-import type pg from 'pg';
+import type { Queryable } from '../db/queryable.js';
 import type { ApiKey } from './api-key.entity.js';
 import type { ActiveApiKey, ApiKeyRepository, CreateApiKeyInput } from './api-key.repository.js';
 
@@ -29,7 +29,7 @@ function toDomain(row: ApiKeyRow): ApiKey {
 }
 
 export class PostgresApiKeyRepository implements ApiKeyRepository {
-	constructor(private readonly pool: pg.Pool) {}
+	constructor(private readonly pool: Queryable) {}
 
 	async create(input: CreateApiKeyInput): Promise<ApiKey> {
 		const { rows } = await this.pool.query<ApiKeyRow>(
