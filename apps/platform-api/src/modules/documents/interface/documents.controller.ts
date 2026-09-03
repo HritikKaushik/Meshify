@@ -1,4 +1,6 @@
-import { Router } from 'express';
+import type { Router } from 'express';
+import { DocumentFilenameConflictError, DocumentValidationError } from '../application/upload-document.usecase.js';
+import { createRouter } from '../../../http/router.js';
 import multer from 'multer';
 import type { Document } from '@meshify/data-access';
 import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
@@ -29,7 +31,7 @@ export function createDocumentsController(deps: {
 	deleteDocument: DeleteDocumentUseCase;
 	getDocumentContent: GetDocumentContentUseCase;
 }): Router {
-	const router = Router();
+	const router = createRouter();
 	const guard = projectIsolationGuard(deps.getProject);
 
 	// List a project's ingested documents (newest first) for the Documents screen.
@@ -59,7 +61,17 @@ export function createDocumentsController(deps: {
 				deduped: result.deduped,
 			});
 		} catch (err) {
-			res.status(400).json({ error: err instanceof Error ? err.message : 'Upload failed' });
+			if (err instanceof DocumentValidationError) {
+				res.status(400).json({ error: err.message });
+				return;
+			}
+			if (err instanceof DocumentFilenameConflictError) {
+				res.status(409).json({ error: err.message, existingDocumentId: err.existingDocumentId });
+				return;
+			}
+			// Storage/database/queue failures are not the client's fault: let the
+			// terminal error middleware answer 500 and log the cause.
+			throw err;
 		}
 	});
 

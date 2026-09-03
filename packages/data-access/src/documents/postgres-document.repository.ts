@@ -78,6 +78,12 @@ export class PostgresDocumentRepository implements DocumentRepository {
 		return row ? toDomain(row) : undefined;
 	}
 
+	async findByProjectAndFilename(projectId: string, filename: string): Promise<Document | undefined> {
+		const { rows } = await this.pool.query<DocumentRow>('select * from documents where project_id = $1 and filename = $2 limit 1', [projectId, filename]);
+		const row = rows[0];
+		return row ? toDomain(row) : undefined;
+	}
+
 	async updateStatus(id: string, status: DocumentStatus): Promise<void> {
 		await this.pool.query('update documents set status = $2, updated_at = now() where id = $1', [id, status]);
 	}
