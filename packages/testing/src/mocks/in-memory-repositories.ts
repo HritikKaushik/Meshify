@@ -349,6 +349,10 @@ export class InMemoryProjectRepository implements ProjectRepository {
 		return [...this.projects.values()].filter((p) => p.orgId === orgId);
 	}
 
+	async listAll(): Promise<Project[]> {
+		return [...this.projects.values()];
+	}
+
 	async delete(id: string): Promise<void> {
 		this.projects.delete(id);
 	}

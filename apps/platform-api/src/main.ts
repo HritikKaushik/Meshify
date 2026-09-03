@@ -16,6 +16,7 @@ import { PostgresProjectRepository } from '@meshify/data-access';
 import { QdrantCollectionProvisioner } from '@meshify/vector-store';
 import { CreateProjectUseCase } from './modules/projects/application/create-project.usecase.js';
 import { DeleteProjectUseCase } from './modules/projects/application/delete-project.usecase.js';
+import { reconcileQdrantPayloadIndexes } from './modules/projects/application/reconcile-qdrant-indexes.js';
 import { GetProjectUseCase } from './modules/projects/application/get-project.usecase.js';
 import { GetProjectStatsUseCase } from './modules/projects/application/get-project-stats.usecase.js';
 import { ListProjectsUseCase } from './modules/projects/application/list-projects.usecase.js';
@@ -474,6 +475,13 @@ async function bootstrap(): Promise<void> {
 	const server = app.listen(port, '::', () => {
 		logger.info({ port }, 'platform-api listening');
 	});
+
+	// Backfill payload indexes on collections provisioned before they existed
+	// (idempotent, best-effort, off the request path).
+	void reconcileQdrantPayloadIndexes(projectRepository, qdrantProvisioner, logger).then(
+		(result) => logger.info(result, 'Qdrant payload index reconcile finished'),
+		(err: unknown) => logger.warn({ err }, 'Qdrant payload index reconcile failed')
+	);
 
 	const shutdown = async (signal: string) => {
 		logger.info({ signal }, 'shutting down');
