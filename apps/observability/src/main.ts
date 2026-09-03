@@ -1,5 +1,5 @@
 import { loadEnv } from '@meshify/config';
-import { createLogger, installProcessGuards } from '@meshify/shared';
+import { createLogger, installGracefulShutdown, installProcessGuards } from '@meshify/shared';
 import { PostgresPipelineRunRepository, createPgPool } from '@meshify/data-access';
 import { RocketRideClientPool } from '@meshify/rocketride-gateway';
 import { DapEventHandler } from './dap-event-handler.js';
@@ -29,15 +29,14 @@ async function bootstrap(): Promise<void> {
 	await pool.subscribeAllTasks(['task', 'summary', 'flow', 'output', 'sse']);
 	logger.info({}, 'observability ingester subscribed to all tasks');
 
-	const shutdown = async (signal: string) => {
-		logger.info({ signal }, 'shutting down');
-		await pool.shutdown();
-		await pgPool.end();
-		process.exit(0);
-	};
-
-	process.on('SIGTERM', () => void shutdown('SIGTERM'));
-	process.on('SIGINT', () => void shutdown('SIGINT'));
+	installGracefulShutdown({
+		logger,
+		timeoutMs: 20_000,
+		steps: [
+			{ name: 'rocketride subscription', run: () => pool.shutdown() },
+			{ name: 'postgres', run: () => pgPool.end() },
+		],
+	});
 }
 
 bootstrap().catch((err) => {

@@ -3,7 +3,7 @@ import express from 'express';
 import { pinoHttp } from 'pino-http';
 import { Redis } from 'ioredis';
 import { loadEnv } from '@meshify/config';
-import { createLogger, installProcessGuards } from '@meshify/shared';
+import { closeHttpServer, createLogger, installGracefulShutdown, installProcessGuards } from '@meshify/shared';
 import { PostgresChecker } from './modules/health/infrastructure/postgres.checker.js';
 import { RedisChecker } from './modules/health/infrastructure/redis.checker.js';
 import { QdrantChecker } from './modules/health/infrastructure/qdrant.checker.js';
@@ -482,21 +482,20 @@ async function bootstrap(): Promise<void> {
 		(err: unknown) => logger.warn({ err }, 'Qdrant payload index reconcile failed')
 	);
 
-	const shutdown = async (signal: string) => {
-		logger.info({ signal }, 'shutting down');
-		server.close();
-		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close(), sourceSyncQueue.close(), webhookEventsQueue.close()]);
-		await rocketridePool.shutdown();
-		await redis.quit();
-		await bullRedis.quit();
-		await jobEventsRedis.quit();
-		await platformEventsRedis.quit();
-		await pgPool.end();
-		process.exit(0);
-	};
-
-	process.on('SIGTERM', () => void shutdown('SIGTERM'));
-	process.on('SIGINT', () => void shutdown('SIGINT'));
+	// Orderly rollout: stop accepting requests and drain in-flight ones (SSE
+	// streams are cut after the drain window), then close the clients. Bounded
+	// so a wedged dependency cannot hold the old instance past Render's grace.
+	installGracefulShutdown({
+		logger,
+		timeoutMs: 25_000,
+		steps: [
+			{ name: 'http server', run: () => closeHttpServer(server, { drainMs: 10_000 }) },
+			{ name: 'queues', run: () => Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close(), sourceSyncQueue.close(), webhookEventsQueue.close()]) },
+			{ name: 'rocketride', run: () => rocketridePool.shutdown() },
+			{ name: 'redis', run: () => Promise.all([redis.quit(), bullRedis.quit(), jobEventsRedis.quit(), platformEventsRedis.quit()]) },
+			{ name: 'postgres', run: () => pgPool.end() },
+		],
+	});
 }
 
 bootstrap().catch((err) => {

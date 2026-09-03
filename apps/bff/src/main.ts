@@ -6,7 +6,7 @@ import { pinoHttp } from 'pino-http';
 import { clerkMiddleware, getAuth } from '@clerk/express';
 import { loadEnv } from '@meshify/config';
 import { createPgPool } from '@meshify/data-access';
-import { createLogger, installProcessGuards } from '@meshify/shared';
+import { closeHttpServer, createLogger, installGracefulShutdown, installProcessGuards } from '@meshify/shared';
 import { requireClerkSession } from './modules/auth/clerk-guard.js';
 import { resolveOrgForClerk } from './modules/auth/resolve-org-for-clerk.js';
 import { csrfOriginGuard } from './modules/security/csrf-origin-guard.js';
@@ -160,15 +160,16 @@ async function bootstrap(): Promise<void> {
 		logger.info({ port }, 'bff listening');
 	});
 
-	const shutdown = async (signal: string) => {
-		logger.info({ signal }, 'shutting down');
-		server.close();
-		await pgPool.end();
-		process.exit(0);
-	};
-
-	process.on('SIGTERM', () => void shutdown('SIGTERM'));
-	process.on('SIGINT', () => void shutdown('SIGINT'));
+	// Drain in-flight proxied requests (uploads, SSE) before closing, bounded
+	// below Render's 30s shutdown grace for this service.
+	installGracefulShutdown({
+		logger,
+		timeoutMs: 25_000,
+		steps: [
+			{ name: 'http server', run: () => closeHttpServer(server, { drainMs: 15_000 }) },
+			{ name: 'postgres', run: () => pgPool.end() },
+		],
+	});
 }
 
 bootstrap().catch((err) => {

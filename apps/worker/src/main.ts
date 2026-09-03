@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Redis } from 'ioredis';
 import { Worker } from 'bullmq';
 import { loadEnv } from '@meshify/config';
-import { createLogger, installProcessGuards } from '@meshify/shared';
+import { createLogger, installGracefulShutdown, installProcessGuards } from '@meshify/shared';
 import {
 	PostgresDocumentRepository,
 	PostgresFileRepository,
@@ -417,20 +417,23 @@ async function bootstrap(): Promise<void> {
 	});
 	logger.info({ port: env.WORKER_METRICS_PORT }, 'worker metrics listening');
 
-	const shutdown = async (signal: string) => {
-		logger.info({ signal }, 'shutting down');
-		await metricsServer.close();
-		await Promise.all(workers.map((w) => w.close()));
-		await sourceSyncQueue.close();
-		await maintenanceQueue.close();
-		await clientPool.shutdown();
-		await bullRedis.quit();
-		await pgPool.end();
-		process.exit(0);
-	};
-
-	process.on('SIGTERM', () => void shutdown('SIGTERM'));
-	process.on('SIGINT', () => void shutdown('SIGINT'));
+	// Workers first: Worker.close() stops taking jobs and waits for the active
+	// ones, so an ingest in progress finishes (or checkpoints) instead of being
+	// torn down and retried from scratch. The metrics/health server stays up
+	// until the end so the drain remains observable. Bounded below Render's
+	// 120s shutdown grace for this service.
+	installGracefulShutdown({
+		logger,
+		timeoutMs: 110_000,
+		steps: [
+			{ name: 'workers', run: () => Promise.all(workers.map((w) => w.close())) },
+			{ name: 'queues', run: () => Promise.all([sourceSyncQueue.close(), maintenanceQueue.close()]) },
+			{ name: 'rocketride', run: () => clientPool.shutdown() },
+			{ name: 'redis', run: () => bullRedis.quit() },
+			{ name: 'postgres', run: () => pgPool.end() },
+			{ name: 'metrics server', run: () => metricsServer.close() },
+		],
+	});
 }
 
 bootstrap().catch((err) => {
