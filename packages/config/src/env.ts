@@ -25,7 +25,16 @@ const envSchema = z.object({
 	// BFF (Clerk session proxy — apps/bff). Optional here so platform-api/worker
 	// aren't forced to set them; apps/bff validates its own required-ness at boot.
 	BFF_PORT: z.coerce.number().int().positive().default(3001),
-	PLATFORM_API_ORIGIN: z.string().url().optional(),
+	// Where the BFF reaches platform-api. Accepts a full URL (http://platform-api:3000)
+	// or a bare `host:port`, which is defaulted to http:// - that is the form a Render
+	// Blueprint `fromService: hostport` reference yields, and Render can't prepend a
+	// scheme itself. Private networks are plain HTTP, hence http (unlike S3_ENDPOINT).
+	PLATFORM_API_ORIGIN: z
+		.string()
+		.min(1)
+		.transform((v) => (/^https?:\/\//i.test(v) ? v : `http://${v}`))
+		.pipe(z.string().url())
+		.optional(),
 	// Public origin(s) the browser loads the web app from — comma-separated for
 	// multiple (e.g. app + marketing domains). The BFF's CSRF guard rejects any
 	// state-changing request whose Origin/Referer isn't in this list. Optional in

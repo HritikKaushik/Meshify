@@ -19,7 +19,15 @@ RUN pnpm --filter @meshify/platform-api... build
 # node_modules). data-access ships its migrations/ so the migrate Job can run.
 RUN pnpm --filter=@meshify/platform-api deploy --prod /prod
 
-FROM base AS runtime
+# Runtime: a plain node image (no corepack/pnpm), OS packages patched to the
+# latest Alpine builds, and npm/yarn removed. Nothing here runs npm - the app,
+# the HEALTHCHECK and the migrator are all `node ...` - and npm's bundled deps
+# (node-tar, minimatch) are what the Trivy gate keeps flagging in the base image.
+FROM node:22-alpine AS runtime
+RUN apk upgrade --no-cache \
+	&& rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+		/usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+		/usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-v*
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /prod ./

@@ -142,6 +142,22 @@ Standardized on **Vitest** with a shared [`@meshify/testing`](packages/testing/R
 package and a repository-wide suite. See [TESTING.md](TESTING.md) and the
 [Testing handbook](docs/testing/index.md).
 
+## Deployment
+
+The production target is **Render**: the root [`render.yaml`](render.yaml) Blueprint
+creates the five services (web public; BFF, API, worker, observability private)
+plus Render Postgres and Key Value, and points at managed Qdrant Cloud / Backblaze B2
+/ RocketRide by env var. Create it once via *Render → New → Blueprint*, then release
+by pushing a `vX.Y.Z` tag: [`deploy.yml`](.github/workflows/deploy.yml) rolls the
+tagged commit out through the Render API (API first, so its pre-deploy migration
+lands before anything else) and smoke-tests the public chain. Every push to `main`
+/ `development` runs CI (lint, typecheck, build, tests, `pnpm audit`, gitleaks,
+`render.yaml` schema validation, image builds + Trivy).
+
+Step by step: [Deployment Runbook](docs/operations/DEPLOYMENT_RUNBOOK.md).
+Alternatives: Railway (`apps/*/railway.toml`) and Kubernetes
+([`infrastructure/kubernetes`](infrastructure/kubernetes/README.md)).
+
 ## Tech stack
 
 **Web:** React 18, Vite, React Router, Clerk, Tailwind ·

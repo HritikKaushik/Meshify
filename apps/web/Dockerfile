@@ -20,13 +20,20 @@ COPY apps/web apps/web
 ARG VITE_CLERK_PUBLISHABLE_KEY
 RUN VITE_CLERK_PUBLISHABLE_KEY="$VITE_CLERK_PUBLISHABLE_KEY" pnpm --filter @meshify/web build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
+# Patch the OS packages to the latest Alpine builds: the Trivy gate fails on fixable
+# HIGH/CRITICAL CVEs and base images lag the Alpine repos. Needs root; drop back.
+USER root
+RUN apk upgrade --no-cache
+USER nginx
 # Where nginx forwards /api. Override per environment (compose: http://bff:3001;
-# split hosting: the BFF's internal URL, e.g. Railway http://meshify-bff.railway.internal:3001).
+# split hosting: the BFF's private address - a full URL like Railway's
+# http://meshify-bff.railway.internal:3001, or a bare host:port such as Render's
+# `fromService: hostport` value; nginx.conf.template adds the scheme when missing).
 # Rendered into the config at startup.
 ENV BFF_UPSTREAM=http://bff:3001
 # The port nginx listens on. Defaults to 8080 (unprivileged nginx can't bind <1024);
-# a host that injects its own $PORT (e.g. Railway) overrides this and nginx follows.
+# a host that injects its own $PORT (Render, Railway) overrides this and nginx follows.
 ENV PORT=8080
 # Opt the image entrypoint into deriving ${NGINX_LOCAL_RESOLVERS} from /etc/resolv.conf
 # (guarded off by default). The /api location's request-time resolver needs it so

@@ -1,0 +1,354 @@
+# Render Blueprint (infrastructure-as-code) for Meshify.
+# Docs: https://render.com/docs/blueprint-spec - validated in CI against Render's
+# published JSON schema (see .github/workflows/ci.yml → blueprint job).
+#
+# WHAT THIS CREATES (one Render workspace, one region - all 7 resources must share it):
+#   meshify-web            web    (public)  nginx: serves the SPA, proxies /api → BFF over the private network
+#   meshify-bff            pserv  (private) Clerk session → org API key → proxy to platform-api
+#   meshify-platform-api   pserv  (private) core API; runs the DB migrations as its pre-deploy step
+#   meshify-worker         worker (private) BullMQ ingestion consumer
+#   meshify-observability  worker (private) RocketRide trace subscriber - keep numInstances: 1
+#   meshify-postgres       Render Postgres (private network only)
+#   meshify-redis          Render Key Value (Redis-compatible, BullMQ needs noeviction)
+#
+# WHAT STAYS EXTERNAL (referenced by env var, never provisioned here):
+#   Qdrant Cloud   - MUST be internet-reachable: the RocketRide cloud engine writes
+#                    vectors into it directly, so a private Render Qdrant would not work.
+#   Backblaze B2 / any S3 - Render has no object storage.
+#   RocketRide cloud, Clerk, (optional) GitHub App + Slack App.
+#
+# WIRING RULES BAKED IN HERE (read before editing):
+#   • Private hostnames on Render carry a random suffix (meshify-bff-ab1c), so the
+#     web→BFF and BFF→API addresses are `fromService: hostport` references, never
+#     literals. Both consumers accept the bare host:port form (nginx.conf.template and
+#     packages/config/src/env.ts prepend http://). PORT is pinned on the two private
+#     services so the referenced port always equals the port the app binds.
+#   • Every Node service shares the `meshify-backend` env group because they all
+#     validate the SAME env schema at boot (the BFF included). PLATFORM_API_KEY_PEPPER
+#     and ORG_KEY_ENCRYPTION_KEY are generated ONCE in the group, which is what makes
+#     them byte-identical on the BFF and the API - a hard requirement.
+#   • `sync: false` = you are prompted for the value when creating the Blueprint; it is
+#     never stored in git. `generateValue: true` = Render mints a random 256-bit secret
+#     (back the four crypto keys up out-of-band - see docs/operations/BACKUP_DR.md).
+#   • Releases: autoDeployTrigger is "off" on every service; the tag-driven
+#     .github/workflows/deploy.yml triggers ordered, verified deploys through the Render
+#     API (platform-api first so its pre-deploy migration lands before anything else).
+#     Blueprint *config* changes on the linked branch still sync automatically.
+#   • Optional features are configured in the Dashboard (Environment Groups →
+#     meshify-backend → Add), NOT here, because a blank value would fail validation:
+#       GitHub App: GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PRIVATE_KEY,
+#                   GITHUB_APP_WEBHOOK_SECRET, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET
+#       Slack:      SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_SIGNING_SECRET, SLACK_REDIRECT_URI
+#       Tracing:    OTEL_EXPORTER_OTLP_ENDPOINT (OTEL_SERVICE_NAME is already set per service)
+#       Gemini:     ROCKETRIDE_GEMINI_KEY
+#
+# COST (Sep 2026 list prices): 5 × starter services ($7 each) + basic-256mb Postgres ($6)
+# + free Key Value ≈ $41/mo. Private services and background workers have NO free
+# instance type on Render, so this topology cannot run on the free tier. Free web
+# services also can't receive private-network traffic, which rules out a cheaper
+# web-only variant. Upgrade meshify-redis to `256mb` for persistent queues.
+
+previews:
+  generation: "off" # never spin up 5 paid services per pull request
+
+databases:
+  - name: meshify-postgres
+    plan: basic-256mb
+    region: ohio
+    postgresMajorVersion: "16" # matches the version the migrations are verified on
+    databaseName: meshify
+    user: meshify
+    # No external access: services use the internal connection string. To run psql
+    # from your machine, add your IP here (or in the Dashboard → Access Control).
+    ipAllowList: []
+
+services:
+  # ---------------------------------------------------------------------------
+  # Redis (Render Key Value). BullMQ requires the noeviction policy.
+  # `free` = 25 MB, in-memory only (queued jobs are lost on a restart; they stay
+  # visible as stuck jobs in Postgres). Switch to `256mb` for persistence.
+  # ---------------------------------------------------------------------------
+  - type: keyvalue
+    name: meshify-redis
+    plan: free
+    region: ohio
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # private network only
+
+  # ---------------------------------------------------------------------------
+  # Core API (private). Its pre-deploy step applies pending SQL migrations from
+  # the image (data-access ships them) BEFORE the new version takes traffic.
+  # The migrator holds a Postgres advisory lock, so the other services running
+  # the same step concurrently just wait and skip. /health/ready is verified by
+  # deploy.yml's smoke test (Render private services only get a TCP probe).
+  # ---------------------------------------------------------------------------
+  - type: pserv
+    name: meshify-platform-api
+    runtime: docker
+    region: ohio
+    plan: starter
+    branch: main
+    dockerfilePath: ./apps/platform-api/Dockerfile
+    dockerContext: .
+    preDeployCommand: node node_modules/@meshify/data-access/dist/migrate.js
+    autoDeployTrigger: "off"
+    maxShutdownDelaySeconds: 30
+    buildFilter:
+      paths:
+        - apps/platform-api/**
+        - packages/**
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - package.json
+        - tsconfig.base.json
+        - .dockerignore
+      ignoredPaths:
+        - "**/*.md"
+        - "**/*.test.ts"
+    envVars:
+      - key: PORT # the app binds $PORT; keep equal to what the BFF dials (hostport below)
+        value: "3000"
+      - key: OTEL_SERVICE_NAME
+        value: platform-api
+      - key: DATABASE_URL
+        fromDatabase:
+          name: meshify-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: meshify-redis
+          property: connectionString
+      - fromGroup: meshify-backend
+
+  # ---------------------------------------------------------------------------
+  # BFF (private). Reached only by meshify-web's nginx. Requires APP_ORIGIN (the
+  # public web URL) in production - its CSRF allowlist; it refuses to boot without it.
+  # ---------------------------------------------------------------------------
+  - type: pserv
+    name: meshify-bff
+    runtime: docker
+    region: ohio
+    plan: starter
+    branch: main
+    dockerfilePath: ./apps/bff/Dockerfile
+    dockerContext: .
+    preDeployCommand: node node_modules/@meshify/data-access/dist/migrate.js
+    autoDeployTrigger: "off"
+    maxShutdownDelaySeconds: 30
+    buildFilter:
+      paths:
+        - apps/bff/**
+        - packages/**
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - package.json
+        - tsconfig.base.json
+        - .dockerignore
+      ignoredPaths:
+        - "**/*.md"
+        - "**/*.test.ts"
+    envVars:
+      - key: PORT # the app binds $PORT; keep equal to what the web nginx dials (hostport)
+        value: "3001"
+      - key: OTEL_SERVICE_NAME
+        value: bff
+      # `<api-host>:3000` - packages/config normalizes it to http://<api-host>:3000.
+      - key: PLATFORM_API_ORIGIN
+        fromService:
+          type: pserv
+          name: meshify-platform-api
+          property: hostport
+      # The public origin the browser loads the app from, e.g. https://meshify-web.onrender.com
+      # (check the URL Render assigns meshify-web - a suffix is added if the name is taken)
+      # or https://app.<your-domain>. Comma-separate several. Update it whenever the
+      # public URL changes, or every state-changing request is rejected with 403.
+      - key: APP_ORIGIN
+        sync: false
+      - key: CLERK_SECRET_KEY # sk_live_…
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY # pk_live_… (same value as the web service's VITE_ key)
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: meshify-postgres
+          property: connectionString
+      - key: REDIS_URL # unused by the BFF, but the shared env schema requires it
+        fromService:
+          type: keyvalue
+          name: meshify-redis
+          property: connectionString
+      - fromGroup: meshify-backend
+
+  # ---------------------------------------------------------------------------
+  # Ingestion worker. Pure queue consumer (no inbound HTTP); its /metrics +
+  # /healthz listen on WORKER_METRICS_PORT (9091) over the private network.
+  # 120s shutdown grace lets in-flight ingest jobs checkpoint (mirrors the K8s
+  # terminationGracePeriodSeconds); jobs return to the queue on SIGTERM anyway.
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: meshify-worker
+    runtime: docker
+    region: ohio
+    plan: starter
+    branch: main
+    dockerfilePath: ./apps/worker/Dockerfile
+    dockerContext: .
+    preDeployCommand: node node_modules/@meshify/data-access/dist/migrate.js
+    autoDeployTrigger: "off"
+    numInstances: 1 # scale out freely - the worker is stateless
+    maxShutdownDelaySeconds: 120
+    buildFilter:
+      paths:
+        - apps/worker/**
+        - packages/**
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - package.json
+        - tsconfig.base.json
+        - .dockerignore
+      ignoredPaths:
+        - "**/*.md"
+        - "**/*.test.ts"
+    envVars:
+      - key: OTEL_SERVICE_NAME
+        value: worker
+      - key: DATABASE_URL
+        fromDatabase:
+          name: meshify-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: meshify-redis
+          property: connectionString
+      - fromGroup: meshify-backend
+
+  # ---------------------------------------------------------------------------
+  # RocketRide pipeline-trace subscriber. Singleton by design: replicas elect one
+  # leader via a Postgres advisory lock, so a brief overlap during a deploy is
+  # safe, but do NOT scale it deliberately.
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: meshify-observability
+    runtime: docker
+    region: ohio
+    plan: starter
+    branch: main
+    dockerfilePath: ./apps/observability/Dockerfile
+    dockerContext: .
+    preDeployCommand: node node_modules/@meshify/data-access/dist/migrate.js
+    autoDeployTrigger: "off"
+    numInstances: 1
+    maxShutdownDelaySeconds: 30
+    buildFilter:
+      paths:
+        - apps/observability/**
+        - packages/**
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - package.json
+        - tsconfig.base.json
+        - .dockerignore
+      ignoredPaths:
+        - "**/*.md"
+        - "**/*.test.ts"
+    envVars:
+      - key: OTEL_SERVICE_NAME
+        value: observability
+      - key: DATABASE_URL
+        fromDatabase:
+          name: meshify-postgres
+          property: connectionString
+      - key: REDIS_URL # unused here, but the shared env schema requires it
+        fromService:
+          type: keyvalue
+          name: meshify-redis
+          property: connectionString
+      - fromGroup: meshify-backend
+
+  # ---------------------------------------------------------------------------
+  # THE ONLY PUBLIC SERVICE. nginx serves the built SPA on Render's injected $PORT
+  # and proxies /api to the BFF over the private network, so the browser sees a
+  # single origin (no CORS) and never holds a platform-api or provider credential.
+  # Attach your custom domain here (Dashboard → Settings → Custom Domains); Render
+  # terminates TLS. Then set the BFF's APP_ORIGIN to match.
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: meshify-web
+    runtime: docker
+    region: ohio
+    plan: starter
+    branch: main
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    autoDeployTrigger: "off"
+    maxShutdownDelaySeconds: 30
+    buildFilter:
+      paths:
+        - apps/web/**
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - package.json
+        - tsconfig.base.json
+        - .dockerignore
+      ignoredPaths:
+        - "**/*.md"
+    envVars:
+      # `<bff-host>:3001` - nginx.conf.template prepends http:// when the scheme is absent.
+      - key: BFF_UPSTREAM
+        fromService:
+          type: pserv
+          name: meshify-bff
+          property: hostport
+      # Public (publishable) Clerk key, pk_live_…. Render passes service env vars to
+      # the Docker build as build args, so this reaches the Vite build ARG and is
+      # inlined into the bundle. It is public by design - nothing secret goes here.
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
+
+# Shared backend configuration + secrets, attached to all four Node services.
+# Value-less keys (sync: false) are prompted for once at Blueprint creation.
+envVarGroups:
+  - name: meshify-backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PLATFORM_LOG_LEVEL
+        value: info
+      # --- crypto keys: generated by Render, identical on every service. BACK THEM UP.
+      - key: PLATFORM_API_KEY_PEPPER # peppers API-key hashes; rotating invalidates every key
+        generateValue: true
+      - key: ORG_KEY_ENCRYPTION_KEY # encrypts org API keys + Slack tokens at rest
+        generateValue: true
+      - key: INTEGRATION_ENCRYPTION_KEY # credential vault key (decoupled rotation)
+        generateValue: true
+      - key: METRICS_TOKEN # bearer token your Prometheus/Grafana scraper sends to /metrics
+        generateValue: true
+      # --- Qdrant Cloud (must be reachable from the internet - RocketRide writes to it)
+      - key: QDRANT_URL # https://<cluster-id>.<region>.cloud.qdrant.io:6333
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      # --- S3-compatible object storage (Backblaze B2 example: endpoint
+      #     https://s3.us-east-005.backblazeb2.com, region us-east-005 - the REAL region, not "auto")
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        value: meshify-documents
+      - key: S3_ACCESS_KEY_ID # B2: the application keyID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY # B2: the applicationKey
+        sync: false
+      - key: S3_FORCE_PATH_STYLE
+        value: "false"
+      # --- RocketRide managed cloud engine
+      - key: ROCKETRIDE_URI
+        value: https://api.rocketride.ai
+      - key: ROCKETRIDE_APIKEY
+        sync: false
+      - key: ROCKETRIDE_OPENAI_KEY # managed embeddings + LLM fallback (search needs it)
+        sync: false

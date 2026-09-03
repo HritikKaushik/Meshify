@@ -21,7 +21,7 @@ related:
 ## Overview
 
 - **Build/test:** Turbo (`turbo.json`) with dependency-aware, cached tasks.
-- **Deploy targets:** `apps/web` (static SPA behind the BFF/CDN), `apps/bff`, `apps/platform-api`, `apps/worker`, `apps/observability` — each a Node process; Kubernetes manifests live under `infrastructure/`.
+- **Deploy targets:** `apps/web` (nginx-served SPA, the only public origin), `apps/bff`, `apps/platform-api`, `apps/worker`, `apps/observability` - one Docker image each. **Render** is the production path (root [`render.yaml`](../../render.yaml) Blueprint + tag-driven [`deploy.yml`](../../.github/workflows/deploy.yml)); Railway (`apps/*/railway.toml`) and Kubernetes (`infrastructure/kubernetes/`) are the alternatives. See the [Deployment Runbook](DEPLOYMENT_RUNBOOK.md).
 - **Dependencies:** Postgres, Redis, Qdrant, S3-compatible storage, RocketRide.
 
 ## Architecture
@@ -30,18 +30,21 @@ related:
 
 ```mermaid
 flowchart LR
-  pr[Pull request] --> install[pnpm install]
-  install --> tc[turbo run typecheck]
-  install --> build[turbo run build]
-  install --> test[turbo run test<br/>cached + affected]
-  test --> cov[vitest --coverage<br/>merged lcov]
-  build --> images[build service images]
-  images --> deploy[deploy per app]
+  push[push to main / development, PR] --> verify[lint · turbo typecheck build test · pnpm audit]
+  push --> scan[gitleaks secret scan]
+  push --> bp[render.yaml schema validation]
+  verify --> images[build 5 images + Trivy<br/>push to GHCR on main]
+  tag[push tag vX.Y.Z] --> rollout[deploy.yml: Render API<br/>platform-api first, then the rest]
+  rollout --> predeploy[each service: pre-deploy<br/>migrate.js, advisory-locked]
+  predeploy --> smoke[smoke test /api/health]
 ```
 
 Turbo restores unchanged packages from cache; `--filter=...[origin/main]` runs
-only affected packages and their dependents. Migrations run as a pre-deploy step
-(`pnpm migrate`).
+only affected packages and their dependents. On Render, migrations run as every
+Node service's **pre-deploy command** inside the built image
+(`node node_modules/@meshify/data-access/dist/migrate.js`); the migrator holds a
+Postgres advisory lock so concurrent runners serialize. On Kubernetes the
+equivalent is the pre-rollout migrate Job.
 
 ### Runtime topology
 

@@ -2,6 +2,8 @@
 
 > Audit date: 2026-07-21 · Branch: `development` · Scope: entire monorepo (5 apps, 13 packages, infra, CI)
 > Method: full-codebase inspection (frontend, BFF, platform-api, worker, observability, all packages, Docker, K8s, CI, env schema, git history).
+>
+> **Update 2026-09-02:** the deployment target is **Render** again - root [`render.yaml`](../../render.yaml) Blueprint (5 services + Render Postgres + Key Value), migrations as each service's pre-deploy step, tag-driven `deploy.yml` rollout through the Render API. §6, §8 and §10 below describe the interim Railway plan and are kept as history; the current path is [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md).
 
 ---
 

@@ -69,6 +69,7 @@ five applications and eleven shared packages.
 | Doc | What it answers |
 | --- | --- |
 | [Deployment & CI/CD](operations/deployment.md) | How the system is built, shipped, and observed |
+| [Deployment Runbook](operations/DEPLOYMENT_RUNBOOK.md) | A–Z: zero-to-live on Render from the root `render.yaml` Blueprint, releases, rollback |
 | [Troubleshooting](operations/troubleshooting.md) | Symptom → cause → fix for common failures |
 
 ### 6. Reference
