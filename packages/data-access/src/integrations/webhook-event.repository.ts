@@ -16,6 +16,11 @@ export interface WebhookEventRepository {
 	/** Deliveries still in 'received'/'queued' older than `before` — the orphan-recovery sweep. */
 	listReprocessable(before: Date): Promise<WebhookEvent[]>;
 	listRecentByIntegration(integrationId: string, limit: number): Promise<WebhookEvent[]>;
-	/** Retention sweep for terminal events. */
-	deleteTerminalBefore(before: Date): Promise<number>;
+	/**
+	 * Retention sweep for terminal events: processed/skipped deliveries older
+	 * than `before`, failed ones older than `failedBefore` (default: `before`).
+	 * Failed deliveries are the webhook dead-letter record, so callers keep
+	 * them around longer for operator review.
+	 */
+	deleteTerminalBefore(before: Date, failedBefore?: Date): Promise<number>;
 }

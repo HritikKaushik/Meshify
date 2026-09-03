@@ -657,6 +657,10 @@ export class InMemoryPipelineJobRepository implements PipelineJobRepository {
 		return [...this.jobs.values()].filter((j) => j.status === 'queued' && j.createdAt < before);
 	}
 
+	async listStuckRunning(before: Date): Promise<PipelineJob[]> {
+		return [...this.jobs.values()].filter((j) => j.status === 'running' && j.updatedAt < before);
+	}
+
 	async markRunning(id: string): Promise<void> {
 		this.patch(id, { status: 'running', progress: 0 });
 	}
@@ -895,10 +899,11 @@ export class InMemoryWebhookEventRepository implements WebhookEventRepository {
 		return [...this.events.values()].filter((e) => e.integrationId === integrationId).slice(0, limit);
 	}
 
-	async deleteTerminalBefore(_before: Date): Promise<number> {
+	async deleteTerminalBefore(before: Date, failedBefore: Date = before): Promise<number> {
 		let removed = 0;
 		for (const [id, e] of [...this.events]) {
-			if (['processed', 'skipped', 'failed'].includes(e.status)) {
+			const cutoff = e.status === 'failed' ? failedBefore : ['processed', 'skipped'].includes(e.status) ? before : undefined;
+			if (cutoff && e.receivedAt < cutoff) {
 				this.events.delete(id);
 				removed += 1;
 			}

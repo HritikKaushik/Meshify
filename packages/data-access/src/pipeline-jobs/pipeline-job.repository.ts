@@ -25,6 +25,12 @@ export interface PipelineJobRepository {
 	listRecentByProject(projectId: string, limit: number): Promise<PipelineJob[]>;
 	/** Queued jobs older than `before` — the orphan-recovery sweep (row committed but enqueue may have failed). */
 	listStuckQueued(before: Date): Promise<PipelineJob[]>;
+	/**
+	 * Running jobs whose last progress write is older than `before` - candidates
+	 * for the stuck-running reaper (a worker that died mid-job never reaches
+	 * markFailed, so the row would otherwise show 'running' forever).
+	 */
+	listStuckRunning(before: Date): Promise<PipelineJob[]>;
 	markRunning(id: string): Promise<void>;
 	/** Record the current stage + completion percent (0-100) of a running job. */
 	updateProgress(id: string, progress: { stage: string; percent: number }): Promise<void>;
