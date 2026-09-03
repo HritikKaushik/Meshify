@@ -157,7 +157,6 @@ async function bootstrap(): Promise<void> {
 	const projectRepository = new PostgresProjectRepository(pgPool);
 	const qdrantProvisioner = new QdrantCollectionProvisioner(env.QDRANT_URL, env.QDRANT_API_KEY);
 	const createProject = new CreateProjectUseCase(projectRepository, qdrantProvisioner);
-	const deleteProject = new DeleteProjectUseCase(projectRepository, qdrantProvisioner);
 	const getProject = new GetProjectUseCase(projectRepository);
 	const listProjects = new ListProjectsUseCase(projectRepository);
 
@@ -335,6 +334,7 @@ async function bootstrap(): Promise<void> {
 	// chat-pipeline.ts for why.
 	const rocketridePool = new RocketRideClientPool(env, logger);
 	const pipelineRegistry = new PipelineRegistry(rocketridePool, env.ROCKETRIDE_OP_TIMEOUT_MS);
+	const deleteProject = new DeleteProjectUseCase(projectRepository, qdrantProvisioner, documentRepository, repositoryRepository, objectStorage, pipelineRegistry, logger);
 	const ragService = new RocketRideRagService(rocketridePool);
 	// The resolver consults the active LLM provider; falls back to managed OpenAI when none is active.
 	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry, llmResolutionService);

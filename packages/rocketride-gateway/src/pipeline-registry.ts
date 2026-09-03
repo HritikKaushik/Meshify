@@ -77,6 +77,21 @@ export class PipelineRegistry {
 		this.tokenCache.delete(`${kind}:${pipelineGuid}`);
 	}
 
+	/**
+	 * Stops the running task for a pipeline (project deletion) and forgets its
+	 * token. Serialized with reconciles like every other lifecycle op on the
+	 * shared client. A no-op when nothing is running.
+	 */
+	terminatePipeline(pipelineGuid: string, kind: 'ingest' | 'chat'): Promise<void> {
+		this.invalidate(pipelineGuid, kind);
+		const source = kind === 'chat' ? 'chat_1' : 'webhook_1';
+		return this.enqueue(async () => {
+			const client = await this.pool.getClient();
+			const token = await this.withTimeout(client.getTaskToken({ projectId: pipelineGuid, source }), 'getTaskToken').catch(() => undefined);
+			if (token) await this.withTimeout(client.terminate(token), 'pipeline terminate');
+		});
+	}
+
 	private ensure(cacheKey: string, projectId: string, source: string, pipeline: RocketRidePipeline): Promise<string> {
 		const hash = JSON.stringify(pipeline);
 		const cached = this.cachedToken(cacheKey, hash);

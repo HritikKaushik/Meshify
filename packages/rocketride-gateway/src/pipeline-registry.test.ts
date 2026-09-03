@@ -9,8 +9,10 @@ const openaiConfig: ChatPipelineConfig = { pipelineGuid: GUID, llm: { provider: 
 const geminiConfig: ChatPipelineConfig = { pipelineGuid: GUID, llm: { provider: 'gemini', profile: 'gemini-2_0-flash', apiKeyEnvVar: 'K' } };
 const tick = () => new Promise((r) => setTimeout(r, 5));
 
-function fakePool(client: Partial<{ getTaskToken: () => Promise<string | undefined>; restart: () => Promise<void>; use: () => Promise<{ token: string }> }>): RocketRideClientPool {
-	const full = { getTaskToken: async () => undefined, restart: async () => {}, use: async () => ({ token: 'tk_ok' }), ...client };
+function fakePool(
+	client: Partial<{ getTaskToken: () => Promise<string | undefined>; restart: () => Promise<void>; use: () => Promise<{ token: string }>; terminate: (token: string) => Promise<void> }>
+): RocketRideClientPool {
+	const full = { getTaskToken: async () => undefined, restart: async () => {}, use: async () => ({ token: 'tk_ok' }), terminate: async () => {}, ...client };
 	return { getClient: async () => full } as unknown as RocketRideClientPool;
 }
 
@@ -47,6 +49,30 @@ describe('PipelineRegistry', () => {
 		expect(uses).toBe(3);
 		await registry.ensureChatPipeline({ ...openaiConfig, pipelineGuid: GUID2 }); // evicted: reconciles again
 		expect(uses).toBe(4);
+	});
+
+	it('terminatePipeline stops the running task, forgets the token, and is a no-op when nothing runs', async () => {
+		const terminated: string[] = [];
+		let running: string | undefined = 'tk_live';
+		let uses = 0;
+		const registry = new PipelineRegistry(
+			fakePool({
+				getTaskToken: async () => running,
+				terminate: async (token) => {
+					terminated.push(token);
+					running = undefined;
+				},
+				use: async () => ({ token: `tk_${++uses}` }),
+			}),
+			200
+		);
+		await registry.ensureChatPipeline(openaiConfig);
+		await registry.terminatePipeline(GUID, 'chat');
+		expect(terminated).toEqual(['tk_live']);
+		await registry.terminatePipeline(GUID, 'chat'); // nothing running any more
+		expect(terminated).toEqual(['tk_live']);
+		await registry.ensureChatPipeline(openaiConfig); // the token was forgotten: starts afresh
+		expect(uses).toBe(2);
 	});
 
 	it('starts a fresh pipeline (no reconcile) when nothing is running', async () => {
