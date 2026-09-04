@@ -58,7 +58,7 @@ kubectl apply -k overlays/prod        # or overlays/dev
 
 - **platform-api** — stateless (auth, rate-limit, chat history all live in Postgres/Redis), so it scales horizontally on CPU via the HPA. Anti-affinity spreads replicas across nodes; a PDB keeps ≥1 up during drains.
 - **worker** — scales on BullMQ backlog (`bull:<queue>:wait` list length) via KEDA across the three ingest/sync queues. In-flight jobs return to the queue on SIGTERM and are retried, so scale-down is safe.
-- **observability** — pinned to a single replica with a `Recreate` strategy. It must never run two instances (they would double-write `pipeline_runs`; there is no leader election yet). Do not add an HPA/ScaledObject or a PDB to it.
+- **observability** — pinned to a single replica with a `Recreate` strategy. Extra replicas are safe (each instance contends for a Postgres advisory lock at boot; only the holder subscribes and writes `pipeline_runs`, the rest wait as hot standbys), but a second one buys nothing except failover, so there is no HPA/ScaledObject or PDB for it.
 
 ## Secrets & key rotation
 

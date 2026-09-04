@@ -69,7 +69,7 @@ flowchart TB
 ### Observability
 - **Structured logs:** `pino` via `@meshify/shared`, with `pino-http` request logging + correlation ids. Credentials are redacted (`packages/shared/src/logger.ts`).
 - **Pipeline traces:** `apps/observability` consumes RocketRide pipeline events into `pipeline_runs` / `pipeline_run_traces`.
-- **Metrics:** a Prometheus `/metrics` surface is the documented next step (queue depth, pipeline/search latency).
+- **Metrics:** Prometheus `/metrics` on platform-api (HTTP request durations + process defaults) and on the worker's metrics port (BullMQ queue depth by state + process defaults), gated by `METRICS_TOKEN` (required in production). See [OBSERVABILITY.md](OBSERVABILITY.md).
 
 ### Configuration
 Validated at boot by `@meshify/config`; a bad/missing env var fails fast. See

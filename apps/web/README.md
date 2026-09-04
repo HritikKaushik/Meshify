@@ -1,39 +1,40 @@
-# @meshify/web — dev console
+# @meshify/web
 
-A minimal Vite + React SPA for exercising the whole platform-api by hand: API-key
-auth, projects, document upload + job status, search, RAG chat, the evaluation
-harness, and repositories.
-
-**This is a developer tool, not the Phase II product.** It stores the API key in
-the browser (`localStorage`) for convenience; the real Phase II frontend would
-authenticate users properly.
+The Meshify product frontend: a Vite + React single-page app. It signs users in
+with Clerk, talks only to its own origin (`/api`, proxied to the BFF, which
+holds the org API key), and renders the product screens: Project Home,
+Documents, Repository, Slack, Integrations, Settings, and the RAG Chat with
+the live Job Progress Center.
 
 ## Run
 
 ```bash
-# 1. Backend up (from repo root): infra + platform-api.
-docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis qdrant minio minio-init platform-api
+# 1. Backend up (from the repo root): infra + platform-api + bff.
+docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis qdrant minio minio-init platform-api bff
 
-# 2. Issue an API key (copy the printed msk_… value).
-docker compose -f infrastructure/docker/docker-compose.yml run --rm --no-deps \
-  platform-api node packages/data-access/dist/scripts/issue-api-key.js \
-  --org-name "Dev" --key-name "console"
+# 2. Clerk keys in the root .env (VITE_CLERK_PUBLISHABLE_KEY for this app; CLERK_* for the BFF).
 
-# 3. Start the console.
+# 3. Start the app; Vite proxies /api to the BFF (BFF_ORIGIN overrides the target).
 pnpm --filter @meshify/web dev      # http://localhost:5174
 ```
 
-In the top bar, leave **API base URL** blank (requests go same-origin and Vite
-proxies `/v1` and `/health` to the API) and paste the **API key**. Click
-**Health**, then create a project and use the tabs.
+## Test
 
-To point at a remote/deployed API instead of the local proxy, set
-`PLATFORM_API_ORIGIN` before `pnpm dev`, or type a full base URL in the bar
-(note: a cross-origin API needs CORS, which platform-api does not enable yet).
+```bash
+pnpm --filter @meshify/web test     # vitest + jsdom + Testing Library
+```
 
-## What works without RocketRide
+## Structure
 
-Projects, upload (object storage + queue), job status, and **search** (real query
-embedding) work against just the infra + API. **Chat, evaluation, and actual
-ingestion** need the RocketRide server running (it ships via the IDE extension,
-not the compose stack) — those tabs will surface a clear error otherwise.
+- `src/App.tsx` - routes; every screen is a lazy chunk behind a route-level error boundary.
+- `src/api.ts` - the typed API client (cookie session, same origin), SSE stream URLs.
+- `src/ui.tsx` - `useAsync`, the request hook every page loads through (latest-run wins, data kept across refreshes).
+- `src/components/jobs/` - the real-time Job Progress Center (one SSE connection per project, re-seeded after reconnects).
+- `src/components/ui/` - shadcn/Radix primitives; `src/pages/` - the screens.
+
+## Production
+
+`apps/web/Dockerfile` builds the bundle and serves it with nginx
+(`nginx.conf.template`): gzip, immutable hashed assets, security headers, a
+Content-Security-Policy (`CSP_MODE=report-only` by default, `enforce` once a
+real session shows no violations), and `/api` proxied to the BFF.
