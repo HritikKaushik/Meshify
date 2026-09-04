@@ -38,7 +38,7 @@ export function SlackCallbackPage() {
 			.completeSlackOAuth(projectId, code, state)
 			.then(() => {
 				sessionStorage.removeItem(OAUTH_PROJECT_KEY);
-				navigate(`/projects/${projectId}/slack`, { replace: true });
+				void navigate(`/projects/${projectId}/slack`, { replace: true });
 			})
 			.catch((err) => setError((err as Error).message));
 	}, [params, navigate]);
