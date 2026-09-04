@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { Search, UploadCloud, Plus, LayoutGrid, List, Trash2, Loader2, FileText, FileCode2 } from 'lucide-react';
 import { api } from '@/api-client';
 import type { DocumentSummary } from '@/api';
-import { useAsync } from '@/ui';
+import { useAsync, EMPTY } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { PdfThumbnail } from '@/components/documents/PdfThumbnail';
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
@@ -78,7 +78,7 @@ export function DocumentsPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [project.id]);
 
-	const docs = list.state.status === 'success' ? list.state.value : [];
+	const docs = list.data ?? EMPTY;
 
 	// Real-time: refresh the list the moment a document ingest job finishes — no polling.
 	// Live progress itself is shown in the global Job Progress Center.

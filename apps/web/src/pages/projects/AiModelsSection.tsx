@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { Zap } from 'lucide-react';
 import { api } from '@/api-client';
 import type { LlmProviderCatalogEntry, LlmProviderStatus } from '@/api';
-import { useAsync } from '@/ui';
+import { useAsync, EMPTY } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { GlassCard, Kicker, StatusDot, type DotColor } from '@/components/mc/primitives';
 import { Button } from '@/components/ui/button';
@@ -50,7 +50,7 @@ export function AiModelsSection() {
 	const [activating, setActivating] = useState<string | null>(null);
 
 	const refresh = useCallback(() => {
-		catalog.run(() => api.listLlmProviders());
+		void catalog.run(() => api.listLlmProviders());
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -79,7 +79,7 @@ export function AiModelsSection() {
 		}
 	}
 
-	const providers = catalog.state.status === 'success' ? catalog.state.value : [];
+	const providers = catalog.data ?? EMPTY;
 
 	const renderCard = (provider: LlmProviderCatalogEntry) => {
 		const status = STATUS_VIEW[provider.status] ?? STATUS_VIEW.not_connected;

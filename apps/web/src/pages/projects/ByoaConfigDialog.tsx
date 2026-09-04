@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { Copy, ShieldCheck, CheckCircle2, Trash2 } from 'lucide-react';
 import { api } from '@/api-client';
 import type { ByoaFieldView } from '@/api';
-import { useAsync } from '@/ui';
+import { useAsync, EMPTY } from '@/ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -38,7 +38,7 @@ export function ByoaConfigDialog({
 	const [confirmRemove, setConfirmRemove] = useState(false);
 
 	useEffect(() => {
-		config.run(() => api.describeRegistration(provider));
+		void config.run(() => api.describeRegistration(provider));
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [provider]);
 
@@ -76,8 +76,8 @@ export function ByoaConfigDialog({
 	}
 
 	const loaded = config.state.status === 'success';
-	const fields: ByoaFieldView[] = config.state.status === 'success' ? config.state.value.fields : [];
-	const isByoa = config.state.status === 'success' && config.state.value.mode === 'byoa';
+	const fields: ByoaFieldView[] = config.data?.fields ?? EMPTY;
+	const isByoa = config.data?.mode === 'byoa';
 
 	return (
 		<Dialog open onOpenChange={(open) => !open && onClose()}>
