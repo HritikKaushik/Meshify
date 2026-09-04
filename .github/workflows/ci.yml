@@ -96,8 +96,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build (the migrator and repositories run from dist)
         run: pnpm exec turbo run build --filter=@meshify/data-access
+      # The built migrator, exactly as Render's pre-deploy step runs it (the
+      # `pnpm migrate` dev script wraps it in tsx with the local .env file).
       - name: Apply migrations
-        run: pnpm migrate
+        run: node packages/data-access/dist/migrate.js
       - name: Integration tests
         run: pnpm test:integration
 
