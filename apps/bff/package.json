@@ -20,15 +20,15 @@
 		"express-rate-limit": "^8.7.0",
 		"helmet": "^8.3.0",
 		"http-proxy-middleware": "^3.0.3",
-		"pg": "^8.13.1",
+		"pg": "^8.23.0",
 		"pino": "^9.5.0",
 		"pino-http": "^10.3.0"
 	},
 	"devDependencies": {
 		"@types/express": "^5.0.0",
 		"@types/node": "^22.9.0",
-		"@types/pg": "^8.11.10",
-		"tsx": "^4.19.2",
+		"@types/pg": "^8.23.1",
+		"tsx": "^4.23.13",
 		"typescript": "^5.6.3",
 		"vitest": "^3.2.6"
 	}
