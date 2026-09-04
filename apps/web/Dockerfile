@@ -35,6 +35,11 @@ ENV BFF_UPSTREAM=http://bff:3001
 # The port nginx listens on. Defaults to 8080 (unprivileged nginx can't bind <1024);
 # a host that injects its own $PORT (Render, Railway) overrides this and nginx follows.
 ENV PORT=8080
+# Content-Security-Policy on the app HTML: report-only until a real session on the
+# deployed origin shows no violations, then set CSP_MODE=enforce. CSP_EXTRA_ORIGINS
+# adds hosts (a custom Clerk domain, analytics), space-separated. See nginx.conf.template.
+ENV CSP_MODE=report-only
+ENV CSP_EXTRA_ORIGINS=
 # Opt the image entrypoint into deriving ${NGINX_LOCAL_RESOLVERS} from /etc/resolv.conf
 # (guarded off by default). The /api location's request-time resolver needs it so
 # the container boots even when the BFF's internal DNS is briefly unresolvable.

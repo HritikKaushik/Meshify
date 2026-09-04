@@ -29,23 +29,55 @@ map "${BFF_UPSTREAM}" $bff_upstream {
     "~^https?://"  "${BFF_UPSTREAM}";
 }
 
+# Content-Security-Policy for the app HTML. The SPA talks only to this origin
+# (/api) and to Clerk; Clerk loads its script and frames from the instance's
+# frontend API host (*.clerk.accounts.dev for development instances, *.clerk.com
+# or a custom clerk.<your-domain> for production) and its bot check from
+# Cloudflare. Add any further hosts (a custom Clerk domain, an analytics
+# endpoint) through CSP_EXTRA_ORIGINS, space-separated.
+#
+# CSP_MODE=report-only (default) reports violations in the browser console
+# without blocking anything; switch to CSP_MODE=enforce once a real session on
+# the deployed origin shows none. nginx drops an add_header whose value is
+# empty, so exactly one of the two headers below is sent.
+map "${CSP_MODE}" $csp_enforce {
+    default   "";
+    "enforce" "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com ${CSP_EXTRA_ORIGINS}; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com ${CSP_EXTRA_ORIGINS}; frame-src https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com ${CSP_EXTRA_ORIGINS}; img-src 'self' data: blob: https://img.clerk.com https://*.clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; worker-src 'self' blob:";
+}
+map "${CSP_MODE}" $csp_report_only {
+    default   "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com ${CSP_EXTRA_ORIGINS}; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com ${CSP_EXTRA_ORIGINS}; frame-src https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com ${CSP_EXTRA_ORIGINS}; img-src 'self' data: blob: https://img.clerk.com https://*.clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; worker-src 'self' blob:";
+    "enforce" "";
+}
+
 server {
     listen ${PORT};
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
 
+    # The bundle shipped uncompressed (about 840 KB of JS on a cold load).
+    # Compress text responses on the fly; hashed assets are cached hard anyway.
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_types text/plain text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml font/woff2;
+
     # Applies to /api/ and any location WITHOUT its own add_header.
     add_header X-Content-Type-Options nosniff always;
     add_header X-Frame-Options DENY always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
 
-    # Entry HTML: never cached, so new deploys are picked up immediately.
+    # Entry HTML: never cached, so new deploys are picked up immediately. The CSP
+    # rides on the document only (API responses and assets are not documents).
     location = /index.html {
         add_header Cache-Control "no-cache" always;
         add_header X-Content-Type-Options nosniff always;
         add_header X-Frame-Options DENY always;
         add_header Referrer-Policy strict-origin-when-cross-origin always;
+        add_header Content-Security-Policy $csp_enforce always;
+        add_header Content-Security-Policy-Report-Only $csp_report_only always;
     }
 
     # Hash-named build assets are immutable — cache them hard.
