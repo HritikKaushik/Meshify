@@ -1,12 +1,15 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
-import { LandingPage } from './pages/LandingPage';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { NotFoundPage } from './pages/NotFoundPage';
 
-// Route-level code splitting: the public landing (above) paints immediately,
-// while the authenticated shells + pages — and the heavier deps they pull in
-// (motion for the chat reveal) — load on demand in their own chunks.
+// Route-level code splitting: every screen, the public landing included, loads
+// in its own chunk on demand, so the entry bundle carries only the router, the
+// Clerk provider and the shells' glue. (The landing page used to be imported
+// statically, which put its hero and animations in front of every signed-in
+// visit that never renders it.)
+const LandingPage = lazy(() => import('./pages/LandingPage').then((m) => ({ default: m.LandingPage })));
 const OrgShell = lazy(() => import('@/components/layout/OrgShell').then((m) => ({ default: m.OrgShell })));
 const WorkspaceShell = lazy(() => import('@/components/layout/WorkspaceShell').then((m) => ({ default: m.WorkspaceShell })));
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
@@ -37,9 +40,13 @@ function RouteFallback() {
 }
 
 export function App() {
+	// A crash inside one screen is contained here and cleared by navigating to
+	// another route (the boundary resets on path change) rather than blanking the app.
+	const location = useLocation();
 	return (
-		<Suspense fallback={<RouteFallback />}>
-			<Routes>
+		<ErrorBoundary resetKey={location.pathname}>
+			<Suspense fallback={<RouteFallback />}>
+				<Routes>
 				<Route path="/" element={<LandingPage />} />
 
 				{/* Project Home (3b) — org-level chrome, no project-list sidebar. */}
@@ -94,7 +101,8 @@ export function App() {
 					/>
 
 					<Route path="*" element={<NotFoundPage />} />
-			</Routes>
-		</Suspense>
+				</Routes>
+			</Suspense>
+		</ErrorBoundary>
 	);
 }

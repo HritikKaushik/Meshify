@@ -33,7 +33,7 @@ export function ProviderCallbackPage() {
 			.completeProviderConnect(provider, state, params)
 			.then((result) => {
 				const fallback = result.projectId ? `/projects/${result.projectId}/integrations` : '/home';
-				navigate(result.returnPath ?? fallback, { replace: true });
+				void navigate(result.returnPath ?? fallback, { replace: true });
 			})
 			.catch((err) => setError((err as Error).message));
 	}, [provider, searchParams, navigate]);

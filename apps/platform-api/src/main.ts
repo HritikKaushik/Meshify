@@ -337,10 +337,10 @@ async function bootstrap(): Promise<void> {
 	const ragService = new RocketRideRagService(rocketridePool);
 	// The resolver consults the active LLM provider; falls back to managed OpenAI when none is active.
 	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry, llmResolutionService);
-	const chatContextRetriever = new VectorSearchContextRetriever(embeddingProviderFactory, qdrantSearchClient);
+	const chatContextRetriever = new VectorSearchContextRetriever(embeddingProviderFactory, qdrantSearchClient, { minScore: env.RAG_MIN_SCORE });
 	const chatRepository = new PostgresChatRepository(pgPool);
 	const slackCitationEnricher = new SlackCitationEnricher(slackConversationRepository);
-	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver, chatContextRetriever, slackCitationEnricher);
+	const askQuestion = new AskQuestionUseCase(chatRepository, ragService, chatPipelineResolver, chatContextRetriever, slackCitationEnricher, { minScore: env.RAG_MIN_SCORE });
 
 	// AI Providers use cases. The change notifier invalidates the resolution cache
 	// and the org's cached chat pipelines on connect/activate/disconnect, so a

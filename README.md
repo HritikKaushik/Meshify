@@ -37,13 +37,13 @@ flowchart LR
   worker --> s3[(S3 / object storage)]
 ```
 
-A **pnpm + Turborepo** monorepo of five apps and ten shared packages. See the
+A **pnpm + Turborepo** monorepo of five apps and fourteen shared packages. See the
 [System Overview](docs/architecture/overview.md) for the full picture.
 
 ## Quickstart
 
 ### Prerequisites
-- **Node 20+** and **pnpm 9** (pinned via `packageManager`)
+- **Node 20.19+** (22 in CI and the images; `.nvmrc`) and **pnpm 9** (pinned via `packageManager`)
 - **Docker** (Postgres, Redis, Qdrant, MinIO)
 - Keys for **Clerk** (auth), **RocketRide** (AI), and a **GitHub App** (repo ingestion)
 
@@ -60,7 +60,7 @@ see the [Environment Variables](docs/reference/environment-variables.md) referen
 ### 2. Start infrastructure & apply migrations
 ```bash
 docker compose -f infrastructure/docker/docker-compose.yml up -d \
-  postgres redis qdrant minio minio-init rocketride
+  postgres redis qdrant minio minio-init
 pnpm migrate                # applies packages/data-access/migrations/*.sql
 ```
 

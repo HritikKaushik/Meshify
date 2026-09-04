@@ -43,7 +43,7 @@ export function CommandPalette({
 		];
 		const projectItems: Item[] = projects
 			.filter((p) => !q || p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q))
-			.map((p) => ({ id: p.id, label: p.name, hint: 'Project', color: projectColor(p.id), run: () => { onOpenChange(false); navigate(`/projects/${p.id}`); } }));
+			.map((p) => ({ id: p.id, label: p.name, hint: 'Project', color: projectColor(p.id), run: () => { onOpenChange(false); void navigate(`/projects/${p.id}`); } }));
 		const filteredActions = actions.filter((a) => !q || a.label.toLowerCase().includes(q));
 		return [...projectItems, ...filteredActions];
 	}, [query, projects, navigate, onNewProject, onOpenChange]);

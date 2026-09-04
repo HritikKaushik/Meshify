@@ -94,7 +94,7 @@ export function AppSidebar({
 		try {
 			await api.deleteChat(project.id, pendingDelete.id);
 			toast.success('Conversation deleted');
-			if (activeId === pendingDelete.id) navigate(`/projects/${project.id}/chat`, { replace: true });
+			if (activeId === pendingDelete.id) void navigate(`/projects/${project.id}/chat`, { replace: true });
 			setPendingDelete(null);
 			await refreshConversations();
 		} catch (err) {

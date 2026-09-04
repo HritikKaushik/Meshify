@@ -6,7 +6,7 @@ import { Lock, RefreshCw, Unplug, MessagesSquare, FolderGit2, Building2, Chevron
 import { api } from '@/api-client';
 import type { Integration, IntegrationHealth, ProviderCatalogEntry } from '@/api';
 import { useWorkspace } from '@/lib/workspace-context';
-import { useAsync } from '@/ui';
+import { useAsync, EMPTY } from '@/ui';
 import { GlassCard, Kicker, StatusDot, type DotColor } from '@/components/mc/primitives';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -82,8 +82,8 @@ export function IntegrationsPage() {
 	const [byoaFor, setByoaFor] = useState<{ provider: string; providerName: string; accountName?: string } | null>(null);
 
 	const refresh = useCallback(() => {
-		catalog.run(() => api.listProviders());
-		orgIntegrations.run(() => api.listIntegrations());
+		void catalog.run(() => api.listProviders());
+		void orgIntegrations.run(() => api.listIntegrations());
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -91,17 +91,28 @@ export function IntegrationsPage() {
 		refresh();
 	}, [refresh]);
 
-	// Live org events: OAuth completions, revocations, health flips.
+	// Live org events: OAuth completions, revocations, health flips. Events that
+	// fired while the stream was down are not replayed, so a reconnect refreshes.
 	useEffect(() => {
 		const source = new EventSource(api.integrationsStreamUrl(), { withCredentials: true });
+		let wasDown = false;
 		source.onmessage = () => refresh();
+		source.onerror = () => {
+			wasDown = true;
+		};
+		source.onopen = () => {
+			if (wasDown) {
+				wasDown = false;
+				refresh();
+			}
+		};
 		return () => source.close();
 	}, [refresh]);
 
 	useRefreshOnJobComplete(['source_sync', 'clone_repo', 'sync_repo', 'slack_ingest', 'slack_sync'], refresh);
 
-	const providers = catalog.state.status === 'success' ? catalog.state.value : [];
-	const integrations = orgIntegrations.state.status === 'success' ? orgIntegrations.state.value : [];
+	const providers = catalog.data ?? EMPTY;
+	const integrations = orgIntegrations.data ?? EMPTY;
 	const integrationsByProvider = useMemo(() => {
 		const map = new Map<string, Integration>();
 		// Prefer the active claim when an org somehow holds several for one provider.
@@ -156,7 +167,7 @@ export function IntegrationsPage() {
 		try {
 			const result = await api.attachSlackWorkspace(project.id, integration.id);
 			toast.success(result.alreadyAttached ? 'Workspace already attached — pick channels' : `${result.teamName ?? 'Workspace'} attached (${result.channelCount} channels found)`);
-			navigate(`/projects/${project.id}/slack`);
+			void navigate(`/projects/${project.id}/slack`);
 		} catch (err) {
 			toast.error((err as Error).message);
 		}

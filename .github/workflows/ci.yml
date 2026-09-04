@@ -28,21 +28,80 @@ jobs:
       - name: Typecheck, build, test
         run: pnpm exec turbo run typecheck build test
 
+      # Coverage over every source file with ratcheting thresholds (see
+      # vitest.config.ts); a drop below them fails the build.
+      - name: Coverage thresholds
+        run: pnpm test:coverage
+
       # Full dependency audit (prod + dev). Transitive-only advisories that the
       # dependents haven't re-released for are lifted with scoped `pnpm.overrides`
       # in package.json (one per vulnerable major). If a future dev-only advisory
       # has no fix yet and must ship, narrow this to `--prod` (dev tooling isn't in
       # the images or run in prod) rather than lowering the level.
-      # The registry's audit endpoint times out now and then; retry before
-      # failing so a transient outage does not read as a vulnerable tree.
+      # The registry's audit endpoint has outages that last hours. Retry, and
+      # if every attempt died on the network (never a finding) report a warning
+      # instead of failing: Trivy scans the same lockfile in the image jobs, so
+      # a vulnerable tree is still caught, while a registry blip no longer
+      # blocks a release.
       - name: Audit dependencies
         run: |
           for attempt in 1 2 3; do
-            if pnpm audit --audit-level=high; then exit 0; fi
-            status=$?
-            if [ "$attempt" -lt 3 ]; then echo "audit attempt $attempt failed (exit $status); retrying in 20s"; sleep 20; fi
+            if pnpm audit --audit-level=high 2>&1 | tee /tmp/audit.log; then exit 0; fi
+            if [ "$attempt" -lt 3 ]; then echo "audit attempt $attempt failed; retrying in 20s"; sleep 20; fi
           done
+          if grep -qE "ERR_SOCKET_TIMEOUT|ECONNRESET|ETIMEDOUT|EAI_AGAIN|FetchError" /tmp/audit.log && ! grep -qE "vulnerabilit(y|ies) found" /tmp/audit.log; then
+            echo "::warning::pnpm audit could not reach the npm registry after 3 attempts; skipped (Trivy still scans the lockfile in the image jobs)."
+            exit 0
+          fi
           echo "audit failed after 3 attempts"; exit 1
+
+  # The real-Postgres suites (tests/integration): the exact SQL, the migrations
+  # as applied, cascades and the advisory locks. They skip themselves without a
+  # database, so this is the only place they run for sure.
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: meshify
+          POSTGRES_PASSWORD: meshify
+          POSTGRES_DB: meshify
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U meshify"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://meshify:meshify@localhost:5433/meshify
+      # The migrator loads the full env schema; everything but the database is a placeholder here.
+      REDIS_URL: redis://localhost:6379
+      QDRANT_URL: http://localhost:6333
+      S3_ENDPOINT: http://localhost:9000
+      S3_BUCKET: meshify
+      S3_ACCESS_KEY_ID: ci-placeholder-access-key
+      S3_SECRET_ACCESS_KEY: ci-placeholder-secret-key-value
+      ROCKETRIDE_URI: http://localhost:8000
+      ROCKETRIDE_APIKEY: rr_ci_placeholder_key
+      PLATFORM_API_KEY_PEPPER: ci-placeholder-pepper-value-16
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build (the migrator and repositories run from dist)
+        run: pnpm exec turbo run build --filter=@meshify/data-access
+      # The built migrator, exactly as Render's pre-deploy step runs it (the
+      # `pnpm migrate` dev script wraps it in tsx with the local .env file).
+      - name: Apply migrations
+        run: node packages/data-access/dist/migrate.js
+      - name: Integration tests
+        run: pnpm test:integration
 
   # Secret scanning across the full history — catches a committed key before it
   # ships. gitleaks-action is free for personal repos.
@@ -172,6 +231,12 @@ jobs:
             ${{ steps.image.outputs.name }}:${{ github.ref == 'refs/heads/main' && 'latest' || 'pr' }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+
+      # The nginx config is rendered from a template at container start; a bad
+      # directive would otherwise surface only as a crash-looping web service.
+      # `nginx -t` runs the image's entrypoint hooks (envsubst included) first.
+      - name: Validate the rendered nginx config
+        run: docker run --rm -e BFF_UPSTREAM=bff:3001 ${{ steps.image.outputs.name }}:${{ github.sha }} nginx -t
 
       - name: Scan image (Trivy)
         uses: aquasecurity/trivy-action@v0.36.0

@@ -92,18 +92,18 @@ export function ProjectCard({
 			{/* hover action overlay */}
 			<div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-2 items-center gap-2 border-t border-mc-hairline bg-gradient-to-t from-mc-card to-mc-card/80 px-4 py-3 opacity-0 backdrop-blur-sm transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
 				<button
-					onClick={(e) => { e.stopPropagation(); open(); }}
+					onClick={(e) => { e.stopPropagation(); void open(); }}
 					className="flex-1 rounded-full bg-mc-accent py-2 text-[11.5px] font-semibold text-white shadow-glow-accent transition-colors hover:bg-mc-accent-hi"
 				>
 					Open Workspace
 				</button>
-				<OverlayIcon title="Ask Mesh" onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/chat`); }} accent>
+				<OverlayIcon title="Ask Mesh" onClick={(e) => { e.stopPropagation(); void navigate(`/projects/${project.id}/chat`); }} accent>
 					<Sparkles className="h-3.5 w-3.5" />
 				</OverlayIcon>
-				<OverlayIcon title="Repository" onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/repository`); }}>
+				<OverlayIcon title="Repository" onClick={(e) => { e.stopPropagation(); void navigate(`/projects/${project.id}/repository`); }}>
 					<FolderGit2 className="h-3.5 w-3.5" />
 				</OverlayIcon>
-				<OverlayIcon title="Settings" onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}/settings`); }}>
+				<OverlayIcon title="Settings" onClick={(e) => { e.stopPropagation(); void navigate(`/projects/${project.id}/settings`); }}>
 					<Settings className="h-3.5 w-3.5" />
 				</OverlayIcon>
 			</div>

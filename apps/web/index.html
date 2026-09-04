@@ -12,17 +12,9 @@
 			href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap"
 			rel="stylesheet"
 		/>
-		<!-- Apply the persisted theme before first paint to avoid a flash. Dark is the default. -->
-		<script>
-			(function () {
-				try {
-					var t = localStorage.getItem('meshify.theme');
-					document.documentElement.classList.add(t === 'light' ? 'light' : 'dark');
-				} catch (e) {
-					document.documentElement.classList.add('dark');
-				}
-			})();
-		</script>
+		<!-- Apply the persisted theme before first paint to avoid a flash (external so the
+		     Content-Security-Policy can stay free of 'unsafe-inline' for scripts). -->
+		<script src="/theme-init.js"></script>
 		<style>
 			html {
 				background: #111114;

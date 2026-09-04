@@ -7,6 +7,7 @@ import type { ChatContextRetriever } from './chat-context-retriever.port.js';
 import { noopCitationEnricher, type CitationEnricher } from './citation-enricher.port.js';
 import { extractReferencedCodeFiles } from '../domain/referenced-code-files.js';
 import { buildRagPrompt, type RetrievedChunk } from '../domain/build-rag-prompt.js';
+import { calibrateConfidence } from '../domain/retrieval-query.js';
 
 export class ChatNotFoundError extends Error {
 	constructor(id: string) {
@@ -36,13 +37,19 @@ export interface AskQuestionResult {
 
 const HISTORY_TURNS = 10;
 
+export interface AskQuestionOptions {
+	/** The retrieval floor (RAG_MIN_SCORE); confidence is calibrated from it. */
+	minScore: number;
+}
+
 export class AskQuestionUseCase {
 	constructor(
 		private readonly chats: ChatRepository,
 		private readonly rag: RagPort,
 		private readonly chatPipelines: ChatPipelineResolver,
 		private readonly contextRetriever: ChatContextRetriever,
-		private readonly citationEnricher: CitationEnricher = noopCitationEnricher
+		private readonly citationEnricher: CitationEnricher = noopCitationEnricher,
+		private readonly options: AskQuestionOptions = { minScore: 0.25 }
 	) {}
 
 	async execute(command: AskQuestionCommand): Promise<AskQuestionResult> {
@@ -58,11 +65,15 @@ export class AskQuestionUseCase {
 		// Retrieval + prompt assembly happen here, not inside the RocketRide
 		// pipeline (see chat-pipeline.ts) — citations/confidence come from this
 		// retrieval directly, not parsed back out of RocketRide's response.
-		const context = await this.contextRetriever.retrieve(command.project, command.question);
+		const context = await this.contextRetriever.retrieve(command.project, command.question, { history });
 		const rawCitations: MessageCitation[] = context.map((chunk) => ({ sourcePath: chunk.sourcePath, chunkId: chunk.chunkId, score: chunk.score }));
 		// Enrich Slack citations with channel/thread/author/timestamp/permalink from Postgres.
 		const citations = await this.citationEnricher.enrich(command.project.id, rawCitations);
-		const confidence = context[0]?.score ?? 0;
+		// Retrieval confidence: how well the best chunks match, on a 0..1 scale the UI labels (see calibrateConfidence).
+		const confidence = calibrateConfidence(
+			context.map((chunk) => chunk.score),
+			{ floor: this.options.minScore }
+		);
 
 		const answer = await this.askWithRetry(command, history, context);
 

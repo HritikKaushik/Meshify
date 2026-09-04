@@ -7,8 +7,9 @@ import reactHooks from 'eslint-plugin-react-hooks';
  * Flat ESLint config for the whole monorepo (one pass — `eslint .`). Pragmatic,
  * not pedantic: it catches real problems (unused vars, unsafe patterns) without
  * fighting the codebase's deliberate idioms (`req.auth!`, `as never` in tests).
- * Fast, syntax-only (no type-aware linting) so it stays cheap in CI on top of the
- * `tsc` typecheck that already covers types.
+ * Mostly syntax-only so it stays cheap in CI on top of the `tsc` typecheck that
+ * already covers types; the one type-aware rule (no-floating-promises) is worth
+ * its type pass.
  */
 export default tseslint.config(
 	{
@@ -27,11 +28,30 @@ export default tseslint.config(
 		},
 	},
 	{
+		// Type-aware rule set for the TypeScript sources: a promise that is neither
+		// awaited nor handed to `void` is the classic silent failure (a lost
+		// refresh, a swallowed rejection that later crashes the process). Uses the
+		// TypeScript project service, so it costs a type pass on top of tsc.
+		files: ['apps/**/src/**/*.{ts,tsx}', 'packages/**/src/**/*.ts'],
+		ignores: ['**/*.test.ts', '**/*.test.tsx', '**/*.testutil.ts', 'packages/testing/**'],
+		languageOptions: {
+			parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+		},
+		rules: {
+			'@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: true, ignoreIIFE: true }],
+		},
+	},
+	{
 		// Plain JS/MJS (scripts, config) run in Node — declare its globals so
 		// console/process/URL aren't flagged as undefined (TS files get these from
 		// their tsconfig lib, so this is only for non-TS files).
 		files: ['**/*.{js,mjs,cjs}'],
 		languageOptions: { globals: { ...globals.node } },
+	},
+	{
+		// Static browser scripts served as-is (no bundler): browser globals apply.
+		files: ['apps/web/public/**/*.js'],
+		languageOptions: { globals: { ...globals.browser } },
 	},
 	{
 		// Config files idiomatically use require() for plugins (tailwind, etc.).

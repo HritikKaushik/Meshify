@@ -4,7 +4,7 @@ import { Bell, Command as CommandIcon } from 'lucide-react';
 import { useOrganization } from '@clerk/clerk-react';
 import { api } from '@/api-client';
 import type { Conversation, Project } from '@/api';
-import { useAsync } from '@/ui';
+import { useAsync, EMPTY } from '@/ui';
 import { Atmosphere } from '@/components/mc/Atmosphere';
 import { StatusDot } from '@/components/mc/primitives';
 import { AppSidebar, SECTION_LABEL } from '@/components/layout/AppSidebar';
@@ -76,8 +76,8 @@ export function WorkspaceShell() {
 	}
 
 	const p = project.state.value;
-	const convList = conversations.state.status === 'success' ? conversations.state.value : [];
-	const projectList = allProjects.state.status === 'success' ? allProjects.state.value : [];
+	const convList = conversations.data ?? EMPTY;
+	const projectList = allProjects.data ?? EMPTY;
 	const currentTab = location.pathname.split('/').filter(Boolean).pop() ?? 'chat';
 	const isChat = currentTab === 'chat';
 	const orgName = organization?.name ?? 'Workspace';

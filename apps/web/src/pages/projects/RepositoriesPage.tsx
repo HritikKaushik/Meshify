@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { api } from '@/api-client';
 import type { Repository, Integration, IntegrationResource } from '@/api';
-import { useAsync } from '@/ui';
+import { useAsync, EMPTY } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { GlassCard, BeamCard, MeshAvatar, Kicker } from '@/components/mc/primitives';
@@ -44,18 +44,18 @@ export function RepositoriesPage() {
 
 	useEffect(() => {
 		void refresh();
-		integrations.run(() => api.listIntegrations());
+		void integrations.run(() => api.listIntegrations());
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [project.id]);
 
 	// The org's active GitHub app grant, if any — enables browsing its repositories instead of pasting URLs.
 	const githubIntegration = useMemo(
-		() => (integrations.state.status === 'success' ? integrations.state.value.find((i) => i.provider === 'github' && i.status === 'active') : undefined),
-		[integrations.state]
+		() => integrations.data?.find((i) => i.provider === 'github' && i.status === 'active'),
+		[integrations.data]
 	);
 
 	const loadResources = () => {
-		if (githubIntegration) resources.run(() => api.listIntegrationResources(githubIntegration.id));
+		if (githubIntegration) void resources.run(() => api.listIntegrationResources(githubIntegration.id));
 	};
 	useEffect(() => {
 		loadResources();
@@ -65,10 +65,10 @@ export function RepositoriesPage() {
 	// Real-time: refresh sync status when a repo ingest/sync job finishes (live progress in the Job Progress Center).
 	useRefreshOnJobComplete(['clone_repo', 'sync_repo'], refresh);
 
-	const repos = list.state.status === 'success' ? list.state.value : [];
+	const repos = list.data ?? EMPTY;
 	const selected = repos.find((r) => r.id === selectedId) ?? repos[0];
 
-	const browsable = resources.state.status === 'success' ? resources.state.value.resources : [];
+	const browsable = resources.data?.resources ?? EMPTY;
 	const filtered = useMemo(() => {
 		const q = search.trim().toLowerCase();
 		const matches = q ? browsable.filter((r) => r.name.toLowerCase().includes(q)) : browsable;

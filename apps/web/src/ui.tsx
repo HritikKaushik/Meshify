@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError } from './api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
@@ -51,19 +51,55 @@ export type AsyncState<T> =
 	| { status: 'success'; value: T }
 	| { status: 'error'; error: Error };
 
-/** Runs an async action, tracking idle/pending/success/error for the UI. */
+/** A stable empty list for `data ?? EMPTY` so memo dependencies do not change on every render. */
+export const EMPTY: never[] = [];
+
+/**
+ * Runs an async action, tracking idle/pending/success/error for the UI.
+ *
+ * Two guarantees matter for pages that refresh in place:
+ *  - Only the LATEST run may settle the state. A slow response from an earlier
+ *    run (the previous project, a superseded filter) is dropped instead of
+ *    overwriting a newer result, and nothing settles after unmount.
+ *  - `data` keeps the last successful value across re-runs, so a refresh does
+ *    not blank a list while the new response is in flight; `state` still
+ *    reports 'pending' for the callers that want a spinner.
+ */
 export function useAsync<T>() {
 	const [state, setState] = useState<AsyncState<T>>({ status: 'idle' });
+	const [data, setData] = useState<T | undefined>(undefined);
+	const latestRun = useRef(0);
+	const mounted = useRef(true);
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+
 	const run = useCallback(async (fn: () => Promise<T>) => {
+		const runId = ++latestRun.current;
+		const isCurrent = () => mounted.current && runId === latestRun.current;
 		setState({ status: 'pending' });
 		try {
 			const value = await fn();
+			if (!isCurrent()) return undefined;
+			setData(value);
 			setState({ status: 'success', value });
 			return value;
 		} catch (err) {
+			if (!isCurrent()) return undefined;
 			setState({ status: 'error', error: err instanceof Error ? err : new Error(String(err)) });
 			return undefined;
 		}
 	}, []);
-	return { state, run };
+
+	/** Forget the current value and outcome (e.g. when the entity the hook tracks changes). */
+	const reset = useCallback(() => {
+		latestRun.current += 1;
+		setData(undefined);
+		setState({ status: 'idle' });
+	}, []);
+
+	return { state, run, data, reset };
 }

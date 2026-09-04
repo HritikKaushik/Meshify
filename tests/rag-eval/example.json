@@ -1,0 +1,15 @@
+{
+	"$comment": "Replace projectId with a project whose sources are ingested; expectedSources are the meta.parent paths the retrieval must surface (a file name or a path suffix).",
+	"projectId": "00000000-0000-4000-8000-000000000000",
+	"cases": [
+		{
+			"question": "How long does a customer have to request a refund?",
+			"expectedSources": ["refund-policy.md"]
+		},
+		{
+			"question": "Why does it fail after the window closes?",
+			"priorQuestions": ["How long does a customer have to request a refund?"],
+			"expectedSources": ["src/billing/refunds.ts"]
+		}
+	]
+}

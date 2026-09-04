@@ -1,5 +1,11 @@
 import type { Project } from '@meshify/data-access';
+import type { ChatHistoryTurn } from '@meshify/rocketride-gateway';
 import type { RetrievedChunk } from '../domain/build-rag-prompt.js';
+
+export interface RetrieveOptions {
+	/** Prior turns of the conversation; a follow-up question retrieves with its predecessor's subject (see buildRetrievalQueries). */
+	history?: readonly ChatHistoryTurn[];
+}
 
 /**
  * Retrieves the top-N context chunks for a chat question, ranked by score.
@@ -8,5 +14,5 @@ import type { RetrievedChunk } from '../domain/build-rag-prompt.js';
  * shared embedding + Qdrant retrieval path.
  */
 export interface ChatContextRetriever {
-	retrieve(project: Project, query: string): Promise<RetrievedChunk[]>;
+	retrieve(project: Project, query: string, options?: RetrieveOptions): Promise<RetrievedChunk[]>;
 }

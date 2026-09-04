@@ -25,7 +25,7 @@ export function SettingsPage() {
 	const doDelete = async () => {
 		await del.run(() => api.deleteProject(project.id));
 		toast.success(`Deleted "${project.name}"`);
-		navigate('/home');
+		void navigate('/home');
 	};
 
 	return (

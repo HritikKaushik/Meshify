@@ -3,7 +3,7 @@ import { Hash, Lock, MessagesSquare, RefreshCw, Sparkles, Trash2 } from 'lucide-
 import { toast } from 'sonner';
 import { api } from '@/api-client';
 import type { Connector, SlackChannelSummary } from '@/api';
-import { useAsync } from '@/ui';
+import { useAsync, EMPTY } from '@/ui';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useRefreshOnJobComplete } from '@/components/jobs/JobsProvider';
 import { GlassCard, BeamCard, MeshAvatar, Kicker } from '@/components/mc/primitives';
@@ -43,7 +43,7 @@ export function SlackPage() {
 	// Real-time: refresh workspace stats when a Slack ingest/sync job finishes (progress shown in the Job Progress Center).
 	useRefreshOnJobComplete(['slack_ingest', 'slack_sync'], refresh);
 
-	const connectors = list.state.status === 'success' ? list.state.value : [];
+	const connectors = list.data ?? EMPTY;
 	const selected = connectors.find((c) => c.id === selectedConnectorId) ?? connectors[0];
 
 	// Load channels whenever the selected workspace changes.
@@ -119,7 +119,7 @@ export function SlackPage() {
 		}
 	};
 
-	const chans = channels.state.status === 'success' ? channels.state.value : [];
+	const chans = channels.data ?? EMPTY;
 
 	return (
 		<div className="flex flex-col gap-5">

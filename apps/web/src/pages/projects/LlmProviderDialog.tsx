@@ -45,7 +45,7 @@ export function LlmProviderDialog({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [provider]);
 
-	const d = detail.state.status === 'success' ? detail.state.value : null;
+	const d = detail.data ?? null;
 	const effectiveModel = customModel.trim() || selectedModel;
 
 	const modelOptions = useMemo(() => {

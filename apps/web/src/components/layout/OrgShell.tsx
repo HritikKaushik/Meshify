@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Search, Bell } from 'lucide-react';
 import { api } from '@/api-client';
 import type { Project } from '@/api';
-import { useAsync } from '@/ui';
+import { useAsync, EMPTY } from '@/ui';
 import { Atmosphere } from '@/components/mc/Atmosphere';
 import { MeshLogo } from '@/components/mc/primitives';
 import { CommandPalette } from '@/components/common/CommandPalette';
@@ -61,7 +61,7 @@ export function OrgShell() {
 		return () => window.removeEventListener('keydown', onKey);
 	}, []);
 
-	const list = projects.state.status === 'success' ? projects.state.value : [];
+	const list = projects.data ?? EMPTY;
 
 	const handleCreate = async () => {
 		const project = await create.run(() => api.createProject({ name, description: description || undefined }));
@@ -71,7 +71,7 @@ export function OrgShell() {
 			setDescription('');
 			toast.success(`Created "${project.name}"`);
 			void refreshProjects();
-			navigate(`/projects/${project.id}`);
+			void navigate(`/projects/${project.id}`);
 		}
 	};
 
