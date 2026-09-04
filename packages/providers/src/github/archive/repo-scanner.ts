@@ -7,11 +7,17 @@ import path from 'node:path';
 export interface ScannedFile {
 	/** Repo-relative path with forward slashes. */
 	path: string;
-	buffer: Buffer;
 	language: string | null;
 	sizeBytes: number;
 	contentHash: string;
 	isReadme: boolean;
+	/**
+	 * Reads the file's contents from the extracted tree. Contents are not kept
+	 * on the scan result: a scan of a large repository used to hold every file
+	 * in memory at once, so consumers read one batch at a time while the tree
+	 * is still on disk.
+	 */
+	read(): Promise<Buffer>;
 }
 
 const MAX_FILE_BYTES = 1024 * 1024; // >1MB source files are near-always generated artifacts
@@ -137,11 +143,11 @@ async function walk(root: string, dir: string, results: ScannedFile[]): Promise<
 
 		results.push({
 			path: relative,
-			buffer,
 			language: detectLanguage(relative),
 			sizeBytes: size,
 			contentHash: hashContent(buffer),
 			isReadme: isReadme(relative),
+			read: () => readFile(absolute),
 		});
 	}
 }

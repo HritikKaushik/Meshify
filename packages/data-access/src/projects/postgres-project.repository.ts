@@ -89,6 +89,11 @@ export class PostgresProjectRepository implements ProjectRepository {
 		return rows.map(toDomain);
 	}
 
+	async listAll(): Promise<Project[]> {
+		const { rows } = await this.pool.query<ProjectRow>('select * from projects where deleted_at is null order by created_at');
+		return rows.map(toDomain);
+	}
+
 	async delete(id: string): Promise<void> {
 		await this.pool.query('delete from projects where id = $1', [id]);
 	}

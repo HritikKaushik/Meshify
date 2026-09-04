@@ -10,6 +10,7 @@ import type {
 import type { JobEventPublisher, SourceSyncJobPayload } from '@meshify/queues';
 import type { ContentLedger, CredentialVault, CursorStore, KnowledgeWriter, PlatformEventBus, ProviderRegistrationService, ProviderRegistry, SyncContext } from '@meshify/providers';
 import { ConnectorEngine, supportsSync } from '@meshify/providers';
+import { connectorLockKey, withExecutionLock, type ExecutionLock } from '../execution-lock.js';
 import { JobProgress } from './job-progress.js';
 import { runPipelineJob } from './run-pipeline-job.js';
 
@@ -30,6 +31,8 @@ export interface SourceSyncProcessorDeps {
 	ledgers: Map<string, (connector: KnowledgeConnector) => ContentLedger>;
 	/** Per-job writer construction (project-scoped pipeline tokens). */
 	writerFor(projectId: string): Promise<KnowledgeWriter>;
+	/** Serializes syncs per connector across worker replicas (see withExecutionLock). */
+	lock: ExecutionLock;
 }
 
 /**
@@ -38,8 +41,13 @@ export interface SourceSyncProcessorDeps {
  * (vault-scoped credentials, generic cursor store), and lets the
  * ConnectorEngine drive the provider's executeSync — job lifecycle, progress,
  * and connector status handled uniformly here.
+ *
+ * Only one sync runs per connector at a time: a second job for the same
+ * connector (a webhook burst landing mid-run, a manual "sync now" during the
+ * reconcile sweep) parks in the delayed set until the first finishes, rather
+ * than racing it on the cursor and the vector store.
  */
-export async function processSourceSyncJob(job: Job<SourceSyncJobPayload>, deps: SourceSyncProcessorDeps): Promise<void> {
+export async function processSourceSyncJob(job: Job<SourceSyncJobPayload>, deps: SourceSyncProcessorDeps, token?: string): Promise<void> {
 	const { pipelineJobId, connectorId, projectId, mode } = job.data;
 	const progress = new JobProgress(deps.pipelineJobs, deps.jobEvents, {
 		jobId: pipelineJobId,
@@ -48,7 +56,7 @@ export async function processSourceSyncJob(job: Job<SourceSyncJobPayload>, deps:
 		title: 'Source sync',
 	});
 
-	await runPipelineJob(
+	await withExecutionLock(job, token, deps.lock, connectorLockKey(connectorId), () => runPipelineJob(
 		job,
 		pipelineJobId,
 		deps.pipelineJobs,
@@ -115,5 +123,5 @@ export async function processSourceSyncJob(job: Job<SourceSyncJobPayload>, deps:
 			}
 		},
 		progress
-	);
+	));
 }

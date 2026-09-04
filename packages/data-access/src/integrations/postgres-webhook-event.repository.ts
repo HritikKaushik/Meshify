@@ -75,10 +75,12 @@ export class PostgresWebhookEventRepository implements WebhookEventRepository {
 		return rows.map(toDomain);
 	}
 
-	async deleteTerminalBefore(before: Date): Promise<number> {
+	async deleteTerminalBefore(before: Date, failedBefore: Date = before): Promise<number> {
 		const result = await this.pool.query(
-			`delete from webhook_events where received_at < $1 and status in ('processed', 'skipped', 'failed')`,
-			[before]
+			`delete from webhook_events
+			 where (status in ('processed', 'skipped') and received_at < $1)
+			    or (status = 'failed' and received_at < $2)`,
+			[before, failedBefore]
 		);
 		return result.rowCount ?? 0;
 	}

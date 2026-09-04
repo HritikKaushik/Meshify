@@ -1,10 +1,9 @@
 import '@meshify/telemetry'; // MUST be first — instruments http/express/pg before they load
 import { randomUUID } from 'node:crypto';
-import pg from 'pg';
 import { Redis } from 'ioredis';
 import { Worker } from 'bullmq';
 import { loadEnv } from '@meshify/config';
-import { createLogger, installProcessGuards } from '@meshify/shared';
+import { createLogger, installGracefulShutdown, installProcessGuards } from '@meshify/shared';
 import {
 	PostgresDocumentRepository,
 	PostgresFileRepository,
@@ -22,10 +21,13 @@ import {
 	PostgresSyncCursorRepository,
 	PostgresWebhookEventRepository,
 	PostgresOAuthStateRepository,
+	PostgresAuditLogRepository,
+	PostgresPipelineRunRepository,
 	PostgresProviderRegistrationRepository,
 	PostgresProviderRegistrationCredentialRepository,
 	encryptSecret,
 	decryptSecret,
+	createPgPool,
 } from '@meshify/data-access';
 import { ObjectStorageClient } from '@meshify/object-storage';
 import {
@@ -77,6 +79,8 @@ import {
 } from '@meshify/providers';
 import type { KnowledgeConnector } from '@meshify/data-access';
 import { processSourceSyncJob } from './processors/source-sync.processor.js';
+import { PgAdvisoryExecutionLock } from './execution-lock.js';
+import { memoizeForMs } from './memoize.js';
 import { processWebhookEventJob } from './processors/webhook-event.processor.js';
 import { processMaintenanceJob } from './processors/integration-maintenance.processor.js';
 import { ProjectKnowledgeWriter } from './processors/knowledge-writer.js';
@@ -104,7 +108,7 @@ async function bootstrap(): Promise<void> {
 		}
 	}
 
-	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
+	const pgPool = createPgPool({ connectionString: env.DATABASE_URL, max: env.PG_POOL_MAX, statementTimeoutMs: env.PG_STATEMENT_TIMEOUT_MS, applicationName: 'worker' }, logger);
 	const bullRedis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 	// Publishes real-time job progress to Redis Pub/Sub (PUBLISH works on a normal connection, so bullRedis is reused).
 	const jobEvents = new JobEventPublisher(bullRedis);
@@ -114,6 +118,8 @@ async function bootstrap(): Promise<void> {
 	const repositories = new PostgresRepositoryRepository(pgPool);
 	const files = new PostgresFileRepository(pgPool);
 	const pipelineJobs = new PostgresPipelineJobRepository(pgPool);
+	// One sync per connector/repository at a time, across every worker replica.
+	const executionLock = new PgAdvisoryExecutionLock(pgPool);
 	const connectors = new PostgresKnowledgeConnectorRepository(pgPool);
 	const slackWorkspaces = new PostgresSlackWorkspaceRepository(pgPool);
 	const slackChannels = new PostgresSlackChannelRepository(pgPool);
@@ -211,7 +217,10 @@ async function bootstrap(): Promise<void> {
 		sync: {
 			repos: repositories,
 			files,
-			repoTransport: (ctx) => new GitHubRepoClient({ installationToken: () => githubProvider.getInstallationToken(ctx) }),
+			// One vault read (and decrypt) per sync every couple of minutes rather
+			// than one per GitHub API request; well inside the vault's own
+			// minimum-remaining-lifetime guard for installation tokens.
+			repoTransport: (ctx) => new GitHubRepoClient({ installationToken: memoizeForMs(() => githubProvider.getInstallationToken(ctx), 2 * 60_000) }),
 			generateId: () => randomUUID(),
 		},
 	});
@@ -249,6 +258,7 @@ async function bootstrap(): Promise<void> {
 		bus: platformEventBus,
 		logger,
 		ledgers,
+		lock: executionLock,
 		writerFor: async (projectId: string) => {
 			const project = await projects.findById(projectId);
 			if (!project) throw new Error(`Project "${projectId}" not found`);
@@ -304,6 +314,9 @@ async function bootstrap(): Promise<void> {
 		registrations: registrationService,
 		bus: platformEventBus,
 		logger,
+		pipelineRuns: new PostgresPipelineRunRepository(pgPool),
+		auditLogs: new PostgresAuditLogRepository(pgPool),
+		retention: { pipelineRunDays: env.PIPELINE_RUN_RETENTION_DAYS, auditLogDays: env.AUDIT_LOG_RETENTION_DAYS },
 	};
 
 	const documentWorker = new Worker<DocumentIngestJobPayload>(
@@ -327,43 +340,53 @@ async function bootstrap(): Promise<void> {
 
 	const repoIngestWorker = new Worker<RepoIngestJobPayload>(
 		REPO_INGEST_QUEUE,
-		(job) =>
-			processRepoIngestJob(job, {
-				repositories,
-				files,
-				projects,
-				pipelineJobs,
-				storage,
-				github,
-				pipelineRegistry,
-				rag,
-				jobEvents,
-				codeChunkSize: CODE_CHUNK_SIZE,
-				qdrantHost,
-				qdrantPort,
-				qdrantApiKey,
-			}),
+		(job, token) =>
+			processRepoIngestJob(
+				job,
+				{
+					repositories,
+					files,
+					projects,
+					pipelineJobs,
+					storage,
+					github,
+					pipelineRegistry,
+					rag,
+					jobEvents,
+					codeChunkSize: CODE_CHUNK_SIZE,
+					qdrantHost,
+					qdrantPort,
+					qdrantApiKey,
+					lock: executionLock,
+				},
+				token
+			),
 		// Repo ingestion is archive-sized work (extraction + full-tree embedding); keep concurrency low.
 		{ connection: bullRedis, concurrency: 2 }
 	);
 
 	const repoSyncWorker = new Worker<RepoSyncJobPayload>(
 		REPO_SYNC_QUEUE,
-		(job) =>
-			processRepoSyncJob(job, {
-				repositories,
-				files,
-				projects,
-				pipelineJobs,
-				github,
-				pipelineRegistry,
-				rag,
-				jobEvents,
-				codeChunkSize: CODE_CHUNK_SIZE,
-				qdrantHost,
-				qdrantPort,
-				qdrantApiKey,
-			}),
+		(job, token) =>
+			processRepoSyncJob(
+				job,
+				{
+					repositories,
+					files,
+					projects,
+					pipelineJobs,
+					github,
+					pipelineRegistry,
+					rag,
+					jobEvents,
+					codeChunkSize: CODE_CHUNK_SIZE,
+					qdrantHost,
+					qdrantPort,
+					qdrantApiKey,
+					lock: executionLock,
+				},
+				token
+			),
 		{ connection: bullRedis, concurrency: 3 }
 	);
 
@@ -373,7 +396,7 @@ async function bootstrap(): Promise<void> {
 
 	// The provider platform's generic sync lane; legacy per-provider workers
 	// above remain only to drain in-flight jobs enqueued before the cutover.
-	const sourceSyncWorker = new Worker<SourceSyncJobPayload>(SOURCE_SYNC_QUEUE, (job) => processSourceSyncJob(job, sourceSyncDeps), { connection: bullRedis, concurrency: 3 });
+	const sourceSyncWorker = new Worker<SourceSyncJobPayload>(SOURCE_SYNC_QUEUE, (job, token) => processSourceSyncJob(job, sourceSyncDeps, token), { connection: bullRedis, concurrency: 3 });
 	const webhookEventsWorker = new Worker<WebhookEventJobPayload>(WEBHOOK_EVENTS_QUEUE, (job) => processWebhookEventJob(job, webhookDeps), { connection: bullRedis, concurrency: 5 });
 	const maintenanceWorker = new Worker<IntegrationMaintenanceJobPayload>(INTEGRATION_MAINTENANCE_QUEUE, (job) => processMaintenanceJob(job, maintenanceDeps), { connection: bullRedis, concurrency: 1 });
 
@@ -398,20 +421,23 @@ async function bootstrap(): Promise<void> {
 	});
 	logger.info({ port: env.WORKER_METRICS_PORT }, 'worker metrics listening');
 
-	const shutdown = async (signal: string) => {
-		logger.info({ signal }, 'shutting down');
-		await metricsServer.close();
-		await Promise.all(workers.map((w) => w.close()));
-		await sourceSyncQueue.close();
-		await maintenanceQueue.close();
-		await clientPool.shutdown();
-		await bullRedis.quit();
-		await pgPool.end();
-		process.exit(0);
-	};
-
-	process.on('SIGTERM', () => void shutdown('SIGTERM'));
-	process.on('SIGINT', () => void shutdown('SIGINT'));
+	// Workers first: Worker.close() stops taking jobs and waits for the active
+	// ones, so an ingest in progress finishes (or checkpoints) instead of being
+	// torn down and retried from scratch. The metrics/health server stays up
+	// until the end so the drain remains observable. Bounded below Render's
+	// 120s shutdown grace for this service.
+	installGracefulShutdown({
+		logger,
+		timeoutMs: 110_000,
+		steps: [
+			{ name: 'workers', run: () => Promise.all(workers.map((w) => w.close())) },
+			{ name: 'queues', run: () => Promise.all([sourceSyncQueue.close(), maintenanceQueue.close()]) },
+			{ name: 'rocketride', run: () => clientPool.shutdown() },
+			{ name: 'redis', run: () => bullRedis.quit() },
+			{ name: 'postgres', run: () => pgPool.end() },
+			{ name: 'metrics server', run: () => metricsServer.close() },
+		],
+	});
 }
 
 bootstrap().catch((err) => {

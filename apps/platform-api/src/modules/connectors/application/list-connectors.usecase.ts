@@ -4,10 +4,12 @@ import type {
 	DocumentRepository,
 	KnowledgeConnector,
 	KnowledgeConnectorRepository,
+	Repository,
 	RepositoryRepository,
 	RepositorySyncStatus,
 	SlackChannelRepository,
 	SlackConversationRepository,
+	SlackWorkspace,
 	SlackWorkspaceRepository,
 } from '@meshify/data-access';
 
@@ -29,6 +31,19 @@ export interface ConnectorSummary {
 	/** Type-specific fields for the UI (e.g. remoteUrl, syncStatus, teamName, channel counts). */
 	detail: Record<string, unknown>;
 	createdAt: string;
+}
+
+/** Per-project lookups shared by every row of one listing. */
+interface Lookups {
+	repositoryByConnector: Map<string, Repository>;
+	workspaceByConnector: Map<string, SlackWorkspace>;
+	documentStats: () => Promise<{ total: number; embedded: number; lastUpdatedAt: Date | null }>;
+}
+
+/** Runs the factory once and hands every caller the same promise. */
+function single<T>(factory: () => Promise<T>): () => Promise<T> {
+	let value: Promise<T> | undefined;
+	return () => (value ??= factory());
 }
 
 function statusFromRepoSync(sync: RepositorySyncStatus): ConnectorStatus {
@@ -60,10 +75,19 @@ export class ListConnectorsUseCase {
 
 	async execute(projectId: string): Promise<ConnectorSummary[]> {
 		const connectors = await this.connectors.listByProject(projectId);
-		return Promise.all(connectors.map((connector) => this.summarize(connector, projectId)));
+		if (connectors.length === 0) return [];
+		// One query per table for the whole list, not one per connector: a
+		// project with dozens of repositories used to fan out a lookup each.
+		const [repositories, workspaces] = await Promise.all([this.repositories.listByProject(projectId), this.slackWorkspaces.listByProject(projectId)]);
+		const lookups: Lookups = {
+			repositoryByConnector: new Map(repositories.filter((r) => r.connectorId).map((r) => [r.connectorId!, r])),
+			workspaceByConnector: new Map(workspaces.filter((w) => w.connectorId).map((w) => [w.connectorId!, w])),
+			documentStats: single(() => this.documents.statsByProject(projectId)),
+		};
+		return Promise.all(connectors.map((connector) => this.summarize(connector, lookups)));
 	}
 
-	private async summarize(connector: KnowledgeConnector, projectId: string): Promise<ConnectorSummary> {
+	private async summarize(connector: KnowledgeConnector, lookups: Lookups): Promise<ConnectorSummary> {
 		const base = {
 			id: connector.id,
 			type: connector.type,
@@ -72,7 +96,7 @@ export class ListConnectorsUseCase {
 		};
 
 		if (connector.type === 'github') {
-			const repo = await this.repositories.findByConnectorId(connector.id);
+			const repo = lookups.repositoryByConnector.get(connector.id);
 			return {
 				...base,
 				status: repo ? statusFromRepoSync(repo.syncStatus) : connector.status,
@@ -90,7 +114,7 @@ export class ListConnectorsUseCase {
 		}
 
 		if (connector.type === 'documents') {
-			const stats = await this.documents.statsByProject(projectId);
+			const stats = await lookups.documentStats();
 			const status: ConnectorStatus = stats.embedded > 0 ? 'active' : stats.total > 0 ? 'connecting' : connector.status;
 			return {
 				...base,
@@ -103,7 +127,7 @@ export class ListConnectorsUseCase {
 		}
 
 		// slack
-		const workspace = await this.slackWorkspaces.findByConnectorId(connector.id);
+		const workspace = lookups.workspaceByConnector.get(connector.id);
 		if (!workspace) {
 			return { ...base, status: connector.status, itemCount: 0, embeddedCount: 0, lastActivityAt: null, detail: {} };
 		}

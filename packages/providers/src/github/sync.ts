@@ -6,12 +6,13 @@ import type { KnowledgeItem, KnowledgeSink } from '../base/knowledge.js';
 import type { SyncContext } from '../base/sync.js';
 import { ProviderConfigError } from '../base/errors.js';
 import { detectLanguage, hashContent, isBinaryBuffer, isDeniedPath, scanExtractedRepo, type ScannedFile } from './archive/repo-scanner.js';
-import { withExtractedArchive } from './archive/archive-extractor.js';
+import { withDownloadedTarball } from './archive/archive-extractor.js';
 
 /** Token-parameterized read transport (structural over GitHubRepoClient). */
 export interface GitHubRepoTransport {
 	getHead(owner: string, repo: string): Promise<{ defaultBranch: string; headSha: string }>;
-	downloadTarball(owner: string, repo: string, ref: string): Promise<Buffer>;
+	/** Streams the tarball at `ref` to `destination` on disk. */
+	downloadTarballToFile(owner: string, repo: string, ref: string, destination: string): Promise<void>;
 	compare(owner: string, repo: string, base: string, head: string): Promise<Array<{ path: string; status: string; previousPath?: string }>>;
 	getFileContent(owner: string, repo: string, path: string, ref: string): Promise<Buffer>;
 }
@@ -26,6 +27,7 @@ export interface GitHubSyncDeps {
 	};
 	files: {
 		upsert(input: { id: string; projectId: string; repositoryId: string; path: string; language: string | null; sizeBytes: number; contentHash: string }): Promise<unknown>;
+		upsertMany(inputs: Array<{ id: string; projectId: string; repositoryId: string; path: string; language: string | null; sizeBytes: number; contentHash: string }>): Promise<unknown>;
 		markDeleted(repositoryId: string, paths: string[]): Promise<void>;
 		/** Lets a full sync retire rows (and vectors) for files no longer in the tree. Optional for callers that cannot list. */
 		listByRepository?(repositoryId: string): Promise<Array<{ path: string; status: string }>>;
@@ -33,7 +35,12 @@ export interface GitHubSyncDeps {
 	/** Builds the token-bearing transport for one integration (vault-backed installation token). */
 	repoTransport(ctx: IntegrationContext): GitHubRepoTransport;
 	/** Injectable archive → scanned-files step (real tarball extraction by default). */
-	scanArchive?: (archive: Buffer, format: 'tar.gz' | 'zip') => Promise<ScannedFile[]>;
+	/**
+	 * Downloads, extracts and scans the tree, then runs `use` while the tree is
+	 * still on disk (file contents are read lazily per batch). Injectable so
+	 * tests can hand in a fake tree.
+	 */
+	materializeTree?: (download: (destination: string) => Promise<void>, use: (files: ScannedFile[]) => Promise<void>) => Promise<void>;
 	generateId: () => string;
 }
 
@@ -80,6 +87,9 @@ function repoIdentity(repository: Repository): { owner: string; name: string } {
 	return { owner: parsed.owner, name: parsed.repo };
 }
 
+/** Files whose contents are in memory at once during a full ingest (each is at most 1 MB). */
+const EMBED_CHUNK_FILES = 100;
+
 interface SyncTarget {
 	repository: Repository;
 	owner: string;
@@ -93,40 +103,49 @@ async function fullSync(deps: GitHubSyncDeps, ctx: SyncContext, sink: KnowledgeS
 
 	sink.progress('Downloading repository', 10);
 	await deps.repos.updateSyncStatus(repository.id, 'cloning');
-	const archive = await transport.downloadTarball(owner, name, head.headSha);
+	const materialize = deps.materializeTree ?? ((download, use) => withDownloadedTarball(download, (dir) => scanExtractedRepo(dir).then(use)));
 
-	sink.progress('Scanning repository', 30);
-	const scan = deps.scanArchive ?? ((buffer, format) => withExtractedArchive(buffer, format, (dir) => scanExtractedRepo(dir)));
-	const scanned = await scan(archive, 'tar.gz');
-	if (scanned.length === 0) throw new Error('Archive contained no ingestable source files after filtering');
+	await materialize(
+		(destination) => transport.downloadTarballToFile(owner, name, head.headSha, destination),
+		async (scanned) => {
+			if (scanned.length === 0) throw new Error('Archive contained no ingestable source files after filtering');
 
-	sink.progress('Recording files', 40);
-	for (const file of scanned) {
-		await deps.files.upsert({
-			id: deps.generateId(),
-			projectId: repository.projectId,
-			repositoryId: repository.id,
-			path: file.path,
-			language: file.language,
-			sizeBytes: file.sizeBytes,
-			contentHash: file.contentHash,
-		});
-	}
+			sink.progress('Recording files', 40);
+			await deps.files.upsertMany(
+				scanned.map((file) => ({
+					id: deps.generateId(),
+					projectId: repository.projectId,
+					repositoryId: repository.id,
+					path: file.path,
+					language: file.language,
+					sizeBytes: file.sizeBytes,
+					contentHash: file.contentHash,
+				}))
+			);
 
-	sink.progress('Embedding repository', 50);
-	await sink.upsert(scanned.map((file) => toItem(file.path, file.buffer, file.contentHash, file.language)));
+			// Contents are read one chunk at a time while the tree is on disk, so
+			// memory holds a chunk of files rather than the whole repository.
+			for (let i = 0; i < scanned.length; i += EMBED_CHUNK_FILES) {
+				sink.progress('Embedding repository', 50 + Math.round((i / scanned.length) * 45));
+				const chunk = scanned.slice(i, i + EMBED_CHUNK_FILES);
+				const items: KnowledgeItem[] = [];
+				for (const file of chunk) items.push(toItem(file.path, await file.read(), file.contentHash, file.language));
+				await sink.upsert(items);
+			}
 
-	// Files that left the tree since the last sync: retire their rows and purge
-	// their vectors, so a full re-ingest (also the fallback for oversized diffs)
-	// never leaves deleted files citable.
-	if (deps.files.listByRepository) {
-		const present = new Set(scanned.map((file) => file.path));
-		const gone = (await deps.files.listByRepository(repository.id)).filter((row) => row.status !== 'deleted' && !present.has(row.path)).map((row) => row.path);
-		if (gone.length > 0) {
-			await deps.files.markDeleted(repository.id, gone);
-			await sink.remove(gone);
+			// Files that left the tree since the last sync: retire their rows and purge
+			// their vectors, so a full re-ingest (also the fallback for oversized diffs)
+			// never leaves deleted files citable.
+			if (deps.files.listByRepository) {
+				const present = new Set(scanned.map((file) => file.path));
+				const gone = (await deps.files.listByRepository(repository.id)).filter((row) => row.status !== 'deleted' && !present.has(row.path)).map((row) => row.path);
+				if (gone.length > 0) {
+					await deps.files.markDeleted(repository.id, gone);
+					await sink.remove(gone);
+				}
+			}
 		}
-	}
+	);
 
 	// Cursor commit strictly after the embed barrier — a failed flush must retry
 	// from the previous commit, never skip content.

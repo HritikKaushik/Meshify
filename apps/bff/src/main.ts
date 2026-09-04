@@ -3,15 +3,15 @@ import express, { Router } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { pinoHttp } from 'pino-http';
-import pg from 'pg';
 import { clerkMiddleware, getAuth } from '@clerk/express';
 import { loadEnv } from '@meshify/config';
-import { createLogger, installProcessGuards } from '@meshify/shared';
+import { createPgPool } from '@meshify/data-access';
+import { closeHttpServer, createLogger, installGracefulShutdown, installProcessGuards } from '@meshify/shared';
 import { requireClerkSession } from './modules/auth/clerk-guard.js';
 import { resolveOrgForClerk } from './modules/auth/resolve-org-for-clerk.js';
 import { csrfOriginGuard } from './modules/security/csrf-origin-guard.js';
 import { maxBodySize } from './modules/security/max-body-size.js';
-import { createHealthProxy, createPlatformApiProxy } from './modules/proxy/platform-proxy.js';
+import { createHealthProxy, createPlatformApiProxy, createWebhookProxy } from './modules/proxy/platform-proxy.js';
 
 /** Fields the shared env schema marks optional (other apps don't need them) but this app requires. */
 function requireBffEnv(env: ReturnType<typeof loadEnv>) {
@@ -55,9 +55,13 @@ async function bootstrap(): Promise<void> {
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'bff' });
 	installProcessGuards(logger);
 
-	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
+	const pgPool = createPgPool({ connectionString: env.DATABASE_URL, max: env.PG_POOL_MAX, statementTimeoutMs: env.PG_STATEMENT_TIMEOUT_MS, applicationName: 'bff' }, logger);
 
 	const app = express();
+	// Client addresses (the pre-auth limiter, what we forward to platform-api)
+	// come from X-Forwarded-For; trust exactly the configured hops in front of
+	// this process (Render: web nginx + load balancer = 2).
+	app.set('trust proxy', env.TRUST_PROXY_HOPS);
 	app.use(pinoHttp({ logger }));
 
 	// Security headers (defense-in-depth). The BFF serves API/proxy responses, not
@@ -85,6 +89,26 @@ async function bootstrap(): Promise<void> {
 	// and platform-api's 50MB multer limit) before streaming anything downstream.
 	app.use('/api/v1', maxBodySize(50 * 1024 * 1024));
 
+	// Pre-auth address limiter: unauthenticated floods (or a scripted client with
+	// no session) are cut off here, before they cost a Clerk session
+	// verification or reach the public webhook passthrough. Generous - a real
+	// user never gets near it - and per address, so it only ever bites one source.
+	app.use(
+		'/api/v1',
+		rateLimit({
+			windowMs: 60_000,
+			limit: 1200,
+			standardHeaders: 'draft-7',
+			legacyHeaders: false,
+			message: { error: 'Rate limit exceeded' },
+		})
+	);
+
+	// Provider webhook deliveries: public, streamed through raw to platform-api,
+	// which verifies the provider signature itself. Mounted BEFORE the CSRF
+	// guard (server-to-server POSTs carry no Origin) and before Clerk.
+	app.use('/api/v1/integrations/webhooks', createWebhookProxy(bff.platformApiOrigin));
+
 	// CSRF guard runs BEFORE Clerk so a forged cross-origin write is rejected with
 	// 403 without spending any auth work on it. Safe methods pass straight through.
 	app.use('/api/v1', csrfOriginGuard(bff.allowedOrigins));
@@ -105,9 +129,10 @@ async function bootstrap(): Promise<void> {
 	// streamed straight through to platform-api. No express.json()/multer here:
 	// this must stay a raw passthrough so multipart uploads aren't buffered.
 	// Per-user edge rate limit, keyed by the Clerk user id (mounted AFTER
-	// requireClerkSession, so the key is always the authenticated user — never a
-	// spoofable IP). In-process store: fine for a single BFF instance; front
-	// multiple replicas with a shared store (e.g. rate-limit-redis) when scaling.
+	// requireClerkSession, so the key is always the authenticated user). The
+	// store is per process; the authoritative per-user and per-org limits live in
+	// platform-api on Redis, so this is only a local backstop and needs no
+	// shared store when the BFF scales out.
 	const edgeRateLimit = rateLimit({
 		windowMs: 60_000,
 		limit: 600,
@@ -135,15 +160,16 @@ async function bootstrap(): Promise<void> {
 		logger.info({ port }, 'bff listening');
 	});
 
-	const shutdown = async (signal: string) => {
-		logger.info({ signal }, 'shutting down');
-		server.close();
-		await pgPool.end();
-		process.exit(0);
-	};
-
-	process.on('SIGTERM', () => void shutdown('SIGTERM'));
-	process.on('SIGINT', () => void shutdown('SIGINT'));
+	// Drain in-flight proxied requests (uploads, SSE) before closing, bounded
+	// below Render's 30s shutdown grace for this service.
+	installGracefulShutdown({
+		logger,
+		timeoutMs: 25_000,
+		steps: [
+			{ name: 'http server', run: () => closeHttpServer(server, { drainMs: 15_000 }) },
+			{ name: 'postgres', run: () => pgPool.end() },
+		],
+	});
 }
 
 bootstrap().catch((err) => {

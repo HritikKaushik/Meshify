@@ -19,6 +19,12 @@ export interface AuthContext {
 	keyId: string;
 	scopes: string[];
 	/**
+	 * The end user behind a BFF-forwarded request (the Clerk user id), when
+	 * present. Rate limits key on it so one user cannot exhaust the budget of
+	 * the org key every browser session shares. Absent for direct API-key callers.
+	 */
+	actorId?: string;
+	/**
 	 * Whether this request may perform org-admin actions (manage AI providers,
 	 * delete projects, manage connectors/integrations). Derived from the
 	 * BFF-forwarded Clerk org role: a Clerk `org:admin` → true, `org:member` →

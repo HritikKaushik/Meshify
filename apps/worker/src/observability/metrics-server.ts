@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { Queue, type ConnectionOptions } from 'bullmq';
 import { collectDefaultMetrics, Gauge, Registry } from 'prom-client';
+import { bearerTokenMatches } from '@meshify/shared';
 
 export interface MetricsServer {
 	close(): Promise<void>;
@@ -52,7 +53,7 @@ export function startMetricsServer(opts: {
 			return;
 		}
 		if (req.url === '/metrics') {
-			if (opts.token && req.headers.authorization !== `Bearer ${opts.token}`) {
+			if (opts.token && !bearerTokenMatches(req.headers.authorization, opts.token)) {
 				res.writeHead(401).end('Unauthorized');
 				return;
 			}

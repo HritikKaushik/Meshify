@@ -1,10 +1,9 @@
 import '@meshify/telemetry'; // MUST be first — instruments http/express/pg before they load
 import express from 'express';
 import { pinoHttp } from 'pino-http';
-import pg from 'pg';
 import { Redis } from 'ioredis';
 import { loadEnv } from '@meshify/config';
-import { createLogger, installProcessGuards } from '@meshify/shared';
+import { closeHttpServer, createLogger, installGracefulShutdown, installProcessGuards } from '@meshify/shared';
 import { PostgresChecker } from './modules/health/infrastructure/postgres.checker.js';
 import { RedisChecker } from './modules/health/infrastructure/redis.checker.js';
 import { QdrantChecker } from './modules/health/infrastructure/qdrant.checker.js';
@@ -12,10 +11,11 @@ import { CheckHealthUseCase } from './modules/health/application/check-health.us
 import { createHealthController } from './modules/health/interface/health.controller.js';
 import { createErrorHandler } from './http/error-handler.js';
 import { createMetrics } from './modules/observability/metrics.js';
-import { PostgresProjectRepository } from '@meshify/data-access';
+import { PostgresProjectRepository, createPgPool } from '@meshify/data-access';
 import { QdrantCollectionProvisioner } from '@meshify/vector-store';
 import { CreateProjectUseCase } from './modules/projects/application/create-project.usecase.js';
 import { DeleteProjectUseCase } from './modules/projects/application/delete-project.usecase.js';
+import { reconcileQdrantPayloadIndexes } from './modules/projects/application/reconcile-qdrant-indexes.js';
 import { GetProjectUseCase } from './modules/projects/application/get-project.usecase.js';
 import { GetProjectStatsUseCase } from './modules/projects/application/get-project-stats.usecase.js';
 import { ListProjectsUseCase } from './modules/projects/application/list-projects.usecase.js';
@@ -103,6 +103,7 @@ import { DisconnectLlmProviderUseCase } from './modules/llm-providers/applicatio
 import { ListLlmModelsUseCase } from './modules/llm-providers/application/list-llm-models.usecase.js';
 import { LlmResolutionService } from './modules/llm-providers/infrastructure/llm-resolution.service.js';
 import { InProcessLlmProviderChangeNotifier } from './modules/llm-providers/infrastructure/in-process-llm-provider-change-notifier.js';
+import { RedisLlmProviderChangeNotifier } from './modules/llm-providers/infrastructure/redis-llm-provider-change-notifier.js';
 import { createLlmProvidersController } from './modules/llm-providers/interface/llm-providers.controller.js';
 import {
 	COMING_SOON_PROVIDERS,
@@ -139,7 +140,7 @@ async function bootstrap(): Promise<void> {
 	const logger = createLogger({ level: env.PLATFORM_LOG_LEVEL, service: 'platform-api' });
 	installProcessGuards(logger);
 
-	const pgPool = new pg.Pool({ connectionString: env.DATABASE_URL });
+	const pgPool = createPgPool({ connectionString: env.DATABASE_URL, max: env.PG_POOL_MAX, statementTimeoutMs: env.PG_STATEMENT_TIMEOUT_MS, applicationName: 'platform-api' }, logger);
 	const redis = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 });
 	await redis.connect();
 
@@ -155,7 +156,6 @@ async function bootstrap(): Promise<void> {
 	const projectRepository = new PostgresProjectRepository(pgPool);
 	const qdrantProvisioner = new QdrantCollectionProvisioner(env.QDRANT_URL, env.QDRANT_API_KEY);
 	const createProject = new CreateProjectUseCase(projectRepository, qdrantProvisioner);
-	const deleteProject = new DeleteProjectUseCase(projectRepository, qdrantProvisioner);
 	const getProject = new GetProjectUseCase(projectRepository);
 	const listProjects = new ListProjectsUseCase(projectRepository);
 
@@ -294,14 +294,15 @@ async function bootstrap(): Promise<void> {
 	// the worker; secret verification resolves via the registration layer.
 	const webhookEventRepository = new PostgresWebhookEventRepository(pgPool);
 	const webhookEventsQueue = createWebhookEventsQueue(bullRedis);
-	// Webhooks are pre-auth, so the per-key limiter can't apply — use a
-	// per-provider fixed window generous enough for bursty pushes. Falls back to an
-	// in-process limiter if Redis is down rather than dropping throttling.
-	const webhookLimiter = new FallbackRateLimiter(
-		new RedisRateLimiter(redis, 600, 60),
-		new InMemoryRateLimiter(600, 60),
-		(err) => logger.warn({ err }, 'webhook rate limiter fell back to in-memory (redis unavailable)')
-	);
+	// Webhooks are pre-auth, so the per-key limiter can't apply. Two fixed
+	// windows instead: a per-provider ceiling that bounds the signature/secret
+	// work one endpoint can be made to do, and a per-source-address bucket so a
+	// single flooding source is cut off before it can starve the provider's real
+	// deliveries out of that ceiling. Both fall back to an in-process limiter if
+	// Redis is down rather than dropping throttling.
+	const webhookFallback = (err: unknown) => logger.warn({ err }, 'webhook rate limiter fell back to in-memory (redis unavailable)');
+	const webhookLimiter = new FallbackRateLimiter(new RedisRateLimiter(redis, 3000, 60), new InMemoryRateLimiter(3000, 60), webhookFallback);
+	const webhookSourceLimiter = new FallbackRateLimiter(new RedisRateLimiter(redis, 600, 60), new InMemoryRateLimiter(600, 60), webhookFallback);
 
 	const attachSlackWorkspace = new AttachSlackWorkspaceUseCase(integrationRepository, knowledgeConnectorRepository, slackWorkspaceRepository, slackChannelRepository, credentialVault, slackClient);
 	const connectRepositoryFromIntegration = new ConnectRepositoryFromIntegrationUseCase(
@@ -332,6 +333,7 @@ async function bootstrap(): Promise<void> {
 	// chat-pipeline.ts for why.
 	const rocketridePool = new RocketRideClientPool(env, logger);
 	const pipelineRegistry = new PipelineRegistry(rocketridePool, env.ROCKETRIDE_OP_TIMEOUT_MS);
+	const deleteProject = new DeleteProjectUseCase(projectRepository, qdrantProvisioner, documentRepository, repositoryRepository, objectStorage, pipelineRegistry, logger);
 	const ragService = new RocketRideRagService(rocketridePool);
 	// The resolver consults the active LLM provider; falls back to managed OpenAI when none is active.
 	const chatPipelineResolver = new RocketRideChatPipelineResolver(pipelineRegistry, llmResolutionService);
@@ -343,7 +345,14 @@ async function bootstrap(): Promise<void> {
 	// AI Providers use cases. The change notifier invalidates the resolution cache
 	// and the org's cached chat pipelines on connect/activate/disconnect, so a
 	// provider switch takes effect on the next chat turn with no restart.
-	const llmChangeNotifier = new InProcessLlmProviderChangeNotifier(llmResolutionService, projectRepository, chatPipelineResolver, logger);
+	// Local caches drop on this replica, and the change is replicated over Redis
+	// so every other API replica drops its cached provider and chat pipelines too.
+	const llmChangeNotifier = new RedisLlmProviderChangeNotifier(
+		new InProcessLlmProviderChangeNotifier(llmResolutionService, projectRepository, chatPipelineResolver, logger),
+		redis,
+		platformEventsRedis,
+		logger
+	);
 	const listLlmProviders = new ListLlmProvidersUseCase(llmRegistry, llmProviderConfigRepository, activeLlmProviderRepository);
 	const getLlmProvider = new GetLlmProviderUseCase(llmRegistry, llmProviderConfigRepository, activeLlmProviderRepository, llmCredentialVault);
 	const connectLlmProvider = new ConnectLlmProviderUseCase(llmRegistry, llmProviderConfigRepository, llmCredentialVault, llmChangeNotifier);
@@ -365,16 +374,24 @@ async function bootstrap(): Promise<void> {
 	const apiKeyRepository = new PostgresApiKeyRepository(pgPool);
 	const auditLogRepository = new PostgresAuditLogRepository(pgPool);
 	const authenticate = new AuthenticateApiKeyUseCase(apiKeyRepository, env.PLATFORM_API_KEY_PEPPER);
+	const rateLimiterFallback = (err: unknown) => logger.warn({ err }, 'rate limiter fell back to in-memory (redis unavailable)');
 	const rateLimiter = new FallbackRateLimiter(
 		new RedisRateLimiter(redis, env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC),
 		new InMemoryRateLimiter(env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC),
-		(err) => logger.warn({ err }, 'rate limiter fell back to in-memory (redis unavailable)')
+		rateLimiterFallback
+	);
+	const keyCeilingLimiter = new FallbackRateLimiter(
+		new RedisRateLimiter(redis, env.RATE_LIMIT_KEY_MAX, env.RATE_LIMIT_WINDOW_SEC),
+		new InMemoryRateLimiter(env.RATE_LIMIT_KEY_MAX, env.RATE_LIMIT_WINDOW_SEC),
+		rateLimiterFallback
 	);
 
 	const app = express();
-	// Honour X-Forwarded-For for accurate client IPs in audit logs (behind a
-	// load balancer / ingress). Rate limits key on the API key, not the IP.
-	app.set('trust proxy', true);
+	// Client IPs (audit logs, the webhook source limiter) come from
+	// X-Forwarded-For. Trust exactly the configured number of hops - the BFF
+	// overwrites the header with the address it resolved, so 1 by default -
+	// rather than `true`, which believed whatever the client put there.
+	app.set('trust proxy', env.TRUST_PROXY_HOPS);
 	app.use(pinoHttp({ logger }));
 
 	// Prometheus: time every request (mounted early) and expose /metrics (public,
@@ -393,6 +410,7 @@ async function bootstrap(): Promise<void> {
 			webhookQueue: webhookEventsQueue,
 			registrations: providerRegistrationService,
 			limiter: webhookLimiter,
+			sourceLimiter: webhookSourceLimiter,
 			logger,
 		})
 	);
@@ -405,7 +423,7 @@ async function bootstrap(): Promise<void> {
 	// Everything below requires a valid API key, is rate-limited per key, and
 	// (for mutations) audited. Order matters: authenticate → throttle → audit.
 	app.use(authGuard(authenticate));
-	app.use(rateLimitGuard(rateLimiter));
+	app.use(rateLimitGuard(rateLimiter, keyCeilingLimiter));
 	app.use(auditLogMiddleware(auditLogRepository));
 
 	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
@@ -457,21 +475,27 @@ async function bootstrap(): Promise<void> {
 		logger.info({ port }, 'platform-api listening');
 	});
 
-	const shutdown = async (signal: string) => {
-		logger.info({ signal }, 'shutting down');
-		server.close();
-		await Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close(), sourceSyncQueue.close(), webhookEventsQueue.close()]);
-		await rocketridePool.shutdown();
-		await redis.quit();
-		await bullRedis.quit();
-		await jobEventsRedis.quit();
-		await platformEventsRedis.quit();
-		await pgPool.end();
-		process.exit(0);
-	};
+	// Backfill payload indexes on collections provisioned before they existed
+	// (idempotent, best-effort, off the request path).
+	void reconcileQdrantPayloadIndexes(projectRepository, qdrantProvisioner, logger).then(
+		(result) => logger.info(result, 'Qdrant payload index reconcile finished'),
+		(err: unknown) => logger.warn({ err }, 'Qdrant payload index reconcile failed')
+	);
 
-	process.on('SIGTERM', () => void shutdown('SIGTERM'));
-	process.on('SIGINT', () => void shutdown('SIGINT'));
+	// Orderly rollout: stop accepting requests and drain in-flight ones (SSE
+	// streams are cut after the drain window), then close the clients. Bounded
+	// so a wedged dependency cannot hold the old instance past Render's grace.
+	installGracefulShutdown({
+		logger,
+		timeoutMs: 25_000,
+		steps: [
+			{ name: 'http server', run: () => closeHttpServer(server, { drainMs: 10_000 }) },
+			{ name: 'queues', run: () => Promise.all([ingestQueue.close(), repoIngestQueue.close(), repoSyncQueue.close(), slackIngestQueue.close(), slackSyncQueue.close(), sourceSyncQueue.close(), webhookEventsQueue.close()]) },
+			{ name: 'rocketride', run: () => rocketridePool.shutdown() },
+			{ name: 'redis', run: () => Promise.all([redis.quit(), bullRedis.quit(), jobEventsRedis.quit(), platformEventsRedis.quit()]) },
+			{ name: 'postgres', run: () => pgPool.end() },
+		],
+	});
 }
 
 bootstrap().catch((err) => {

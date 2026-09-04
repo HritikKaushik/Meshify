@@ -5,7 +5,8 @@ import { mockRequest, mockResponse } from './http-mocks.testutil.js';
 
 function recorder() {
 	const records: AuditLogEntry[] = [];
-	const repo: AuditLogRepository = { record: async (e) => void records.push(e) };
+	const repo: AuditLogRepository = {
+			deleteBefore: async () => 0, record: async (e) => void records.push(e) };
 	return { repo, records };
 }
 
@@ -64,6 +65,7 @@ describe('auditLogMiddleware', () => {
 
 	it('never throws into the request path if recording fails', async () => {
 		const repo: AuditLogRepository = {
+			deleteBefore: async () => 0,
 			record: async () => {
 				throw new Error('db down');
 			},

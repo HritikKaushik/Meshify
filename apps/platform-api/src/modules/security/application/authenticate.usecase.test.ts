@@ -74,6 +74,14 @@ describe('AuthenticateApiKeyUseCase', () => {
 		await expect(new AuthenticateApiKeyUseCase(repo, PEPPER).execute(header)).rejects.toBeInstanceOf(AuthenticationError);
 	});
 
+	it('carries a well-formed forwarded user id as actorId and drops anything else', async () => {
+		const { plaintext } = generateApiKey();
+		const { repo } = fakeRepo({ [hashApiKey(PEPPER, plaintext)]: activeKey() });
+		expect((await new AuthenticateApiKeyUseCase(repo, PEPPER).execute(`Bearer ${plaintext}`, 'member', 'user_2abcDEF')).actorId).toBe('user_2abcDEF');
+		expect((await new AuthenticateApiKeyUseCase(repo, PEPPER).execute(`Bearer ${plaintext}`, 'member', 'user 2abc; drop')).actorId).toBeUndefined();
+		expect((await new AuthenticateApiKeyUseCase(repo, PEPPER).execute(`Bearer ${plaintext}`)).actorId).toBeUndefined();
+	});
+
 	it('rejects an unknown key without leaking that it is unknown', async () => {
 		const { plaintext } = generateApiKey();
 		const { repo } = fakeRepo({});

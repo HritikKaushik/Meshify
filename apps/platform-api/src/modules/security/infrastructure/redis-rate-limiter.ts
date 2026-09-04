@@ -9,11 +9,25 @@ export interface RateLimitDecision {
 }
 
 /**
+ * INCR the window counter and, on the hit that creates the key (or if the key
+ * somehow has no TTL), bound its lifetime to the window - in one atomic step.
+ * Doing INCR and EXPIRE as two commands left a window where a crash or a
+ * dropped connection between them created a counter that never expired, which
+ * then blocked that identity for good.
+ */
+const HIT_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 or redis.call('TTL', KEYS[1]) < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`;
+
+/**
  * Fixed-window rate limiter backed by Redis. One counter key per identity per
- * window; INCR + EXPIRE (set only on the first hit of a window) is atomic
- * enough for this purpose and far cheaper than a sorted-set sliding window.
- * The window boundary is derived from the clock so all API replicas agree
- * without coordination.
+ * window, advanced by a small Lua script so the increment and the TTL are
+ * atomic. The window boundary is derived from the clock so all API replicas
+ * agree without coordination.
  */
 export class RedisRateLimiter {
 	constructor(
@@ -27,11 +41,7 @@ export class RedisRateLimiter {
 		const resetAt = windowStart + this.windowSec;
 		const redisKey = `ratelimit:${identity}:${windowStart}`;
 
-		const count = await this.redis.incr(redisKey);
-		if (count === 1) {
-			// First hit of this window — bound the key's lifetime to the window.
-			await this.redis.expire(redisKey, this.windowSec);
-		}
+		const count = Number(await this.redis.eval(HIT_SCRIPT, 1, redisKey, this.windowSec));
 
 		const remaining = Math.max(0, this.max - count);
 		return { allowed: count <= this.max, limit: this.max, remaining, resetAt };

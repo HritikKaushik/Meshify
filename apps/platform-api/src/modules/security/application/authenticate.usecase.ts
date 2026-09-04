@@ -29,8 +29,11 @@ export class AuthenticateApiKeyUseCase {
 	 *   credential that never passes through the BFF) — treated as full-access.
 	 *   The BFF always sets this header authoritatively from the Clerk session,
 	 *   overwriting any browser-supplied value, so a member cannot forge `admin`.
+	 * @param actorHeader the BFF-forwarded `X-Meshify-User-Id` (the Clerk user
+	 *   id), set the same authoritative way. Only used to key rate limits per
+	 *   user; a value that is not a plain identifier is ignored, never trusted.
 	 */
-	async execute(authorizationHeader: string | undefined, orgRoleHeader?: string): Promise<AuthContext> {
+	async execute(authorizationHeader: string | undefined, orgRoleHeader?: string, actorHeader?: string): Promise<AuthContext> {
 		const presented = extractBearer(authorizationHeader);
 		if (!presented || !looksLikeApiKey(presented)) {
 			throw new AuthenticationError('Missing or malformed API key');
@@ -56,9 +59,13 @@ export class AuthenticateApiKeyUseCase {
 		const keyIsAdminCapable = key.scopes.length === 0 || key.scopes.includes('admin');
 		const roleIsAdmin = orgRoleHeader === undefined ? true : orgRoleHeader === 'admin';
 		const isOrgAdmin = keyIsAdminCapable && roleIsAdmin;
-		return { orgId: key.orgId, keyId: key.id, scopes: key.scopes, isOrgAdmin };
+		const actorId = actorHeader && ACTOR_ID_PATTERN.test(actorHeader) ? actorHeader : undefined;
+		return { orgId: key.orgId, keyId: key.id, scopes: key.scopes, isOrgAdmin, ...(actorId ? { actorId } : {}) };
 	}
 }
+
+/** Clerk user ids look like `user_2abc...`; anything outside this shape is dropped rather than used as a limiter key. */
+const ACTOR_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 function extractBearer(header: string | undefined): string | undefined {
 	if (!header) return undefined;

@@ -46,7 +46,12 @@ root). Keep secrets in the root `.env` (git-ignored); commit only `.env.example`
 | `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | bff | Session verification |
 | `PLATFORM_API_KEY_PEPPER` | api | HMAC pepper for API-key hashing |
 | `ORG_KEY_ENCRYPTION_KEY` | bff, api, worker | Encrypts org API keys at rest; also signs Slack OAuth `state` + encrypts Slack tokens |
-| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_SEC` | api | Per-key rate limiting |
+| `METRICS_TOKEN` | api, worker | Bearer token the scraper sends to `/metrics`; at least 16 chars, required in production (empty leaves `/metrics` open in dev only) |
+| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_SEC` | api | Requests per window per end user (BFF traffic) or per API key (direct callers) |
+| `RATE_LIMIT_KEY_MAX` | api | Ceiling per window across every user sharing one API key (default 1200) |
+| `PG_POOL_MAX`, `PG_STATEMENT_TIMEOUT_MS` | all | Postgres connections per process (default 10) and server-side statement timeout (default 30000 ms) |
+| `PIPELINE_RUN_RETENTION_DAYS`, `AUDIT_LOG_RETENTION_DAYS` | worker | Daily retention sweeps: pipeline runs/traces (default 30) and audit log entries (default 365) older than this are deleted |
+| `TRUST_PROXY_HOPS` | api, bff | Proxy hops trusted when reading the client IP from `X-Forwarded-For` (api: 1 = the BFF; bff on Render: 2 = web nginx + load balancer) |
 
 ### GitHub App (managed provider registration)
 These form the deployment's **managed** GitHub registration. The managed provider is only offered when the full set (App ID, slug, private key, **and** OAuth client ID + secret) is present — without the client credentials, installation ownership can't be verified during connect, so the provider fails closed rather than expose an unverifiable flow. Orgs can instead register their own GitHub App (BYOA) with the same field set through the platform UI.

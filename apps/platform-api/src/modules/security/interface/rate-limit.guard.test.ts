@@ -36,6 +36,36 @@ describe('rateLimitGuard', () => {
 		expect(hit).toHaveBeenCalledWith('k1');
 	});
 
+	it('keys the limit per end user when the BFF forwarded one, so users of one org do not share a bucket', async () => {
+		const hit = vi.fn(async () => ({ allowed: true, limit: 100, remaining: 50, resetAt: 1000 }));
+		const req = mockRequest({ auth: { orgId: 'o1', keyId: 'k1', scopes: [], isOrgAdmin: false, actorId: 'user_1' } } as never);
+		await rateLimitGuard(limiter(hit))(req, mockResponse(), vi.fn());
+		expect(hit).toHaveBeenCalledWith('k1:user_1');
+	});
+
+	it('also applies the org-wide key ceiling and reports the tighter decision', async () => {
+		const perActor = vi.fn(async () => ({ allowed: true, limit: 100, remaining: 90, resetAt: 1000 }));
+		const perKey = vi.fn(async () => ({ allowed: true, limit: 1000, remaining: 3, resetAt: 1000 }));
+		const req = mockRequest({ auth: { orgId: 'o1', keyId: 'k1', scopes: [], isOrgAdmin: false, actorId: 'user_1' } } as never);
+		const res = mockResponse();
+		const next = vi.fn();
+		await rateLimitGuard(limiter(perActor), limiter(perKey))(req, res, next);
+		expect(perKey).toHaveBeenCalledWith('k1');
+		expect(next).toHaveBeenCalledOnce();
+		expect(res.getHeader('RateLimit-Remaining')).toBe(3);
+		expect(res.getHeader('RateLimit-Limit')).toBe(1000);
+	});
+
+	it('returns 429 when the key ceiling is exhausted even though the actor bucket is not', async () => {
+		const perActor = vi.fn(async () => ({ allowed: true, limit: 100, remaining: 90, resetAt: Math.floor(Date.now() / 1000) + 30 }));
+		const perKey = vi.fn(async () => ({ allowed: false, limit: 1000, remaining: 0, resetAt: Math.floor(Date.now() / 1000) + 30 }));
+		const res = mockResponse();
+		const next = vi.fn();
+		await rateLimitGuard(limiter(perActor), limiter(perKey))(authed(), res, next);
+		expect(res.statusCode).toBe(429);
+		expect(next).not.toHaveBeenCalled();
+	});
+
 	it('fails closed (503) when the limiter backend throws', async () => {
 		const res = mockResponse();
 		const next = vi.fn();

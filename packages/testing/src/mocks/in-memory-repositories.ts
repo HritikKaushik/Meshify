@@ -300,6 +300,12 @@ export class InMemoryFileRepository implements FileRepository {
 		return file;
 	}
 
+	async upsertMany(inputs: UpsertFileInput[]): Promise<RepoFile[]> {
+		const out: RepoFile[] = [];
+		for (const input of inputs) out.push(await this.upsert(input));
+		return out;
+	}
+
 	async listByRepository(repositoryId: string): Promise<RepoFile[]> {
 		return this.files.filter((f) => f.repositoryId === repositoryId);
 	}
@@ -347,6 +353,10 @@ export class InMemoryProjectRepository implements ProjectRepository {
 
 	async findByOrgId(orgId: string): Promise<Project[]> {
 		return [...this.projects.values()].filter((p) => p.orgId === orgId);
+	}
+
+	async listAll(): Promise<Project[]> {
+		return [...this.projects.values()];
 	}
 
 	async delete(id: string): Promise<void> {
@@ -657,6 +667,10 @@ export class InMemoryPipelineJobRepository implements PipelineJobRepository {
 		return [...this.jobs.values()].filter((j) => j.status === 'queued' && j.createdAt < before);
 	}
 
+	async listStuckRunning(before: Date): Promise<PipelineJob[]> {
+		return [...this.jobs.values()].filter((j) => j.status === 'running' && j.updatedAt < before);
+	}
+
 	async markRunning(id: string): Promise<void> {
 		this.patch(id, { status: 'running', progress: 0 });
 	}
@@ -895,10 +909,11 @@ export class InMemoryWebhookEventRepository implements WebhookEventRepository {
 		return [...this.events.values()].filter((e) => e.integrationId === integrationId).slice(0, limit);
 	}
 
-	async deleteTerminalBefore(_before: Date): Promise<number> {
+	async deleteTerminalBefore(before: Date, failedBefore: Date = before): Promise<number> {
 		let removed = 0;
 		for (const [id, e] of [...this.events]) {
-			if (['processed', 'skipped', 'failed'].includes(e.status)) {
+			const cutoff = e.status === 'failed' ? failedBefore : ['processed', 'skipped'].includes(e.status) ? before : undefined;
+			if (cutoff && e.receivedAt < cutoff) {
 				this.events.delete(id);
 				removed += 1;
 			}

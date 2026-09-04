@@ -15,22 +15,27 @@ import { buildEffectiveCredentials } from '../application/llm-provider-support.j
  * OpenAI workflows keep working.
  *
  * Results are cached per org and invalidated on any provider change (see
- * `InProcessLlmProviderChangeNotifier`), so the chat hot path does no DB/vault
- * work on a cache hit.
+ * `RedisLlmProviderChangeNotifier`, which fans the invalidation out to every
+ * API replica), so the chat hot path does no DB/vault work on a cache hit.
+ * Entries also expire after `ttlMs` as a backstop for a missed invalidation
+ * (a replica that was disconnected from Redis when the change was published).
  */
 export class LlmResolutionService {
-	private readonly cache = new Map<string, ResolvedLlmConfig | null>();
+	private readonly cache = new Map<string, { value: ResolvedLlmConfig | null; expiresAt: number }>();
 
 	constructor(
 		private readonly registry: LlmProviderRegistry,
 		private readonly configs: LlmProviderConfigurationRepository,
-		private readonly vault: CredentialVault
+		private readonly vault: CredentialVault,
+		private readonly ttlMs = 5 * 60 * 1000,
+		private readonly now: () => number = () => Date.now()
 	) {}
 
 	async resolveForOrg(orgId: string): Promise<ResolvedLlmConfig | null> {
-		if (this.cache.has(orgId)) return this.cache.get(orgId) ?? null;
+		const cached = this.cache.get(orgId);
+		if (cached && cached.expiresAt > this.now()) return cached.value;
 		const resolved = await this.compute(orgId);
-		this.cache.set(orgId, resolved);
+		this.cache.set(orgId, { value: resolved, expiresAt: this.now() + this.ttlMs });
 		return resolved;
 	}
 

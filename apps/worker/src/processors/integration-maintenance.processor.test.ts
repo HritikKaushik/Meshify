@@ -50,6 +50,10 @@ function harness(provider: Provider, integrationOverrides: Parameters<typeof bui
 	// passes that instant (a date-triggered flake).
 	const vault = new CredentialVault(credentials, fakeCipher, () => NOW);
 	const enqueued: unknown[] = [];
+	/** Cutoffs the retention task handed to the pipeline-run and audit-log sweeps. */
+	const retentionCutoffs: Array<[string, Date]> = [];
+	/** BullMQ jobs the fake source-sync queue "knows" (id -> current state) for the stuck-running reaper. */
+	const queueJobs = new Map<string, string>();
 	const deps: MaintenanceProcessorDeps = {
 		registry,
 		integrations: new InMemoryIntegrationRepository([integration]),
@@ -58,15 +62,31 @@ function harness(provider: Provider, integrationOverrides: Parameters<typeof bui
 		pipelineJobs: new InMemoryPipelineJobRepository(),
 		oauthStates: { create: async () => ({} as never), consumeByHash: async () => undefined, deleteExpiredBefore: async () => 3 },
 		webhookEvents: new InMemoryWebhookEventRepository(),
-		sourceSyncQueue: { add: async (_n: string, payload: unknown) => void enqueued.push(payload) } as never,
+		sourceSyncQueue: {
+			add: async (_n: string, payload: unknown) => void enqueued.push(payload),
+			getJob: async (id: string) => (queueJobs.has(id) ? { getState: async () => queueJobs.get(id) } : undefined),
+		} as never,
 		webhookQueue: { add: async () => undefined } as never,
 		vault,
 		registrations: { resolveForIntegration: async () => fakeRegistration() } as never,
 		bus: new InMemoryPlatformEventBus(),
 		logger: { info: () => undefined, warn: () => undefined },
+		pipelineRuns: {
+			deleteEndedBefore: async (before: Date) => {
+				retentionCutoffs.push(['runs', before]);
+				return 2;
+			},
+		},
+		auditLogs: {
+			deleteBefore: async (before: Date) => {
+				retentionCutoffs.push(['audits', before]);
+				return 5;
+			},
+		},
+		retention: { pipelineRunDays: 30, auditLogDays: 365 },
 		now: () => NOW,
 	};
-	return { deps, vault, credentials, enqueued, integration };
+	return { deps, vault, credentials, enqueued, integration, queueJobs, retentionCutoffs };
 }
 
 const jobFor = (task: 'refresh' | 'health' | 'retention') => ({ data: { task } }) as Job<IntegrationMaintenanceJobPayload>;
@@ -160,5 +180,66 @@ describe('processMaintenanceJob', () => {
 
 		await processMaintenanceJob(jobFor('retention'), h.deps);
 		expect(events.events.size).toBe(0);
+	});
+
+	it('retention: prunes pipeline runs and audit log entries older than their configured ages', async () => {
+		const h = harness(fakeProvider({}));
+		await processMaintenanceJob(jobFor('retention'), h.deps);
+		const day = 24 * 3600 * 1000;
+		expect(h.retentionCutoffs).toEqual([
+			['runs', new Date(NOW.getTime() - 30 * day)],
+			['audits', new Date(NOW.getTime() - 365 * day)],
+		]);
+	});
+
+	it('retention: keeps failed deliveries (the webhook dead-letter record) three times longer than processed ones', async () => {
+		const h = harness(fakeProvider({}));
+		const events = h.deps.webhookEvents as InMemoryWebhookEventRepository;
+		const days = (n: number) => new Date(NOW.getTime() - n * 24 * 3600 * 1000);
+		const processed = (await events.recordIfNew({ provider: 'fakehub', deliveryId: 'ok', eventType: 'x', integrationId: 'int-1', payload: {} }))!;
+		const failed = (await events.recordIfNew({ provider: 'fakehub', deliveryId: 'bad', eventType: 'x', integrationId: 'int-1', payload: {} }))!;
+		await events.markStatus(processed.id, 'processed');
+		await events.markStatus(failed.id, 'failed', 'boom');
+		for (const id of [processed.id, failed.id]) events.events.set(id, { ...events.events.get(id)!, receivedAt: days(45) });
+
+		await processMaintenanceJob(jobFor('retention'), h.deps);
+		expect(events.events.has(processed.id)).toBe(false);
+		expect(events.events.has(failed.id)).toBe(true);
+
+		events.events.set(failed.id, { ...events.events.get(failed.id)!, receivedAt: days(100) });
+		await processMaintenanceJob(jobFor('retention'), h.deps);
+		expect(events.events.has(failed.id)).toBe(false);
+	});
+
+	it('refresh: dead-letters running source_sync rows with no progress for 2h whose queue job is gone, flipping the connector to error', async () => {
+		const h = harness(fakeProvider({}));
+		const jobs = h.deps.pipelineJobs as InMemoryPipelineJobRepository;
+		await h.deps.connectors.create({ id: 'c-dead', projectId: 'p1', type: 'fakehub', displayName: 'x', integrationId: 'int-1', config: {}, status: 'syncing' });
+		const hoursAgo = (n: number) => new Date(NOW.getTime() - n * 3600 * 1000);
+		const seed = async (id: string, connectorId: string, updatedAt: Date, jobType: 'source_sync' | 'sync_repo' = 'source_sync') => {
+			await jobs.create({ id, projectId: 'p1', jobType, payload: { connectorId, mode: 'incremental' } });
+			await jobs.markRunning(id);
+			const row = (await jobs.findById(id))!;
+			(row as { updatedAt: Date }).updatedAt = updatedAt;
+		};
+		await seed('j-orphan', 'c-dead', hoursAgo(3)); // worker died; BullMQ has forgotten the job
+		await seed('j-stalled', 'c-live', hoursAgo(3)); // BullMQ gave up on it too
+		h.queueJobs.set('j-stalled', 'failed');
+		await seed('j-active', 'c-active', hoursAgo(3)); // still owned by a worker: leave it alone
+		h.queueJobs.set('j-active', 'active');
+		await seed('j-fresh', 'c-fresh', hoursAgo(1)); // progressing normally
+		await seed('j-legacy', 'c-legacy', hoursAgo(3), 'sync_repo'); // no queue handle here: log only
+
+		await processMaintenanceJob(jobFor('refresh'), h.deps);
+
+		expect((await jobs.findById('j-orphan'))?.status).toBe('dead_letter');
+		expect((await jobs.findById('j-orphan'))?.lastError).toMatch(/queue job is missing/);
+		expect((await jobs.findById('j-stalled'))?.status).toBe('dead_letter');
+		expect((await jobs.findById('j-active'))?.status).toBe('running');
+		expect((await jobs.findById('j-fresh'))?.status).toBe('running');
+		expect((await jobs.findById('j-legacy'))?.status).toBe('running');
+		const connector = await h.deps.connectors.findById('c-dead');
+		expect(connector?.status).toBe('error');
+		expect(connector?.lastError).toMatch(/Reaped by maintenance/);
 	});
 });

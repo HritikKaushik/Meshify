@@ -20,9 +20,9 @@ interface WarmLogger {
  * Activating a provider triggers this so the first chat message is fast rather
  * than paying the one-time RocketRide setup lazily.
  *
- * Note: like the existing per-project profile-switch behavior, these caches are
- * in-process; in a multi-instance deployment other instances warm on their own
- * next cache miss (documented in the AI Providers backend doc).
+ * These caches are per process: `RedisLlmProviderChangeNotifier` wraps this
+ * notifier in production so the invalidation reaches every API replica; the
+ * other replicas then rebuild lazily on their next chat turn.
  */
 export class InProcessLlmProviderChangeNotifier implements LlmProviderChangeNotifier {
 	constructor(

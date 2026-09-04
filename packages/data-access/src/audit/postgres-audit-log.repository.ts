@@ -21,4 +21,9 @@ export class PostgresAuditLogRepository implements AuditLogRepository {
 			]
 		);
 	}
+
+	async deleteBefore(before: Date): Promise<number> {
+		const result = await this.pool.query('delete from audit_logs where created_at < $1', [before]);
+		return result.rowCount ?? 0;
+	}
 }

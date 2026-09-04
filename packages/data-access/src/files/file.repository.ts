@@ -13,6 +13,8 @@ export interface UpsertFileInput {
 export interface FileRepository {
 	/** Insert or, if (repository_id, path) already exists, refresh hash/size/language and reset status to pending. */
 	upsert(input: UpsertFileInput): Promise<RepoFile>;
+	/** `upsert` for a whole tree in one statement (a full ingest used to issue one round trip per file). */
+	upsertMany(inputs: UpsertFileInput[]): Promise<RepoFile[]>;
 	listByRepository(repositoryId: string): Promise<RepoFile[]>;
 	updateStatusByRepository(repositoryId: string, from: FileStatus, to: FileStatus): Promise<void>;
 	/** Batch lookup by exact paths — the ConnectorEngine's content-hash ledger read. */

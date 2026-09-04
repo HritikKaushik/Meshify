@@ -204,7 +204,7 @@ version keeps working against the new schema).
 Add these to *Environment Groups → meshify-backend*; they are deliberately not in
 `render.yaml` because a blank value would fail validation at boot:
 - **GitHub App** (repo ingestion): create the App → webhook URL
-  `https://app.<domain>/api/v1/webhooks/github`, enable *Request user authorization
+  `https://app.<domain>/api/v1/integrations/webhooks/github` (served by the BFF's public webhook passthrough), enable *Request user authorization
   (OAuth) during installation*; set `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
   `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`,
   `GITHUB_APP_CLIENT_SECRET` - all six, or the provider reports *not configured*.

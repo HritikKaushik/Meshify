@@ -23,7 +23,7 @@ export function authGuard(authenticate: AuthenticateApiKeyUseCase) {
 			// X-Meshify-Org-Role is set authoritatively by the BFF from the Clerk
 			// session (browsers can't forge it — they never hold the org key and
 			// the BFF overwrites the header). Absent = direct server-key caller.
-			req.auth = await authenticate.execute(req.header('authorization'), req.header('x-meshify-org-role'));
+			req.auth = await authenticate.execute(req.header('authorization'), req.header('x-meshify-org-role'), req.header('x-meshify-user-id'));
 			next();
 		} catch (err) {
 			if (err instanceof AuthenticationError) {

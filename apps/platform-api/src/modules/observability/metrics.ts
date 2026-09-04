@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 import { collectDefaultMetrics, Histogram, Registry } from 'prom-client';
+import { bearerTokenMatches } from '@meshify/shared';
 
 export interface Metrics {
 	/** Times every HTTP request (labels: method, route pattern, status). Mount early. */
@@ -45,7 +46,7 @@ export function createMetrics(opts: { token?: string } = {}): Metrics {
 	};
 
 	const metricsHandler: RequestHandler = async (req, res) => {
-		if (opts.token && req.get('authorization') !== `Bearer ${opts.token}`) {
+		if (opts.token && !bearerTokenMatches(req.get('authorization'), opts.token)) {
 			res.status(401).json({ error: 'Unauthorized' });
 			return;
 		}

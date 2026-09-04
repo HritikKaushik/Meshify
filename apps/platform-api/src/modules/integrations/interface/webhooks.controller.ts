@@ -24,7 +24,10 @@ export interface WebhookReceiverDeps {
 	webhookQueue: Queue<WebhookEventJobPayload>;
 	/** Resolves the managed (deployment) or a specific BYOA registration for secret verification. */
 	registrations: ProviderRegistrationService;
+	/** Per-provider ceiling on deliveries per window (bounds the verification work one endpoint can be made to do). */
 	limiter: { hit(identity: string): Promise<{ allowed: boolean }> };
+	/** Per-source-address bucket so one flooding source cannot starve a provider's real deliveries out of the ceiling. */
+	sourceLimiter: { hit(identity: string): Promise<{ allowed: boolean }> };
 	logger: { warn: (obj: unknown, msg: string) => void; error: (obj: unknown, msg: string) => void };
 }
 
@@ -46,8 +49,11 @@ export function createWebhooksController(deps: WebhookReceiverDeps): Router {
 		const providerId = String(req.params.provider ?? '');
 		const registrationIdParam = req.params.registrationId ? String(req.params.registrationId) : undefined;
 		try {
-			const { allowed } = await deps.limiter.hit(`webhook:${providerId}`);
-			if (!allowed) {
+			const [{ allowed: underCeiling }, { allowed: sourceAllowed }] = await Promise.all([
+				deps.limiter.hit(`webhook:${providerId}`),
+				deps.sourceLimiter.hit(`webhook:${providerId}:${req.ip ?? 'unknown'}`),
+			]);
+			if (!underCeiling || !sourceAllowed) {
 				res.status(429).json({ error: 'Too many webhook deliveries' });
 				return;
 			}

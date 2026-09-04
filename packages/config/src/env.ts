@@ -15,9 +15,13 @@ const envSchema = z.object({
 	// a key the BFF minted.
 	PLATFORM_API_KEY_PEPPER: z.string().min(16, 'PLATFORM_API_KEY_PEPPER must be at least 16 chars'),
 	PLATFORM_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-	// Gates the Prometheus /metrics endpoint. Set in production and configure the
-	// same bearer token on the scraper; unset leaves /metrics open (dev only).
-	METRICS_TOKEN: z.string().optional(),
+	// Gates the Prometheus /metrics endpoint: the scraper sends it as a bearer
+	// token. Required in production (enforced below); unset or empty leaves
+	// /metrics open, which is only acceptable in development.
+	METRICS_TOKEN: z.preprocess(
+		(value) => (value === '' ? undefined : value),
+		z.string().min(16, 'METRICS_TOKEN must be at least 16 chars (generate with `openssl rand -base64 32`)').optional()
+	),
 	// Port for the worker's own metrics/health HTTP server (the worker otherwise
 	// has no HTTP surface). Scraped for queue-depth + process metrics.
 	WORKER_METRICS_PORT: z.coerce.number().int().positive().default(9091),
@@ -45,13 +49,37 @@ const envSchema = z.object({
 	CLERK_PUBLISHABLE_KEY: z.string().optional(),
 	ORG_KEY_ENCRYPTION_KEY: z.string().min(32, 'ORG_KEY_ENCRYPTION_KEY must be at least 32 chars').optional(),
 
-	// Rate limiting (fixed-window per API key, backed by Redis). Defaults suit a
-	// modest single-tenant deployment; raise for higher-throughput clients.
+	// Rate limiting (fixed window, backed by Redis). RATE_LIMIT_MAX applies per
+	// end user (BFF traffic) or per API key (direct callers) each window;
+	// RATE_LIMIT_KEY_MAX is the ceiling across every user sharing one API key
+	// (an org's whole budget). Defaults suit a modest deployment; raise for
+	// higher-throughput clients.
 	RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
 	RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
+	RATE_LIMIT_KEY_MAX: z.coerce.number().int().positive().default(1200),
 
-	// Postgres
+	// Retention for the observability and audit tables, swept daily by the
+	// worker's maintenance task. Pipeline run traces are bulky diagnostics;
+	// audit logs are kept a year by default (tune to your compliance regime).
+	PIPELINE_RUN_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+	AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
+
+	// How many proxy hops in front of this process are trusted when reading the
+	// client address from X-Forwarded-For (Express `trust proxy`). Count only
+	// proxies that append their own entry: platform-api sits behind the BFF,
+	// which overwrites the header with the address it resolved (1); the BFF on
+	// Render sits behind the web nginx and Render's load balancer (2). Trusting
+	// more hops than exist lets a client spoof its address; fewer reports the
+	// proxy's address as the client.
+	TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
+
+	// Postgres. PG_POOL_MAX bounds the connections each process opens (four
+	// services x replicas must fit the database's connection limit; Render's
+	// starter plan allows about 97). PG_STATEMENT_TIMEOUT_MS cancels a runaway
+	// query server-side instead of letting it pin a connection.
 	DATABASE_URL: z.string().url(),
+	PG_POOL_MAX: z.coerce.number().int().positive().default(10),
+	PG_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
 	// Redis / BullMQ
 	REDIS_URL: z.string().url(),
@@ -169,6 +197,18 @@ function assertStrongProductionSecrets(env: Env): void {
 	}
 }
 
+/**
+ * /metrics exposes process internals and queue depths; in production it must
+ * never be open. The Blueprint and the Kubernetes secrets template both set
+ * the token - a missing value means a deployment that forgot to.
+ */
+function assertProductionMetricsToken(env: Env): void {
+	if (env.NODE_ENV !== 'production') return;
+	if (!env.METRICS_TOKEN) {
+		throw new Error('METRICS_TOKEN is required in production: it gates the Prometheus /metrics endpoint (generate with `openssl rand -base64 32`).');
+	}
+}
+
 let cached: Env | undefined;
 
 /**
@@ -185,6 +225,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
 	}
 
 	assertStrongProductionSecrets(result.data);
+	assertProductionMetricsToken(result.data);
 
 	cached = result.data;
 	return cached;

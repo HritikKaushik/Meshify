@@ -15,9 +15,28 @@ function baseEnv(overrides: Record<string, string> = {}): NodeJS.ProcessEnv {
 		S3_SECRET_ACCESS_KEY: 'Vt7Lr4Ke1Wp8Nc3Bd6Fj0Hs5YaUoZx9Q2m',
 		ROCKETRIDE_URI: 'https://api.rocketride.ai',
 		ROCKETRIDE_APIKEY: 'rr_Zx9Q2mVt7Lr4Ke1Wp8',
+		METRICS_TOKEN: 'metrics-scraper-token-for-tests-only', // gitleaks:allow (fixture, not a credential)
 		...overrides,
 	};
 }
+
+describe('loadEnv METRICS_TOKEN', () => {
+	beforeEach(() => resetEnvCache());
+
+	it('is required in production (an empty value counts as unset)', () => {
+		expect(() => loadEnv(baseEnv({ METRICS_TOKEN: '' }))).toThrow(/METRICS_TOKEN is required in production/);
+		resetEnvCache();
+		expect(loadEnv(baseEnv()).METRICS_TOKEN).toBe('metrics-scraper-token-for-tests-only');
+	});
+
+	it('treats an empty value as unset outside production', () => {
+		expect(loadEnv(baseEnv({ NODE_ENV: 'development', METRICS_TOKEN: '' })).METRICS_TOKEN).toBeUndefined();
+	});
+
+	it('rejects a short token in any environment', () => {
+		expect(() => loadEnv(baseEnv({ NODE_ENV: 'development', METRICS_TOKEN: 'short' }))).toThrow(/at least 16 chars/);
+	});
+});
 
 describe('loadEnv production secret strength', () => {
 	beforeEach(() => resetEnvCache());

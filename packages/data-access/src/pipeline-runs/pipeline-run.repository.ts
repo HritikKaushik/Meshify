@@ -8,4 +8,11 @@ export interface PipelineRunRepository {
 	/** Resolves the most recent run id for a project/source, creating a minimal placeholder if none exists yet. */
 	ensureRunForTrace(projectId: string, source: string): Promise<string>;
 	appendTrace(input: PipelineRunTraceInput): Promise<void>;
+	/**
+	 * Retention sweep: removes runs that ended before `before` (their traces
+	 * cascade), plus runs that never recorded an end but started before it -
+	 * a placeholder from a lost DAP stream would otherwise live forever.
+	 * Returns the number of runs removed.
+	 */
+	deleteEndedBefore(before: Date): Promise<number>;
 }

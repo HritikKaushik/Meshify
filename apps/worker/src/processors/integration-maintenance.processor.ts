@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { Job, Queue } from 'bullmq';
 import type {
+	AuditLogRepository,
 	IntegrationCredentialRepository,
 	IntegrationRepository,
 	KnowledgeConnector,
 	KnowledgeConnectorRepository,
 	OAuthStateRepository,
 	PipelineJobRepository,
+	PipelineRunRepository,
 	WebhookEventRepository,
 } from '@meshify/data-access';
 import type { IntegrationMaintenanceJobPayload, SourceSyncJobPayload, WebhookEventJobPayload } from '@meshify/queues';
@@ -28,6 +30,10 @@ export interface MaintenanceProcessorDeps {
 	registrations: ProviderRegistrationService;
 	bus: PlatformEventBus;
 	logger: { info: (obj: unknown, msg: string) => void; warn: (obj: unknown, msg: string) => void };
+	/** Age-based retention for the observability and audit tables (see the retention task). */
+	pipelineRuns: Pick<PipelineRunRepository, 'deleteEndedBefore'>;
+	auditLogs: Pick<AuditLogRepository, 'deleteBefore'>;
+	retention: { pipelineRunDays: number; auditLogDays: number };
 	now?: () => Date;
 }
 
@@ -38,6 +44,8 @@ const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 /** Installation tokens are minted lazily by the vault — sweeping them would just churn. */
 const LAZY_KINDS = new Set(['installation_token']);
 const WEBHOOK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+/** Failed deliveries are the webhook dead-letter record; keep them three times longer for operator review. */
+const FAILED_WEBHOOK_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 const STATE_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /** The platform's upkeep loop; every sweep is idempotent and safe to re-run. */
@@ -47,15 +55,22 @@ export async function processMaintenanceJob(job: Job<IntegrationMaintenanceJobPa
 		case 'refresh':
 			await refreshExpiringCredentials(deps, now);
 			await recoverOrphans(deps, now);
+			await reapStuckRunning(deps, now);
 			await reconcileSyncs(deps, now);
 			return;
 		case 'health':
 			await sweepHealth(deps);
 			return;
 		case 'retention': {
-			const events = await deps.webhookEvents.deleteTerminalBefore(new Date(now.getTime() - WEBHOOK_RETENTION_MS));
+			const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+			const events = await deps.webhookEvents.deleteTerminalBefore(
+				new Date(now.getTime() - WEBHOOK_RETENTION_MS),
+				new Date(now.getTime() - FAILED_WEBHOOK_RETENTION_MS)
+			);
 			const states = await deps.oauthStates.deleteExpiredBefore(new Date(now.getTime() - STATE_RETENTION_MS));
-			deps.logger.info({ events, states }, 'maintenance retention swept');
+			const runs = await deps.pipelineRuns.deleteEndedBefore(daysAgo(deps.retention.pipelineRunDays));
+			const audits = await deps.auditLogs.deleteBefore(daysAgo(deps.retention.auditLogDays));
+			deps.logger.info({ events, states, runs, audits }, 'maintenance retention swept');
 			return;
 		}
 	}
@@ -157,6 +172,46 @@ async function recoverOrphans(deps: MaintenanceProcessorDeps, now: Date): Promis
 	if (stuckWebhooks.length > 0 || stuckJobs.length > 0) {
 		deps.logger.info({ webhooks: stuckWebhooks.length, jobs: stuckJobs.length }, 'orphan-recovery re-drove stuck rows');
 	}
+}
+
+/**
+ * A running job that has written no progress for this long is presumed dead.
+ * Every processor reports progress at least once per file batch, so a healthy
+ * job - even a multi-hour ingest - refreshes updated_at far more often.
+ */
+const STUCK_RUNNING_AFTER_MS = 2 * 60 * 60 * 1000;
+/** BullMQ states in which the queue still owns the job (it will run, or run again, on its own). */
+const LIVE_QUEUE_STATES = new Set(['active', 'waiting', 'delayed', 'prioritized', 'waiting-children']);
+
+/**
+ * Dead-letter 'running' rows whose worker died mid-job. A crash skips the
+ * processor's markFailed, and once BullMQ gives up on the stalled job (or the
+ * job is gone entirely) nothing else would ever close the row: the UI shows a
+ * sync spinning forever and the connector stays 'syncing'. Rows whose queue
+ * job is still live are left alone - BullMQ will re-run them and the
+ * processor closes the row itself. Only the generic lane can be checked
+ * against its queue here; legacy lanes are logged for an operator.
+ */
+async function reapStuckRunning(deps: MaintenanceProcessorDeps, now: Date): Promise<void> {
+	const stuck = await deps.pipelineJobs.listStuckRunning(new Date(now.getTime() - STUCK_RUNNING_AFTER_MS));
+	let reaped = 0;
+	for (const job of stuck) {
+		if (job.jobType !== 'source_sync') {
+			deps.logger.warn({ jobId: job.id, jobType: job.jobType, updatedAt: job.updatedAt }, 'running pipeline job has reported no progress for 2h (legacy lane, not reaped)');
+			continue;
+		}
+		const queued = await deps.sourceSyncQueue.getJob(job.id);
+		const state = queued ? await queued.getState() : 'missing';
+		if (LIVE_QUEUE_STATES.has(state)) continue;
+
+		const reason = `Reaped by maintenance: no progress since ${job.updatedAt.toISOString()} and the queue job is ${state}`;
+		await deps.pipelineJobs.markFailed(job.id, reason, 'dead_letter');
+		const connectorId = typeof job.payload.connectorId === 'string' ? job.payload.connectorId : undefined;
+		if (connectorId) await deps.connectors.updateStatus(connectorId, 'error', reason).catch(() => undefined);
+		deps.logger.warn({ jobId: job.id, connectorId, queueState: state, updatedAt: job.updatedAt }, 'reaped stuck running pipeline job');
+		reaped += 1;
+	}
+	if (reaped > 0) deps.logger.info({ reaped, candidates: stuck.length }, 'stuck-running reaper dead-lettered orphaned jobs');
 }
 
 async function reconcileSyncs(deps: MaintenanceProcessorDeps, now: Date): Promise<void> {
