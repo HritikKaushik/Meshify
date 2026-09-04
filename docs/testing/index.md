@@ -68,6 +68,8 @@ const chats = new InMemoryChatRepository({ chats: [buildChat({ id: 'a' })] });
 - [`TESTING.md`](../../TESTING.md), [`packages/testing`](../../packages/testing/README.md), root `vitest.config.ts`, `turbo.json`
 
 ## Related
+
+- [RAG retrieval evaluation](rag-evaluation.md) - offline recall@k / MRR against a seeded project, gates retrieval changes
 - [Contributing](../contributing/index.md)
 
 ## Next
