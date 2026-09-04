@@ -50,6 +50,28 @@ export class PostgresFileRepository implements FileRepository {
 		return toDomain(row);
 	}
 
+	async upsertMany(inputs: UpsertFileInput[]): Promise<RepoFile[]> {
+		if (inputs.length === 0) return [];
+		const { rows } = await this.pool.query<FileRow>(
+			`insert into files (id, project_id, repository_id, path, language, size_bytes, content_hash)
+			 select * from unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::text[], $6::integer[], $7::text[])
+			 on conflict (repository_id, path) where repository_id is not null
+			 do update set language = excluded.language, size_bytes = excluded.size_bytes,
+			               content_hash = excluded.content_hash, status = 'pending', updated_at = now()
+			 returning *`,
+			[
+				inputs.map((i) => i.id),
+				inputs.map((i) => i.projectId),
+				inputs.map((i) => i.repositoryId),
+				inputs.map((i) => i.path),
+				inputs.map((i) => i.language),
+				inputs.map((i) => i.sizeBytes),
+				inputs.map((i) => i.contentHash),
+			]
+		);
+		return rows.map(toDomain);
+	}
+
 	async listByRepository(repositoryId: string): Promise<RepoFile[]> {
 		const { rows } = await this.pool.query<FileRow>('select * from files where repository_id = $1 order by path', [repositoryId]);
 		return rows.map(toDomain);

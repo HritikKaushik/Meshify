@@ -1,4 +1,7 @@
 import { createServer, type Server } from 'node:http';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COMPARE_FILE_CAP, CompareTooLargeError, GitHubRepoClient } from './github-repo-client.js';
@@ -27,6 +30,18 @@ beforeAll(async () => {
 			return;
 		}
 		if (url.pathname === '/repos/o/stall') return; // never answers
+		if (url.pathname === '/repos/o/r/tarball/ref') {
+			res.setHeader('content-type', 'application/x-gzip');
+			// Several chunks, so the client has to stream rather than read one body.
+			for (let i = 0; i < 4; i++) res.write(Buffer.alloc(64 * 1024, i));
+			res.end();
+			return;
+		}
+		if (url.pathname === '/repos/o/r/tarball/missing') {
+			res.statusCode = 404;
+			res.end('{"message":"Not Found"}');
+			return;
+		}
 		res.statusCode = 404;
 		res.end('{}');
 	});
@@ -68,5 +83,30 @@ describe('GitHubRepoClient timeouts', () => {
 		const started = Date.now();
 		await expect(client.getHead('o', 'stall')).rejects.toThrow(/timeout|abort/i);
 		expect(Date.now() - started).toBeLessThan(2000);
+	});
+});
+
+describe('GitHubRepoClient.downloadTarballToFile', () => {
+	it('streams the archive to the destination path byte for byte', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'meshify-tarball-'));
+		try {
+			const destination = path.join(dir, 'archive.tar.gz');
+			await new GitHubRepoClient(auth, base).downloadTarballToFile('o', 'r', 'ref', destination);
+			const written = await readFile(destination);
+			expect(written.byteLength).toBe(4 * 64 * 1024);
+			expect(written[0]).toBe(0);
+			expect(written[written.byteLength - 1]).toBe(3);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('fails with the status when GitHub does not serve the archive', async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'meshify-tarball-'));
+		try {
+			await expect(new GitHubRepoClient(auth, base).downloadTarballToFile('o', 'r', 'missing', path.join(dir, 'x.tar.gz'))).rejects.toThrow(/404/);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
 	});
 });

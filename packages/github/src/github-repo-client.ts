@@ -1,3 +1,6 @@
+import { createWriteStream } from 'node:fs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 /** Every GitHub call is bounded; a black-holed connection must not hold a worker slot forever. */
 const DEFAULT_API_TIMEOUT_MS = 30_000;
@@ -71,14 +74,19 @@ export class GitHubRepoClient {
 		return { defaultBranch: repoInfo.default_branch, headSha: commit.sha };
 	}
 
-	/** Downloads the repo tarball at `ref`. GitHub responds with a redirect; fetch follows it. */
-	async downloadTarball(owner: string, repo: string, ref: string): Promise<Buffer> {
+	/**
+	 * Streams the repo tarball at `ref` to `destination` on disk. GitHub
+	 * responds with a redirect; fetch follows it. Streaming keeps a large
+	 * repository's archive out of process memory (it used to be buffered whole
+	 * next to the extracted tree and every file's contents).
+	 */
+	async downloadTarballToFile(owner: string, repo: string, ref: string, destination: string): Promise<void> {
 		const token = await this.auth.installationToken(owner, repo);
 		const res = await fetch(`${this.apiBaseUrl}/repos/${owner}/${repo}/tarball/${ref}`, { signal: AbortSignal.timeout(this.downloadTimeoutMs),
 			headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json' },
 		});
-		if (!res.ok) throw new Error(`Tarball download failed for ${owner}/${repo}@${ref}: ${res.status} ${await res.text()}`);
-		return Buffer.from(await res.arrayBuffer());
+		if (!res.ok || !res.body) throw new Error(`Tarball download failed for ${owner}/${repo}@${ref}: ${res.status} ${await res.text()}`);
+		await pipeline(Readable.fromWeb(res.body as import('node:stream/web').ReadableStream), createWriteStream(destination));
 	}
 
 	/**

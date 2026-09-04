@@ -38,13 +38,35 @@ export async function withExtractedArchive<T>(archive: Buffer, format: 'tar.gz' 
 		if (format === 'zip') {
 			await extractZip(archive, dir);
 		} else {
-			await extractTarball(archive, dir);
+			const tarball = path.join(dir, TARBALL_NAME);
+			await writeFile(tarball, archive);
+			await extractTarball(tarball, dir);
 		}
 		return await use(dir);
 	} finally {
 		await rm(dir, { recursive: true, force: true });
 	}
 }
+
+/**
+ * Streams a tarball straight to disk (`download` receives the destination
+ * path), extracts it, hands the tree to `use`, and cleans everything up. The
+ * archive never sits in process memory: a repository is bounded by disk and
+ * the extraction budget, not by the worker's heap.
+ */
+export async function withDownloadedTarball<T>(download: (destination: string) => Promise<void>, use: (dir: string) => Promise<T>): Promise<T> {
+	const dir = await mkdtemp(path.join(tmpdir(), 'meshify-repo-'));
+	try {
+		const tarball = path.join(dir, TARBALL_NAME);
+		await download(tarball);
+		await extractTarball(tarball, dir);
+		return await use(dir);
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+}
+
+const TARBALL_NAME = '__archive__.tar.gz';
 
 async function extractZip(archive: Buffer, dir: string): Promise<void> {
 	const zip = new AdmZip(archive);
@@ -93,9 +115,7 @@ function inflate(entry: AdmZip.IZipEntry): Promise<Buffer> {
 	});
 }
 
-async function extractTarball(archive: Buffer, dir: string): Promise<void> {
-	const tarball = path.join(dir, '__archive__.tar.gz');
-	await writeFile(tarball, archive);
+async function extractTarball(tarball: string, dir: string): Promise<void> {
 	let entries = 0;
 	let bytes = 0;
 	await tar.extract({

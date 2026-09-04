@@ -73,5 +73,8 @@ describe('scanExtractedRepo', () => {
 		expect(readme.contentHash).toMatch(/^[0-9a-f]{64}$/);
 		expect(files[1]!.language).toBe('typescript');
 		expect(files[1]!.sizeBytes).toBe(19);
+		// Contents are read on demand from the tree, not carried on the scan result.
+		expect((await files[1]!.read()).toString('utf8')).toBe('export const x = 1;');
+		expect('buffer' in files[1]!).toBe(false);
 	});
 });

@@ -6,7 +6,7 @@ import type { ObjectStorageClient } from '@meshify/object-storage';
 import type { GitHubRepoClient } from '@meshify/github';
 import type { JobEventPublisher, RepoIngestJobPayload } from '@meshify/queues';
 import type { IngestFile, PipelineRegistry, RagPort } from '@meshify/rocketride-gateway';
-import { scanExtractedRepo, withExtractedArchive, type ScannedFile } from '@meshify/providers';
+import { scanExtractedRepo, withDownloadedTarball, withExtractedArchive } from '@meshify/providers';
 import { repositoryLockKey, withExecutionLock, type ExecutionLock } from '../execution-lock.js';
 import { JobProgress } from './job-progress.js';
 
@@ -58,63 +58,68 @@ async function runRepoIngest(job: Job<RepoIngestJobPayload>, deps: RepoIngestPro
 		await progress.running('Downloading repository');
 		await deps.repositories.updateSyncStatus(repositoryId, 'cloning');
 
-		let archive: Buffer;
-		let format: 'tar.gz' | 'zip';
 		let headSha: string | null = null;
 		let defaultBranch: string | null = null;
 
+		// The archive goes to disk, and file contents are read one batch at a
+		// time while the extracted tree is still there: a large repository is
+		// bounded by disk and the extraction budget, not by this process's heap.
 		await progress.stage('Downloading repository', 10);
+		let withTree: <T>(use: (dir: string) => Promise<T>) => Promise<T>;
 		if (repository.source === 'github') {
 			if (!repository.remoteUrl) throw new Error('GitHub repository row has no remote_url');
 			const { owner, repo } = parseGitHubUrl(repository.remoteUrl);
 			const head = await deps.github.getHead(owner, repo);
 			headSha = head.headSha;
 			defaultBranch = head.defaultBranch;
-			archive = await deps.github.downloadTarball(owner, repo, head.headSha);
-			format = 'tar.gz';
+			withTree = (use) => withDownloadedTarball((destination) => deps.github.downloadTarballToFile(owner, repo, head.headSha, destination), use);
 		} else {
 			if (!repository.archiveObjectKey) throw new Error('ZIP repository row has no archive_object_key');
-			archive = await deps.storage.getObject(repository.archiveObjectKey);
-			format = 'zip';
+			const archive = await deps.storage.getObject(repository.archiveObjectKey);
+			withTree = (use) => withExtractedArchive(archive, 'zip', use);
 		}
 
-		await progress.stage('Scanning repository', 30);
-		const scanned = await withExtractedArchive(archive, format, (dir) => scanExtractedRepo(dir));
-		if (scanned.length === 0) throw new Error('Archive contained no ingestable source files after filtering');
+		await withTree(async (dir) => {
+			await progress.stage('Scanning repository', 30);
+			const scanned = await scanExtractedRepo(dir);
+			if (scanned.length === 0) throw new Error('Archive contained no ingestable source files after filtering');
 
-		await progress.stage('Preparing batches', 40);
-		for (const file of scanned) {
-			await deps.files.upsert({
-				id: randomUUID(),
-				projectId,
-				repositoryId,
-				path: file.path,
-				language: file.language,
-				sizeBytes: file.sizeBytes,
-				contentHash: file.contentHash,
+			await progress.stage('Preparing batches', 40);
+			await deps.files.upsertMany(
+				scanned.map((file) => ({
+					id: randomUUID(),
+					projectId,
+					repositoryId,
+					path: file.path,
+					language: file.language,
+					sizeBytes: file.sizeBytes,
+					contentHash: file.contentHash,
+				}))
+			);
+
+			const embeddingProvider = embeddingProviderFromProfile(project.embeddingProfile);
+			const token = await deps.pipelineRegistry.ensureIngestPipeline({
+				pipelineGuid: project.rocketrideCodeIngestPipelineId,
+				target: 'code',
+				qdrant: { host: deps.qdrantHost, port: deps.qdrantPort, collection: project.qdrantCollectionCode, apiKey: deps.qdrantApiKey },
+				embedding: {
+					provider: embeddingProvider,
+					profile: project.embeddingProfile,
+					apiKeyEnvVar: embeddingProvider === 'openai' ? apiKeyEnvVarFor('openai') : undefined,
+				},
+				chunkSize: deps.codeChunkSize,
 			});
-		}
 
-		const embeddingProvider = embeddingProviderFromProfile(project.embeddingProfile);
-		const token = await deps.pipelineRegistry.ensureIngestPipeline({
-			pipelineGuid: project.rocketrideCodeIngestPipelineId,
-			target: 'code',
-			qdrant: { host: deps.qdrantHost, port: deps.qdrantPort, collection: project.qdrantCollectionCode, apiKey: deps.qdrantApiKey },
-			embedding: {
-				provider: embeddingProvider,
-				profile: project.embeddingProfile,
-				apiKeyEnvVar: embeddingProvider === 'openai' ? apiKeyEnvVarFor('openai') : undefined,
-			},
-			chunkSize: deps.codeChunkSize,
+			// Uploading + embedding is the bulk of the work — report real progress across batches (45% → 95%).
+			const batches = toBatches(scanned, SEND_BATCH_SIZE);
+			for (let i = 0; i < batches.length; i++) {
+				await progress.stage(`Uploading to RocketRide (${i + 1}/${batches.length})`, 45 + Math.round((i / batches.length) * 50));
+				const files: IngestFile[] = [];
+				for (const file of batches[i]!) files.push({ path: file.path, buffer: await file.read(), mimeType: 'text/plain' });
+				const result = await deps.rag.ingestFiles(token, files);
+				if (!result.completed) throw new Error(`Code ingestion reported errors: ${result.errors.join('; ')}`);
+			}
 		});
-
-		// Uploading + embedding is the bulk of the work — report real progress across batches (45% → 95%).
-		const batches = toBatches(scanned, SEND_BATCH_SIZE);
-		for (let i = 0; i < batches.length; i++) {
-			await progress.stage(`Uploading to RocketRide (${i + 1}/${batches.length})`, 45 + Math.round((i / batches.length) * 50));
-			const result = await deps.rag.ingestFiles(token, batches[i]!.map(toIngestFile));
-			if (!result.completed) throw new Error(`Code ingestion reported errors: ${result.errors.join('; ')}`);
-		}
 
 		await progress.stage('Writing vectors', 97);
 		await deps.files.updateStatusByRepository(repositoryId, 'pending', 'embedded');
@@ -132,10 +137,6 @@ async function runRepoIngest(job: Job<RepoIngestJobPayload>, deps: RepoIngestPro
 
 		throw err;
 	}
-}
-
-function toIngestFile(file: ScannedFile): IngestFile {
-	return { path: file.path, buffer: file.buffer, mimeType: 'text/plain' };
 }
 
 function toBatches<T>(items: T[], size: number): T[][] {

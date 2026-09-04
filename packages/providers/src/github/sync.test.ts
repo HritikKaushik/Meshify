@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CompareTooLargeError } from '@meshify/github';
 import { createHash } from 'node:crypto';
 import { executeGitHubSync, type GitHubRepoTransport, type GitHubSyncDeps } from './sync.js';
+import type { ScannedFile } from './archive/repo-scanner.js';
 import { ConnectorEngine, type ContentLedger, type KnowledgeItem, type KnowledgeWriter, type SyncContext } from '../index.js';
 import { buildIntegration, fakeVaultHandle, fakeRegistration } from '../testing/fakes.js';
 import type { Repository } from '@meshify/data-access';
@@ -76,10 +77,15 @@ function syncCtx(mode: 'full' | 'incremental'): SyncContext {
 	};
 }
 
+function scannedFile(path: string, content: string, language: string | null, isReadme = false): ScannedFile {
+	return { path, language, sizeBytes: content.length, contentHash: sha(content), isReadme, read: async () => Buffer.from(content) };
+}
+
 function harness(opts: {
 	repo?: Repository;
 	transport: Partial<GitHubRepoTransport>;
-	scan?: GitHubSyncDeps['scanArchive'];
+	/** A fake tree: the scanned files `materializeTree` hands to the sync. */
+	tree?: ScannedFile[];
 	ledgerSeed?: Map<string, string>;
 	listByRepository?: NonNullable<GitHubSyncDeps['files']['listByRepository']>;
 }) {
@@ -94,17 +100,18 @@ function harness(opts: {
 		},
 		files: {
 			upsert: async (input) => void calls.filesUpserted.push(input.path),
+			upsertMany: async (inputs) => void calls.filesUpserted.push(...inputs.map((input) => input.path)),
 			markDeleted: async (_id, paths) => void calls.filesDeleted.push(paths),
 			listByRepository: opts.listByRepository,
 		},
 		repoTransport: () => ({
 			getHead: async () => ({ defaultBranch: 'main', headSha: 'newsha' }),
-			downloadTarball: async () => Buffer.from('tarball'),
+			downloadTarballToFile: async () => undefined,
 			compare: async () => [],
 			getFileContent: async () => Buffer.from(''),
 			...opts.transport,
 		}),
-		scanArchive: opts.scan,
+		materializeTree: opts.tree ? async (_download, use) => use(opts.tree!) : undefined,
 		generateId: () => 'id-x',
 	};
 	const writer = new RecordingWriter();
@@ -119,10 +126,7 @@ describe('executeGitHubSync', () => {
 	it('full sync: scans, records file rows, embeds everything, commits the cursor after the flush barrier', async () => {
 		const h = harness({
 			transport: {},
-			scan: async () => [
-				{ path: 'src/a.ts', buffer: Buffer.from('aaa'), language: 'typescript', sizeBytes: 3, contentHash: sha('aaa'), isReadme: false },
-				{ path: 'README.md', buffer: Buffer.from('docs'), language: null, sizeBytes: 4, contentHash: sha('docs'), isReadme: true },
-			],
+			tree: [scannedFile('src/a.ts', 'aaa', 'typescript'), scannedFile('README.md', 'docs', null, true)],
 		});
 		const summary = await h.engine.execute(provider(h.deps) as never, syncCtx('full'));
 
@@ -171,7 +175,7 @@ describe('executeGitHubSync', () => {
 					throw new CompareTooLargeError('oldsha', 'newsha', 300);
 				},
 			},
-			scan: async () => [{ path: 'src/a.ts', buffer: Buffer.from('aaa'), language: 'typescript', sizeBytes: 3, contentHash: sha('aaa'), isReadme: false }],
+			tree: [scannedFile('src/a.ts', 'aaa', 'typescript')],
 			listByRepository: async () => [
 				{ path: 'src/a.ts', status: 'embedded' },
 				{ path: 'src/stale.ts', status: 'embedded' },

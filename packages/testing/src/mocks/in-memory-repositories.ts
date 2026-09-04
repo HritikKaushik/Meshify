@@ -300,6 +300,12 @@ export class InMemoryFileRepository implements FileRepository {
 		return file;
 	}
 
+	async upsertMany(inputs: UpsertFileInput[]): Promise<RepoFile[]> {
+		const out: RepoFile[] = [];
+		for (const input of inputs) out.push(await this.upsert(input));
+		return out;
+	}
+
 	async listByRepository(repositoryId: string): Promise<RepoFile[]> {
 		return this.files.filter((f) => f.repositoryId === repositoryId);
 	}
