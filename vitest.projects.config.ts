@@ -1,7 +1,10 @@
 import { defineConfig } from 'vitest/config';
 
 /**
- * Root Vitest config: one `pnpm test:coverage` runs every package's suite in
+ * Root Vitest projects config (deliberately NOT named vitest.config.ts: Vitest
+ * finds a config by walking up from the package it runs in, and a package
+ * without its own config would otherwise inherit this projects list and find
+ * no tests). `pnpm test:coverage` passes it explicitly and runs every package's suite in
  * its own project (each package's vitest.config applies, e.g. jsdom for the web
  * app) and reports coverage over ALL source files, not only the ones a test
  * happened to import. The thresholds are a ratchet: set just under the level
