@@ -12,6 +12,8 @@ interface JobsContextValue {
 	activeCount: number;
 	/** The most recent event — pages use it to refresh their own lists when a relevant job completes. */
 	lastEvent: JobEvent | null;
+	/** False while the live stream is down and EventSource is reconnecting; the snapshot is re-fetched when it comes back. */
+	connected: boolean;
 	open: boolean;
 	setOpen: (open: boolean) => void;
 }
@@ -27,6 +29,7 @@ const JobsContext = createContext<JobsContextValue | null>(null);
 export function JobsProvider({ projectId, children }: { projectId: string; children: ReactNode }) {
 	const [state, dispatch] = useReducer(jobsReducer, initialJobsState);
 	const [lastEvent, setLastEvent] = useState<JobEvent | null>(null);
+	const [connected, setConnected] = useState(true);
 	const [open, setOpen] = useState(false);
 	const archiveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -34,16 +37,35 @@ export function JobsProvider({ projectId, children }: { projectId: string; child
 		let cancelled = false;
 		const timers = archiveTimers.current;
 
-		// 1) Snapshot: current active jobs + recent history for instant first paint.
-		void api
-			.listJobs(projectId)
-			.then((snapshot) => {
-				if (!cancelled) dispatch({ type: 'snapshot', active: snapshot.active, recent: snapshot.recent });
-			})
-			.catch(() => undefined);
+		// 1) Snapshot: current active jobs + recent history for instant first paint,
+		//    and again after every reconnect, since events emitted while the stream
+		//    was down are gone for good (SSE has no replay here).
+		const seed = () =>
+			api
+				.listJobs(projectId)
+				.then((snapshot) => {
+					if (!cancelled) dispatch({ type: 'snapshot', active: snapshot.active, recent: snapshot.recent });
+				})
+				.catch(() => undefined);
+		void seed();
 
 		// 2) Live stream (cookie auth flows through the same-origin BFF; EventSource reconnects automatically).
 		const source = new EventSource(api.jobsStreamUrl(projectId), { withCredentials: true });
+		let wasDown = false;
+		source.onopen = () => {
+			if (cancelled) return;
+			setConnected(true);
+			if (wasDown) {
+				wasDown = false;
+				void seed();
+			}
+		};
+		source.onerror = () => {
+			// EventSource retries on its own; mark the gap so the reopen re-seeds and the UI can say so.
+			if (cancelled) return;
+			wasDown = true;
+			setConnected(false);
+		};
 		source.onmessage = (message) => {
 			let event: JobEvent;
 			try {
@@ -77,8 +99,8 @@ export function JobsProvider({ projectId, children }: { projectId: string; child
 
 	const value = useMemo<JobsContextValue>(() => {
 		const active = Object.values(state.active).sort((a, b) => b.startedAt - a.startedAt);
-		return { active, history: state.history, activeCount: active.filter((j) => !isTerminal(j.phase)).length, lastEvent, open, setOpen };
-	}, [state, lastEvent, open]);
+		return { active, history: state.history, activeCount: active.filter((j) => !isTerminal(j.phase)).length, lastEvent, connected, open, setOpen };
+	}, [state, lastEvent, connected, open]);
 
 	return <JobsContext.Provider value={value}>{children}</JobsContext.Provider>;
 }
@@ -86,7 +108,7 @@ export function JobsProvider({ projectId, children }: { projectId: string; child
 /** Access the real-time jobs state. Returns null-safe empty state when used outside a JobsProvider. */
 export function useJobs(): JobsContextValue {
 	const ctx = useContext(JobsContext);
-	if (!ctx) return { active: [], history: [], activeCount: 0, lastEvent: null, open: false, setOpen: () => {} };
+	if (!ctx) return { active: [], history: [], activeCount: 0, lastEvent: null, connected: true, open: false, setOpen: () => {} };
 	return ctx;
 }
 
