@@ -1,0 +1,4 @@
+# Fingerprints of findings reviewed and accepted (commit:file:rule:line).
+# A test fixture for METRICS_TOKEN in packages/config/src/env.test.ts; the
+# value was a random string, never a credential, and has since been replaced.
+49a4ef9ced1397182c27d7803af89bd645f0c3a3:packages/config/src/env.test.ts:generic-api-key:18
