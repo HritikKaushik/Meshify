@@ -80,6 +80,7 @@ import {
 import type { KnowledgeConnector } from '@meshify/data-access';
 import { processSourceSyncJob } from './processors/source-sync.processor.js';
 import { PgAdvisoryExecutionLock } from './execution-lock.js';
+import { memoizeForMs } from './memoize.js';
 import { processWebhookEventJob } from './processors/webhook-event.processor.js';
 import { processMaintenanceJob } from './processors/integration-maintenance.processor.js';
 import { ProjectKnowledgeWriter } from './processors/knowledge-writer.js';
@@ -216,7 +217,10 @@ async function bootstrap(): Promise<void> {
 		sync: {
 			repos: repositories,
 			files,
-			repoTransport: (ctx) => new GitHubRepoClient({ installationToken: () => githubProvider.getInstallationToken(ctx) }),
+			// One vault read (and decrypt) per sync every couple of minutes rather
+			// than one per GitHub API request; well inside the vault's own
+			// minimum-remaining-lifetime guard for installation tokens.
+			repoTransport: (ctx) => new GitHubRepoClient({ installationToken: memoizeForMs(() => githubProvider.getInstallationToken(ctx), 2 * 60_000) }),
 			generateId: () => randomUUID(),
 		},
 	});
