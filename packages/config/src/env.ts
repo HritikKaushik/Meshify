@@ -58,6 +58,12 @@ const envSchema = z.object({
 	RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
 	RATE_LIMIT_KEY_MAX: z.coerce.number().int().positive().default(1200),
 
+	// Chat retrieval: chunks whose cosine similarity to the question is below
+	// this floor are not used as context (the model is told nothing relevant was
+	// found instead of being handed the least-unrelated chunk); confidence is
+	// calibrated from the same floor. 0.25 suits text-embedding-3-large.
+	RAG_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.25),
+
 	// Retention for the observability and audit tables, swept daily by the
 	// worker's maintenance task. Pipeline run traces are bulky diagnostics;
 	// audit logs are kept a year by default (tune to your compliance regime).

@@ -101,7 +101,8 @@ describe('AskQuestionUseCase', () => {
 
 		expect(result.conversationId).toBeDefined();
 		expect(result.answer).toBe('It uses BullMQ.');
-		expect(result.confidence).toBe(0.91);
+		// Calibrated retrieval confidence (both chunks sit well above the "strong" score for the default floor).
+		expect(result.confidence).toBe(1);
 		expect(result.citations).toEqual([
 			{ sourcePath: 'src/queue.ts', chunkId: 'c1', score: 0.91 },
 			{ sourcePath: 'docs/Architecture.md', chunkId: 'c2', score: 0.85 },
@@ -119,10 +120,17 @@ describe('AskQuestionUseCase', () => {
 		expect(rag.askCalls[0]!.turn.question).toContain('Which queue library is used?');
 	});
 
-	it('passes prior turns as history on a follow-up question', async () => {
+	it('passes prior turns as history on a follow-up question, to the model and to retrieval', async () => {
 		const chats = new FakeChatRepository();
 		const rag = new FakeRagService();
-		const usecase = new AskQuestionUseCase(chats, rag, fakeResolver, NO_CONTEXT);
+		const retrieveCalls: Array<{ query: string; history?: readonly { role: string; content: string }[] }> = [];
+		const retriever: ChatContextRetriever = {
+			retrieve: async (_project, query, options) => {
+				retrieveCalls.push({ query, history: options?.history });
+				return [];
+			},
+		};
+		const usecase = new AskQuestionUseCase(chats, rag, fakeResolver, retriever);
 
 		const first = await usecase.execute({ project: PROJECT, question: 'What is Meshify?' });
 		await usecase.execute({ project: PROJECT, conversationId: first.conversationId, question: 'How does it isolate projects?' });
@@ -132,6 +140,15 @@ describe('AskQuestionUseCase', () => {
 			{ role: 'user', content: 'What is Meshify?' },
 			{ role: 'assistant', content: 'This is a fake answer.' },
 		]);
+		expect(retrieveCalls[0]?.history).toEqual([]);
+		expect(retrieveCalls[1]?.history).toEqual(secondCall.turn.history);
+	});
+
+	it('reports zero confidence when nothing in the project clears the retrieval floor', async () => {
+		const usecase = new AskQuestionUseCase(new FakeChatRepository(), new FakeRagService(), fakeResolver, NO_CONTEXT);
+		const result = await usecase.execute({ project: PROJECT, question: 'Anything?' });
+		expect(result.confidence).toBe(0);
+		expect(result.citations).toEqual([]);
 	});
 
 	it('rejects a conversation belonging to another project exactly like a missing one', async () => {
