@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { App } from './App';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -15,15 +16,18 @@ const root = document.getElementById('root');
 if (!root) throw new Error('#root not found');
 createRoot(root).render(
 	<StrictMode>
-		<ThemeProvider>
-			<ClerkProvider publishableKey={clerkPublishableKey} afterSignOutUrl="/">
-				<BrowserRouter>
-					<TooltipProvider>
-						<App />
-						<Toaster />
-					</TooltipProvider>
-				</BrowserRouter>
-			</ClerkProvider>
-		</ThemeProvider>
+		{/* Last line of defense: a provider-level failure still renders a message instead of a blank page. */}
+		<ErrorBoundary>
+			<ThemeProvider>
+				<ClerkProvider publishableKey={clerkPublishableKey} afterSignOutUrl="/">
+					<BrowserRouter>
+						<TooltipProvider>
+							<App />
+							<Toaster />
+						</TooltipProvider>
+					</BrowserRouter>
+				</ClerkProvider>
+			</ThemeProvider>
+		</ErrorBoundary>
 	</StrictMode>
 );
