@@ -1,7 +1,7 @@
 # Assembled via `pnpm deploy` — the runtime image is derived from the actual
 # dependency graph, so there are no hand-maintained per-package COPY lists to
 # drift out of sync (the failure mode that previously shipped host-built dist).
-FROM node:22-alpine AS base
+FROM node:26-alpine AS base
 RUN corepack enable
 WORKDIR /repo
 
