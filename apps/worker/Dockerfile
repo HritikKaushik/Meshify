@@ -1,6 +1,6 @@
 # Assembled via `pnpm deploy` — runtime derived from the actual dependency graph,
 # so no hand-maintained per-package COPY lists to drift.
-FROM node:22-alpine AS base
+FROM node:26-alpine AS base
 RUN corepack enable
 WORKDIR /repo
 
