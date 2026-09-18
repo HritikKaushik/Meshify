@@ -45,6 +45,11 @@ five applications and eleven shared packages.
 | [Frontend Architecture](architecture/frontend.md) | The web SPA, routing, code-splitting, data access |
 | [Data Model](architecture/data-model.md) | Postgres tables, relationships, and the Qdrant collections |
 
+### 1b. Product Direction
+| Doc | What it answers |
+| --- | --- |
+| [AI Project Management Roadmap](product/ai-pm-roadmap.md) | Where the product is going: per-project memory, agentic chat on RocketRide, and the phased RBAC model |
+
 ### 2. AI & Retrieval
 | Doc | What it answers |
 | --- | --- |

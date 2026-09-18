@@ -1,5 +1,22 @@
 # Phase 1 — Current-State Findings: Integrations, Credentials, Sync & Realtime
 
+> **⚠️ SUPERSEDED — historical record only. Do not plan from this document.**
+>
+> This is a snapshot of `main` as it stood on **2026-07-20**, taken *before* the
+> provider platform was built. The code it describes no longer exists. Its most
+> misleading claims, all now false: GitHub has "no webhooks" (there is a
+> signature-verified receiver handling `push`, `installation`,
+> `installation_repositories`, `repository` and `ping`); Slack is unwired (there
+> is a full `SlackProvider` with OAuth, Events API verification and cursor-based
+> sync); and `GITHUB_APP_WEBHOOK_SECRET` / `SLACK_SIGNING_SECRET` are "dead
+> config" (both are consumed by
+> `packages/providers/src/registry/managed-registrations.ts` for live signature
+> verification).
+>
+> For the current state, read [README.md](README.md) and
+> [../../backend/connectors.md](../../backend/connectors.md). For where this is
+> going, read [../../product/ai-pm-roadmap.md](../../product/ai-pm-roadmap.md).
+
 Meshify monorepo audit for the OAuth-managed integrations feature. All paths repo-relative.
 Verified against code on branch `main` (2026-07-20); five parallel deep-dives (GitHub, Slack, auth/data, frontend, queues/workers).
 
