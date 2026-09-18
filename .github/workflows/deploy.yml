@@ -1,45 +1,67 @@
 # Tag-triggered production deploy to Render. Push a version tag (e.g. `v1.2.0`)
-# - or run it manually from the Actions tab - to roll out the tagged commit.
+# to roll out the tagged commit, or run it from the Actions tab — with
+# `mode: preflight` to only check that this repository can actually reach the
+# Render workspace, without deploying anything.
 #
 # How it works (see render.yaml for the topology):
-#   1. platform-api is deployed FIRST and the workflow waits until it is `live`.
+#   1. A preflight step proves the connection BEFORE anything is triggered: the
+#      API key authenticates, and all five services render.yaml defines exist by
+#      name in the workspace. A missing key or a renamed service fails here, with
+#      the names Render actually has printed in the log.
+#   2. platform-api is deployed FIRST and the workflow waits until it is `live`.
 #      Its Render pre-deploy step applies pending SQL migrations inside the built
 #      image before the new version takes traffic, so the schema is always ahead
 #      of the code. Migrations are expand/contract (backward-compatible), so the
 #      still-running old versions keep working meanwhile.
-#   2. The other four services deploy in parallel; every one runs the same
+#   3. The other four services deploy in parallel; every one runs the same
 #      (advisory-locked, idempotent) migrator as its own pre-deploy step, so order
 #      no longer matters for them.
-#   3. Each deploy is polled through the Render API until `live` - a failed build,
+#   4. Each deploy is polled through the Render API until `live` - a failed build,
 #      pre-deploy or health check fails THIS workflow instead of silently leaving
 #      the previous version running.
-#   4. A smoke test confirms the public web → BFF → API chain answers.
+#   5. A smoke test confirms the public web → BFF → API chain answers.
 #
 # Setup (GitHub repo → Settings):
 #   Environment `production`  - optional required reviewers = a manual approval gate.
 #   Secret  RENDER_API_KEY    - Render Dashboard → Account Settings → API Keys.
+#                               Add it to the `production` ENVIRONMENT, not just
+#                               the repository, or the rollout job cannot read it.
 #   Variable PROD_APP_URL     - the public web URL, e.g. https://meshify-web.onrender.com
-#                               (used by the smoke test; skipped with a warning if unset).
-# With RENDER_API_KEY unset the rollout is a no-op warning, never a failure, so the
-# workflow can be wired up incrementally.
+#
+# Both are REQUIRED. This workflow deliberately fails when either is missing:
+# a deploy that rolled nothing out must not report success, because a green
+# checkmark on a release tag is read as "this version is in production".
 name: Deploy
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "preflight = only verify the Render connection; deploy = roll the commit out"
+        type: choice
+        options: [preflight, deploy]
+        default: preflight
 
 # Never run two production deploys at once.
 concurrency:
   group: production-deploy
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 env:
   RENDER_API: https://api.render.com/v1
+  # A tag push is always a real deploy; a manual run does what it was asked to.
+  MODE: ${{ github.event_name == 'push' && 'deploy' || inputs.mode }}
 
 jobs:
   # A tag can be pushed on any commit; only roll out one whose CI run passed.
+  # Skipped for a preflight run, which deploys nothing and so gates nothing.
   ci-gate:
+    if: github.event_name == 'push' || inputs.mode == 'deploy'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -58,20 +80,95 @@ jobs:
 
   rollout:
     needs: ci-gate
+    # ci-gate is skipped in preflight mode; a skipped dependency would otherwise
+    # skip this job too, so accept success-or-skipped explicitly.
+    if: always() && (needs.ci-gate.result == 'success' || needs.ci-gate.result == 'skipped')
     runs-on: ubuntu-latest
     environment: production # gate on a GitHub Environment (approvals + scoped secrets)
+    permissions:
+      contents: read
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      APP_URL: ${{ vars.PROD_APP_URL }}
       COMMIT: ${{ github.sha }}
       REF: ${{ github.ref_name }}
     steps:
-      - name: Deploy to Render (platform-api first, then the rest) and wait until live
+      # Prove the connection before touching anything. This is the step that
+      # turns "the pipeline is not wired to Render" from a silent no-op into a
+      # failure that names exactly what is missing.
+      - name: Preflight — verify this repository can reach the Render workspace
         run: |
           set -euo pipefail
+
+          fail=0
+          note() { echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+          note "## Render connection preflight"
+          note ""
+
           if [ -z "${RENDER_API_KEY:-}" ]; then
-            echo "::warning::RENDER_API_KEY not set - nothing was rolled out. Add the secret to enable automated Render deploys (see render.yaml)."
-            exit 0
+            echo "::error::RENDER_API_KEY is not set. Add it under Settings → Environments → production → Secrets (Render Dashboard → Account Settings → API Keys). Until it is set this repository cannot deploy anything, and a release tag must not report success."
+            note "- ❌ \`RENDER_API_KEY\` — **missing**. Add it to the \`production\` environment."
+            # Nothing below can run without it.
+            note ""
+            note "No deploy was attempted."
+            exit 1
           fi
+          note "- ✅ \`RENDER_API_KEY\` is present"
+
+          api() { curl -sS --fail-with-body -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "$@"; }
+
+          # Authenticate and pull the workspace's service list once; every name
+          # check below is answered from it, so a rename is reported with the
+          # real names rather than a bare "not found".
+          if ! api "$RENDER_API/services?limit=100" > /tmp/services.json; then
+            echo "::error::The Render API rejected RENDER_API_KEY (see the response above). Regenerate the key in the Render Dashboard and update the secret."
+            note "- ❌ Render API rejected the key"
+            exit 1
+          fi
+          jq -r '.[].service | "\(.name)\t\(.type)\t\(.id)"' /tmp/services.json | sort > /tmp/names.tsv
+          echo "Services visible to this key:"; cat /tmp/names.tsv
+          note "- ✅ Render API authenticated ($(wc -l < /tmp/names.tsv) services visible)"
+          note ""
+          note "| Service | Status |"
+          note "| --- | --- |"
+
+          for name in meshify-platform-api meshify-bff meshify-worker meshify-observability meshify-web; do
+            if id=$(jq -er --arg n "$name" '.[].service | select(.name == $n) | .id' /tmp/services.json | head -n1) && [ -n "$id" ]; then
+              echo "✓ $name → $id"
+              note "| \`$name\` | ✅ found (\`$id\`) |"
+            else
+              echo "::error::Render service '$name' was not found in this workspace. render.yaml defines it; either the Blueprint has not been applied, the key belongs to a different workspace, or Render appended a suffix because the name was taken (in which case rename the service in the Dashboard to match render.yaml)."
+              note "| \`$name\` | ❌ **not found** |"
+              fail=1
+            fi
+          done
+
+          note ""
+          if [ -z "${APP_URL:-}" ]; then
+            echo "::error::The PROD_APP_URL variable is not set, so the post-deploy smoke test cannot verify anything. Set it under Settings → Environments → production → Variables to the public web URL (e.g. https://meshify-web.onrender.com)."
+            note "- ❌ \`PROD_APP_URL\` — **missing**, the smoke test cannot run"
+            fail=1
+          else
+            note "- ✅ \`PROD_APP_URL\` = \`$APP_URL\`"
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$APP_URL/api/health" || true)
+            echo "current $APP_URL/api/health → $code"
+            if [ "$code" = "200" ]; then
+              note "- ✅ the currently deployed stack answers \`/api/health\` with 200"
+            else
+              # Informational only: a stack that is already unhealthy is exactly
+              # what a deploy is often meant to fix.
+              echo "::warning::$APP_URL/api/health returned $code before the deploy."
+              note "- ⚠️ \`/api/health\` returned \`$code\` before this deploy"
+            fi
+          fi
+
+          [ "$fail" -eq 0 ] || { echo "::error::Preflight failed — nothing was deployed."; exit 1; }
+          echo "Preflight passed."
+
+      - name: Deploy to Render (platform-api first, then the rest) and wait until live
+        if: env.MODE == 'deploy'
+        run: |
+          set -euo pipefail
 
           api() { curl -sS --fail-with-body -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "$@"; }
 
@@ -118,37 +215,50 @@ jobs:
           deploy meshify-platform-api
           wait_live "$(cat /tmp/service-meshify-platform-api.id)" "$(cat /tmp/deploy-meshify-platform-api.id)" meshify-platform-api
 
-          # 2. Everything else in parallel.
-          for name in meshify-bff meshify-worker meshify-observability meshify-web; do
-            deploy "$name"
-          done
+          # 2. Everything else in parallel. A failure to TRIGGER one must not abort
+          #    the loop under `set -e`, or the services already triggered would be
+          #    left rolling out unwatched and the workflow would report on none of them.
+          triggered=()
           failed=0
           for name in meshify-bff meshify-worker meshify-observability meshify-web; do
+            if deploy "$name"; then triggered+=("$name"); else failed=1; fi
+          done
+          for name in "${triggered[@]}"; do
             wait_live "$(cat /tmp/service-$name.id)" "$(cat /tmp/deploy-$name.id)" "$name" || failed=1
           done
           [ "$failed" -eq 0 ] || { echo "::error::one or more services failed to deploy"; exit 1; }
           echo "All services live at $COMMIT ($REF)."
 
+      - name: Preflight-only run — stopping here
+        if: env.MODE != 'deploy'
+        run: echo "mode=preflight — the Render connection was verified above and nothing was deployed."
+
   smoke:
     needs: rollout
+    if: needs.rollout.result == 'success' && (github.event_name == 'push' || inputs.mode == 'deploy')
     runs-on: ubuntu-latest
+    environment: production # PROD_APP_URL lives with the rest of the production config
+    permissions:
+      contents: read
     steps:
       # Confirm the public chain (web nginx → BFF → platform-api /health/ready)
       # answers 200. Render private services only get TCP probes, so this is the
       # readiness signal for the whole stack. Fails the deploy (and alerts) if unhealthy.
+      # Preflight already proved APP_URL is set, so an empty value here is a real
+      # configuration fault, not something to warn past.
       - name: Smoke test
         env:
           APP_URL: ${{ vars.PROD_APP_URL }} # e.g. https://meshify-web.onrender.com
         run: |
-          set -e
+          set -euo pipefail
           if [ -z "${APP_URL:-}" ]; then
-            echo "::warning::PROD_APP_URL variable not set - smoke test skipped."
-            exit 0
+            echo "::error::PROD_APP_URL is not set, so the deployed stack cannot be verified. Set it under Settings → Environments → production → Variables."
+            exit 1
           fi
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/api/health" || true)
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$APP_URL/api/health" || true)
             echo "attempt $i: $APP_URL/api/health → $code"
             [ "$code" = "200" ] && exit 0
             sleep 10
           done
-          echo "smoke test failed: /api/health never returned 200"; exit 1
+          echo "::error::smoke test failed: /api/health never returned 200 after the deploy"; exit 1

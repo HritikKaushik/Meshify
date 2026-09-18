@@ -175,15 +175,28 @@ The web nginx already sets `X-Frame-Options` / `nosniff` / `Referrer-Policy`. Ad
 through unchanged), or at the Cloudflare edge if you front with it.
 
 ## J. CI/CD - wire the release workflow
-In the GitHub repo settings:
-- **Environment `production`** (optional): add required reviewers to get a manual
-  approval gate on every deploy.
-- **Secret `RENDER_API_KEY`** - Render → *Account Settings → API Keys*. With it unset
-  the rollout step is a no-op warning, never a failure.
-- **Variable `PROD_APP_URL`** - the public web URL (smoke test; skipped with a warning
-  if unset).
+In the GitHub repo settings, under **Settings → Environments → `production`**:
+- **Required reviewers** (optional): adds a manual approval gate on every deploy.
+- **Secret `RENDER_API_KEY`** - Render → *Account Settings → API Keys*. **Required.**
+  Add it to the `production` *environment*, not only to the repository, or the
+  rollout job cannot read it.
+- **Variable `PROD_APP_URL`** - the public web URL, e.g.
+  `https://meshify-web.onrender.com`. **Required** - it is what the smoke test
+  verifies after the rollout.
 
-Then a `vX.Y.Z` **tag** (or *Actions → Deploy → Run workflow*) runs
+Both are required on purpose. An earlier version of `deploy.yml` warned and exited
+`0` when they were missing, which meant a release tag could show a green checkmark
+having deployed nothing at all. The workflow now **fails** instead, and a preflight
+step checks the connection *before* triggering anything: it authenticates against
+the Render API and confirms all five services in `render.yaml` exist by name,
+printing the names the workspace actually has when one does not match.
+
+**To check the connection without deploying:** *Actions → Deploy → Run workflow →
+mode: `preflight`*. It runs the same checks, writes a pass/fail table to the run
+summary, and stops. Use it after adding the secret, after renaming a service, or
+whenever you want to know whether this repository can still reach Render.
+
+Then a `vX.Y.Z` **tag** (or *Actions → Deploy → Run workflow → mode: `deploy`*) runs
 [`deploy.yml`](../../.github/workflows/deploy.yml): it deploys **`meshify-platform-api`
 first** through the Render API and waits until it is `live` (its pre-deploy migration
 lands before anything else), then deploys the other four in parallel, polls every

@@ -5,6 +5,18 @@ on:
     branches: [main, development]
   pull_request:
 
+# One CI run per branch/PR. A second push supersedes the first, so the five
+# Docker builds + Trivy scans of the run it replaced are cancelled instead of
+# racing it. Never cancel on main: those runs are what `deploy.yml`'s ci-gate
+# looks up to decide whether a tagged commit is releasable.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Least privilege by default; the two image jobs raise it to packages: write.
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
