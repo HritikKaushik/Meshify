@@ -1,5 +1,8 @@
-import type { Router } from 'express';
+import type { Request, Response, Router } from 'express';
 import { createRouter } from '../../../http/router.js';
+import { forbiddenBody, type Authorizer } from '../../security/authorization/authorizer.js';
+import { respondProjectNotFound } from '../../projects/interface/project-isolation.guard.js';
+import type { Permission } from '@meshify/authz';
 import { z } from 'zod';
 import type { Integration } from '@meshify/data-access';
 import { ProviderAuthError, ProviderNotConfiguredError, ProviderNotFoundError } from '@meshify/providers';
@@ -80,6 +83,7 @@ function mapError(err: unknown, res: import('express').Response, log?: { error: 
 }
 
 export function createIntegrationsController(deps: {
+	authz: Authorizer;
 	listProviders: ListProvidersUseCase;
 	listIntegrations: ListIntegrationsUseCase;
 	connectProvider: ConnectProviderUseCase;
@@ -93,22 +97,31 @@ export function createIntegrationsController(deps: {
 	integrationEvents: IntegrationEventHub;
 }): Router {
 	const router = createRouter();
+	const { authorize } = deps.authz;
+
+	/** Answers the request itself (404/403) when the body's project is not the caller's to use. */
+	const mayUseProject = async (req: Request, res: Response, projectId: string, permission: Permission): Promise<boolean> => {
+		const outcome = await deps.authz.checkProjectById(req, projectId, permission);
+		if (outcome === 'hidden') respondProjectNotFound(res, projectId);
+		else if (outcome === 'forbidden') res.status(403).json(forbiddenBody(permission));
+		return outcome === 'allowed';
+	};
 	const configSchema = z.object({ values: z.record(z.string(), z.string()) });
 
 	// The marketplace catalog: provider manifests + whether THIS org can operate each.
-	router.get('/v1/providers', async (req, res) => {
+	router.get('/v1/providers', authorize('integrations:read'), async (req, res) => {
 		const entries = await deps.listProviders.execute(req.auth!.orgId);
 		res.status(200).json(entries.map((entry) => ({ ...entry.manifest, configured: entry.configured })));
 	});
 
-	router.get('/v1/integrations', async (req, res) => {
+	router.get('/v1/integrations', authorize('integrations:read'), async (req, res) => {
 		const summaries = await deps.listIntegrations.execute(req.auth!.orgId);
 		res.status(200).json(
 			summaries.map((s) => ({ ...toResponse(s.integration), connectorCount: s.connectorCount, connectedProjectIds: s.connectedProjectIds }))
 		);
 	});
 
-	router.post('/v1/integrations/:provider/connect', async (req, res) => {
+	router.post('/v1/integrations/:provider/connect', authorize('integrations:manage'), async (req, res) => {
 		const parsed = connectSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -116,6 +129,8 @@ export function createIntegrationsController(deps: {
 		}
 		try {
 			requireOrgAdmin(req.auth!, 'connect integrations');
+			// Connecting INTO a project is a second decision, about that project.
+			if (parsed.data.projectId && !(await mayUseProject(req, res, parsed.data.projectId, 'connectors:manage'))) return;
 			const result = await deps.connectProvider.execute({
 				orgId: req.auth!.orgId,
 				provider: req.params.provider!,
@@ -130,7 +145,7 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	router.post('/v1/integrations/:provider/callback', async (req, res) => {
+	router.post('/v1/integrations/:provider/callback', authorize('integrations:manage'), async (req, res) => {
 		const parsed = callbackSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -155,7 +170,7 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	router.post('/v1/integrations/:integrationId/reconnect', requireUuidParams('integrationId'), async (req, res) => {
+	router.post('/v1/integrations/:integrationId/reconnect', authorize('integrations:manage'), requireUuidParams('integrationId'), async (req, res) => {
 		const parsed = reconnectSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -176,7 +191,7 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	router.delete('/v1/integrations/:integrationId', requireUuidParams('integrationId'), async (req, res) => {
+	router.delete('/v1/integrations/:integrationId', authorize('integrations:manage'), requireUuidParams('integrationId'), async (req, res) => {
 		try {
 			requireOrgAdmin(req.auth!, 'disconnect integrations');
 			await deps.disconnectIntegration.execute({ orgId: req.auth!.orgId, integrationId: req.params.integrationId as string });
@@ -186,7 +201,7 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	router.get('/v1/integrations/:integrationId/resources', requireUuidParams('integrationId'), async (req, res) => {
+	router.get('/v1/integrations/:integrationId/resources', authorize('integrations:read'), requireUuidParams('integrationId'), async (req, res) => {
 		try {
 			const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
 			const result = await deps.listIntegrationResources.execute({
@@ -203,7 +218,7 @@ export function createIntegrationsController(deps: {
 	// Organization Provider Registration (enterprise BYOA): describe the
 	// provider's app-registration form (secrets never echoed — only whether
 	// they're set) and store the org's own app credentials.
-	router.get('/v1/providers/:provider/registration', async (req, res) => {
+	router.get('/v1/providers/:provider/registration', authorize('provider_registrations:read'), async (req, res) => {
 		try {
 			const result = await deps.describeRegistration.execute({ orgId: req.auth!.orgId, provider: req.params.provider! });
 			res.status(200).json(result);
@@ -212,7 +227,7 @@ export function createIntegrationsController(deps: {
 		}
 	});
 
-	router.put('/v1/providers/:provider/registration', async (req, res) => {
+	router.put('/v1/providers/:provider/registration', authorize('provider_registrations:manage'), async (req, res) => {
 		const parsed = configSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -228,7 +243,7 @@ export function createIntegrationsController(deps: {
 	});
 
 	// Remove the org's BYOA registration for a provider (revert to managed). 409 if integrations still use it.
-	router.delete('/v1/providers/:provider/registration', async (req, res) => {
+	router.delete('/v1/providers/:provider/registration', authorize('provider_registrations:manage'), async (req, res) => {
 		try {
 			requireOrgAdmin(req.auth!, 'manage provider registrations');
 			await deps.deleteRegistration.execute({ orgId: req.auth!.orgId, provider: req.params.provider! });
@@ -239,7 +254,7 @@ export function createIntegrationsController(deps: {
 	});
 
 	// Live org-scoped integration events (connects, revocations, health flips).
-	router.get('/v1/integrations/stream', (req, res) => {
+	router.get('/v1/integrations/stream', authorize('integrations:read'), (req, res) => {
 		res.writeHead(200, {
 			'Content-Type': 'text/event-stream',
 			'Cache-Control': 'no-cache, no-transform',

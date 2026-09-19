@@ -1,4 +1,6 @@
 import type { AuthContext, OrganizationRepository, OrgRoleKey, UserRepository } from '@meshify/data-access';
+import { permissionScope, type Permission } from '@meshify/authz';
+import { heldPermissions, principalOf } from '../../security/authorization/principal.js';
 
 /** Who the caller is, as the web app needs to know it. */
 export interface MeView {
@@ -8,6 +10,11 @@ export interface MeView {
 	user: { id: string; email: string | null; displayName: string | null; avatarUrl: string | null } | null;
 	orgRole: OrgRoleKey | null;
 	isOrgAdmin: boolean;
+	/**
+	 * What the caller may do at the organization level, sorted. Permissions
+	 * inside a project depend on their role there and travel with each project.
+	 */
+	orgPermissions: Permission[];
 }
 
 export class GetMeUseCase {
@@ -28,6 +35,7 @@ export class GetMeUseCase {
 			user: user ? { id: user.id, email: user.email, displayName: user.displayName, avatarUrl: user.avatarUrl } : null,
 			orgRole: user ? (auth.orgRole ?? null) : null,
 			isOrgAdmin: auth.isOrgAdmin,
+			orgPermissions: [...heldPermissions(principalOf(auth))].filter((permission) => permissionScope(permission) === 'org').sort(),
 		};
 	}
 }

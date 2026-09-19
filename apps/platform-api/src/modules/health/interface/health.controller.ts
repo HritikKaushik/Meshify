@@ -1,5 +1,6 @@
 import type { Router } from 'express';
 import { createRouter } from '../../../http/router.js';
+import { publicRoute } from '../../../http/route-policy.js';
 import type { CheckHealthUseCase } from '../application/check-health.usecase.js';
 
 interface HealthLogger {
@@ -10,7 +11,7 @@ export function createHealthController(checkHealth: CheckHealthUseCase, logger?:
 	const router = createRouter();
 
 	// Liveness: process is up, no dependency checks.
-	router.get('/health/live', (_req, res) => {
+	router.get('/health/live', publicRoute('liveness probe; reveals nothing'), (_req, res) => {
 		res.status(200).json({ status: 'ok' });
 	});
 
@@ -19,7 +20,7 @@ export function createHealthController(checkHealth: CheckHealthUseCase, logger?:
 	// state but never the driver's error text, which can carry hosts, ports and
 	// auth detail; that goes to the log, where a failed deploy healthcheck is
 	// diagnosed from.
-	router.get('/health/ready', async (_req, res) => {
+	router.get('/health/ready', publicRoute('readiness probe; names dependencies and their state, never error detail'), async (_req, res) => {
 		const report = await checkHealth.execute();
 		if (report.status !== 'ok') {
 			const down = report.dependencies.filter((d) => d.status !== 'up');

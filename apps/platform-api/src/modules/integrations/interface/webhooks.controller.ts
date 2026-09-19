@@ -1,5 +1,6 @@
 import express, { type Router } from 'express';
 import { createRouter } from '../../../http/router.js';
+import { publicRoute } from '../../../http/route-policy.js';
 import type { Queue } from 'bullmq';
 import type { IntegrationRepository, WebhookEventRepository } from '@meshify/data-access';
 import type { WebhookEventJobPayload } from '@meshify/queues';
@@ -44,7 +45,11 @@ export function createWebhooksController(deps: WebhookReceiverDeps): Router {
 	const router = createRouter();
 	router.use('/v1/integrations/webhooks', express.raw({ type: () => true, limit: '2mb' }));
 
-	router.post(['/v1/integrations/webhooks/:provider', '/v1/integrations/webhooks/:provider/:registrationId'], async (req, res) => {
+	// Public by necessity: a provider delivery carries no Meshify credential. The
+	// provider's signature over the raw body is verified before anything is accepted.
+	const signatureVerified = publicRoute('provider deliveries are authenticated by their signature over the raw body, not by a Meshify credential');
+
+	router.post(['/v1/integrations/webhooks/:provider', '/v1/integrations/webhooks/:provider/:registrationId'], signatureVerified, async (req, res) => {
 		// Array route paths type params as string | string[] — normalize once.
 		const providerId = String(req.params.provider ?? '');
 		const registrationIdParam = req.params.registrationId ? String(req.params.registrationId) : undefined;

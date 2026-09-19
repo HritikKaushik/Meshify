@@ -69,6 +69,12 @@ describe('loadEnv identity assertion', () => {
 		expect(loadEnv(baseEnv()).IDENTITY_ASSERTION_MODE).toBe('permissive');
 	});
 
+	it('defaults authorization to shadow, and rejects a mode that does not exist', () => {
+		expect(loadEnv(baseEnv()).RBAC_ENFORCEMENT).toBe('shadow');
+		resetEnvCache();
+		expect(() => loadEnv(baseEnv({ RBAC_ENFORCEMENT: 'off' }))).toThrow(/RBAC_ENFORCEMENT/);
+	});
+
 	it('refuses to boot in required mode without a secret (an empty value counts as unset)', () => {
 		expect(() => loadEnv(baseEnv({ IDENTITY_ASSERTION_MODE: 'required' }))).toThrow(/BFF_ASSERTION_SECRET is required/);
 		resetEnvCache();

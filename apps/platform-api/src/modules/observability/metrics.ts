@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { collectDefaultMetrics, Histogram, Registry } from 'prom-client';
+import { collectDefaultMetrics, Counter, Histogram, Registry } from 'prom-client';
 import { bearerTokenMatches } from '@meshify/shared';
 
 export interface Metrics {
@@ -7,6 +7,11 @@ export interface Metrics {
 	httpMiddleware: RequestHandler;
 	/** Renders the Prometheus exposition format; token-gated when `token` is set. */
 	metricsHandler: RequestHandler;
+	/**
+	 * Counts an authorization denial. In shadow mode this is the cutover gate: it
+	 * must sit at zero for legitimate traffic before RBAC_ENFORCEMENT=enforce.
+	 */
+	recordRbacDenial(labels: { mode: string; permission: string; route: string; outcome: string; principal: string }): void;
 }
 
 /**
@@ -27,6 +32,15 @@ export function createMetrics(opts: { token?: string } = {}): Metrics {
 		help: 'HTTP request duration in seconds',
 		labelNames: ['method', 'route', 'status'],
 		buckets: [0.01, 0.05, 0.1, 0.3, 0.5, 1, 2, 5],
+		registers: [registry],
+	});
+
+	// Label cardinality is bounded: permissions and route patterns are finite sets
+	// defined in code, never request data.
+	const rbacDenials = new Counter({
+		name: 'meshify_rbac_denials_total',
+		help: 'Authorization denials by permission and route. mode=shadow means the request was allowed to continue.',
+		labelNames: ['mode', 'permission', 'route', 'outcome', 'principal'],
 		registers: [registry],
 	});
 
@@ -54,5 +68,5 @@ export function createMetrics(opts: { token?: string } = {}): Metrics {
 		res.send(await registry.metrics());
 	};
 
-	return { httpMiddleware, metricsHandler };
+	return { httpMiddleware, metricsHandler, recordRbacDenial: (labels) => rbacDenials.inc(labels) };
 }

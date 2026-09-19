@@ -172,6 +172,11 @@ const envSchema = z.object({
 	// the legacy headers, with a warning. `required`: a request on a BFF key
 	// without a valid assertion is rejected. Flip once both services are live.
 	IDENTITY_ASSERTION_MODE: z.enum(['permissive', 'required']).default('permissive'),
+	// `shadow` (rollout): every authorization decision is computed and a denial is
+	// only counted (meshify_rbac_denials_total{mode="shadow"}); the request goes on
+	// to the pre-existing checks. `enforce`: a denial is a 404 or 403. Flip once the
+	// shadow counter is quiet for legitimate traffic.
+	RBAC_ENFORCEMENT: z.enum(['shadow', 'enforce']).default('shadow'),
 });
 
 export type Env = z.infer<typeof envSchema>;

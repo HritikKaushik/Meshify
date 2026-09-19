@@ -1,10 +1,9 @@
 import type { Router } from 'express';
 import { requireUuidParams } from '../../../http/require-uuid-params.js';
 import { createRouter } from '../../../http/router.js';
+import type { Authorizer } from '../../security/authorization/authorizer.js';
 import { z } from 'zod';
 import type { Chat, ChatSummary, Message } from '@meshify/data-access';
-import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
-import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
 import type { AskQuestionUseCase } from '../application/ask-question.usecase.js';
 import { ChatNotFoundError } from '../application/ask-question.usecase.js';
 import type { ListConversationsUseCase } from '../application/list-conversations.usecase.js';
@@ -47,7 +46,7 @@ function toMessage(m: Message) {
 }
 
 export function createChatController(deps: {
-	getProject: GetProjectUseCase;
+	authz: Authorizer;
 	askQuestion: AskQuestionUseCase;
 	listConversations: ListConversationsUseCase;
 	updateConversation: UpdateConversationUseCase;
@@ -55,9 +54,9 @@ export function createChatController(deps: {
 	getConversationMessages: GetConversationMessagesUseCase;
 }): Router {
 	const router = createRouter();
-	const guard = projectIsolationGuard(deps.getProject);
+	const { authorize } = deps.authz;
 
-	router.post('/v1/projects/:projectId/chat', guard, async (req, res) => {
+	router.post('/v1/projects/:projectId/chat', authorize('chat:write'), async (req, res) => {
 		const parsed = askSchema.safeParse(req.body);
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -84,13 +83,13 @@ export function createChatController(deps: {
 	});
 
 	// List a project's conversations (pinned first, then newest) for the workspace sidebar.
-	router.get('/v1/projects/:projectId/chats', guard, async (req, res) => {
+	router.get('/v1/projects/:projectId/chats', authorize('chat:read'), async (req, res) => {
 		const conversations = await deps.listConversations.execute(req.project!.id);
 		res.status(200).json({ conversations: conversations.map(toConversationSummary) });
 	});
 
 	// Pin/unpin or rename a conversation.
-	router.patch('/v1/projects/:projectId/chats/:chatId', guard, requireUuidParams('chatId'), async (req, res) => {
+	router.patch('/v1/projects/:projectId/chats/:chatId', authorize('chat:write'), requireUuidParams('chatId'), async (req, res) => {
 		const parsed = updateChatSchema.safeParse(req.body);
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -110,7 +109,7 @@ export function createChatController(deps: {
 	});
 
 	// Delete a conversation (and, via ON DELETE CASCADE, its messages).
-	router.delete('/v1/projects/:projectId/chats/:chatId', guard, requireUuidParams('chatId'), async (req, res) => {
+	router.delete('/v1/projects/:projectId/chats/:chatId', authorize('chat:write'), requireUuidParams('chatId'), async (req, res) => {
 		const chatId = req.params.chatId as string;
 		try {
 			await deps.deleteConversation.execute({ projectId: req.project!.id, chatId });
@@ -124,7 +123,7 @@ export function createChatController(deps: {
 		}
 	});
 
-	router.get('/v1/projects/:projectId/chats/:chatId/messages', guard, requireUuidParams('chatId'), async (req, res) => {
+	router.get('/v1/projects/:projectId/chats/:chatId/messages', authorize('chat:read'), requireUuidParams('chatId'), async (req, res) => {
 		const chatId = req.params.chatId as string;
 		try {
 			const { chat, messages } = await deps.getConversationMessages.execute({ projectId: req.project!.id, chatId });

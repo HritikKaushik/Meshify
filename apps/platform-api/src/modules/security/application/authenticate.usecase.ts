@@ -89,7 +89,7 @@ export class AuthenticateApiKeyUseCase {
 		void this.apiKeys.touch(key.id).catch(() => undefined);
 
 		const actorId = input.actorId && ACTOR_ID_PATTERN.test(input.actorId) ? input.actorId : undefined;
-		const base = { orgId: key.orgId, keyId: key.id, scopes: key.scopes, ...(actorId ? { actorId } : {}) };
+		const base = { orgId: key.orgId, keyId: key.id, keyKind: key.kind, scopes: key.scopes, ...(actorId ? { actorId } : {}) };
 
 		// A key's scopes cap what it can do: EMPTY scopes = unrestricted (the shared
 		// org key + every existing/Clerk-provisioned key - unchanged behaviour); a

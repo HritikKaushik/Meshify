@@ -12,6 +12,9 @@
 			"path": "../../packages/ai"
 		},
 		{
+			"path": "../../packages/authz"
+		},
+		{
 			"path": "../../packages/config"
 		},
 		{

@@ -26,6 +26,14 @@ declare global {
  */
 const UUID = z.string().uuid();
 
+/**
+ * The one "no such project" answer. Shared with the authorizer so a project the
+ * caller may not see is byte-identical to one that does not exist.
+ */
+export function respondProjectNotFound(res: Response, projectId: string): void {
+	res.status(404).json({ error: `Project "${projectId}" not found` });
+}
+
 export function projectIsolationGuard(getProject: GetProjectUseCase) {
 	return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 		if (!req.auth) {
@@ -49,7 +57,7 @@ export function projectIsolationGuard(getProject: GetProjectUseCase) {
 		try {
 			const project = await getProject.execute(projectId);
 			if (!project || project.orgId !== req.auth.orgId) {
-				res.status(404).json({ error: `Project "${projectId}" not found` });
+				respondProjectNotFound(res, projectId);
 				return;
 			}
 			req.project = project;

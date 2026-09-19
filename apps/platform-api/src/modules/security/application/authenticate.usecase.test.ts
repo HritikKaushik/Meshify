@@ -33,7 +33,7 @@ describe('AuthenticateApiKeyUseCase', () => {
 
 		// The key is scoped to ['read'] (non-empty, no 'admin'), so it is NOT an org
 		// admin — least privilege — even as a direct caller with no role header.
-		expect(auth).toEqual({ orgId: ORG_ID, keyId: 'key-1', scopes: ['read'], isOrgAdmin: false });
+		expect(auth).toEqual({ orgId: ORG_ID, keyId: 'key-1', keyKind: 'service', scopes: ['read'], isOrgAdmin: false });
 		expect(touch).toHaveBeenCalledWith('key-1');
 	});
 

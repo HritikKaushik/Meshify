@@ -1,11 +1,10 @@
 import type { Router } from 'express';
 import { requireUuidParams } from '../../../http/require-uuid-params.js';
 import { createRouter } from '../../../http/router.js';
+import type { Authorizer } from '../../security/authorization/authorizer.js';
 import multer from 'multer';
 import { z } from 'zod';
 import type { Repository } from '@meshify/data-access';
-import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
-import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
 import type { ConnectGitHubRepositoryUseCase } from '../application/connect-github-repository.usecase.js';
 import type { UploadRepositoryZipUseCase } from '../application/upload-repository-zip.usecase.js';
 import type { SyncRepositoryUseCase } from '../application/sync-repository.usecase.js';
@@ -47,7 +46,7 @@ function toResponse(repository: Repository) {
 }
 
 export function createRepositoriesController(deps: {
-	getProject: GetProjectUseCase;
+	authz: Authorizer;
 	connectGitHub: ConnectGitHubRepositoryUseCase;
 	connectFromIntegration: ConnectRepositoryFromIntegrationUseCase;
 	uploadZip: UploadRepositoryZipUseCase;
@@ -56,12 +55,12 @@ export function createRepositoriesController(deps: {
 	deleteRepository: DeleteRepositoryUseCase;
 }): Router {
 	const router = createRouter();
-	const guard = projectIsolationGuard(deps.getProject);
+	const { authorize } = deps.authz;
 
 	// One route, three intake modes: multipart = ZIP upload, JSON {integrationId,
 	// githubRepoId} = picker connect via the org's installation, JSON
 	// {source:'github', remoteUrl} = legacy URL paste (kept for back-compat).
-	router.post('/v1/projects/:projectId/repositories', guard, upload.single('file'), async (req, res) => {
+	router.post('/v1/projects/:projectId/repositories', authorize('repositories:write'), upload.single('file'), async (req, res) => {
 		try {
 			if (req.file) {
 				const result = await deps.uploadZip.execute({
@@ -115,13 +114,13 @@ export function createRepositoriesController(deps: {
 		}
 	});
 
-	router.get('/v1/projects/:projectId/repositories', guard, async (req, res) => {
+	router.get('/v1/projects/:projectId/repositories', authorize('repositories:read'), async (req, res) => {
 		const repositories = await deps.listRepositories.execute(req.project!.id);
 		res.status(200).json({ repositories: repositories.map(toResponse) });
 	});
 
 	// Disconnect a repository — purges its code vectors + archive, then deletes the row (files cascade).
-	router.delete('/v1/projects/:projectId/repositories/:repositoryId', guard, requireUuidParams('repositoryId'), async (req, res) => {
+	router.delete('/v1/projects/:projectId/repositories/:repositoryId', authorize('repositories:delete'), requireUuidParams('repositoryId'), async (req, res) => {
 		try {
 			await deps.deleteRepository.execute({ project: req.project!, repositoryId: req.params.repositoryId as string });
 			res.status(204).send();
@@ -135,7 +134,7 @@ export function createRepositoriesController(deps: {
 		}
 	});
 
-	router.post('/v1/projects/:projectId/repositories/:repositoryId/sync', guard, requireUuidParams('repositoryId'), async (req, res) => {
+	router.post('/v1/projects/:projectId/repositories/:repositoryId/sync', authorize('repositories:sync'), requireUuidParams('repositoryId'), async (req, res) => {
 		try {
 			const result = await deps.syncRepository.execute(req.project!.id, req.params.repositoryId as string, req.auth!.userId);
 			res.status(202).json(result);

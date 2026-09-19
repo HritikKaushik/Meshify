@@ -13,6 +13,7 @@ import {
 	InMemorySlackConversationRepository,
 	InMemorySlackSyncStateRepository,
 	InMemorySlackWorkspaceRepository,
+	buildAuthContext,
 	buildProject,
 } from '@meshify/testing';
 import { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
@@ -25,6 +26,7 @@ import { ListSlackChannelsUseCase } from '../application/list-slack-channels.use
 import { SelectSlackChannelsUseCase } from '../application/select-slack-channels.usecase.js';
 import { SyncSlackUseCase } from '../application/sync-slack.usecase.js';
 import { createSlackController } from './slack.controller.js';
+import { buildTestAuthorizer } from '../../security/authorization/authorizer.testutil.js';
 
 const KEY = 'e2e-org-key-encryption-secret-32chars!!';
 const SLACK_CONFIG = { clientId: 'cid', clientSecret: 'sec', redirectUri: 'https://app.example.com/oauth/slack/callback', secret: KEY };
@@ -50,25 +52,29 @@ function buildApp(configured = true) {
 	const vectors = { deleteBySourcePaths: async () => {}, deleteByFilter: async () => {} };
 	const storage = { deleteObject: async () => {} };
 
+	// The real authorizer, enforcing: reaching a handler below proves the route's
+	// declared permission admits this principal.
+	const { authz } = buildTestAuthorizer({ getProject });
+
 	const app = express();
 	app.use(express.json());
 	// Stub authGuard: every request is an authenticated org-1 admin (the flow
 	// includes disconnect, which is org-admin-gated). isOrgAdmin mirrors what the
 	// real authGuard derives from the BFF-forwarded org role.
 	app.use((req: Request, _res: Response, next: NextFunction) => {
-		(req as unknown as { auth: { orgId: string; isOrgAdmin: boolean } }).auth = { orgId: 'org-1', isOrgAdmin: true };
+		req.auth = buildAuthContext({ orgId: 'org-1', isOrgAdmin: true });
 		next();
 	});
 	app.use(
 		createConnectorsController({
-			getProject,
+			authz,
 			listConnectors: new ListConnectorsUseCase(connectors, new InMemoryRepositoryRepository(), new InMemoryDocumentRepository(), workspaces, channels, conversations),
 			deleteConnector: new DeleteConnectorUseCase(connectors, new InMemoryRepositoryRepository(), new InMemoryFileRepository(), new InMemoryDocumentRepository(), workspaces, conversations, vectors, storage),
 		})
 	);
 	app.use(
 		createSlackController({
-			getProject,
+			authz,
 			startOAuth: new StartSlackOAuthUseCase(cfg, () => NOW),
 			completeOAuth: new CompleteSlackOAuthUseCase(connectors, workspaces, channels, slack, cfg, () => NOW, fakeExchange),
 			listChannels: new ListSlackChannelsUseCase(connectors, workspaces, channels),

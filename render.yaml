@@ -338,6 +338,10 @@ envVarGroups:
       # a release that sends and verifies the assertion.
       - key: IDENTITY_ASSERTION_MODE
         value: permissive
+      # shadow = permission denials are only counted and logged (rollout). Set to
+      # enforce once meshify_rbac_denials_total{mode="shadow"} is quiet.
+      - key: RBAC_ENFORCEMENT
+        value: shadow
       - key: METRICS_TOKEN # bearer token your Prometheus/Grafana scraper sends to /metrics
         generateValue: true
       # --- Qdrant Cloud (must be reachable from the internet - RocketRide writes to it)

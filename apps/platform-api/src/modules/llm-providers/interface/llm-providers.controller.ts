@@ -1,5 +1,7 @@
 import type { Router } from 'express';
 import { createRouter } from '../../../http/router.js';
+import { forbiddenBody, type Authorizer } from '../../security/authorization/authorizer.js';
+import { respondProjectNotFound } from '../../projects/interface/project-isolation.guard.js';
 import { z } from 'zod';
 import {
 	LlmAuthError,
@@ -65,6 +67,7 @@ function mapError(err: unknown, res: import('express').Response, log?: { error: 
  * org member; mutating routes pass through `requireLlmAdmin` (the RBAC seam).
  */
 export function createLlmProvidersController(deps: {
+	authz: Authorizer;
 	listLlmProviders: ListLlmProvidersUseCase;
 	getLlmProvider: GetLlmProviderUseCase;
 	connectLlmProvider: ConnectLlmProviderUseCase;
@@ -74,9 +77,10 @@ export function createLlmProvidersController(deps: {
 	listLlmModels: ListLlmModelsUseCase;
 }): Router {
 	const router = createRouter();
+	const { authorize } = deps.authz;
 
 	// Catalog: every provider + this org's config/active state (AI Models cards).
-	router.get('/v1/providers/llm', async (req, res) => {
+	router.get('/v1/providers/llm', authorize('llm_providers:read'), async (req, res) => {
 		try {
 			res.status(200).json(await deps.listLlmProviders.execute(req.auth!.orgId));
 		} catch (err) {
@@ -85,7 +89,7 @@ export function createLlmProvidersController(deps: {
 	});
 
 	// Detail: manifest + masked credential fields + models + config.
-	router.get('/v1/providers/llm/:provider', async (req, res) => {
+	router.get('/v1/providers/llm/:provider', authorize('llm_providers:read'), async (req, res) => {
 		try {
 			res.status(200).json(await deps.getLlmProvider.execute({ orgId: req.auth!.orgId, provider: req.params.provider! }));
 		} catch (err) {
@@ -94,7 +98,7 @@ export function createLlmProvidersController(deps: {
 	});
 
 	// Available models (static catalog or live fetch for dynamic providers).
-	router.get('/v1/providers/llm/:provider/models', async (req, res) => {
+	router.get('/v1/providers/llm/:provider/models', authorize('llm_providers:read'), async (req, res) => {
 		try {
 			res.status(200).json(await deps.listLlmModels.execute({ orgId: req.auth!.orgId, provider: req.params.provider! }));
 		} catch (err) {
@@ -103,7 +107,7 @@ export function createLlmProvidersController(deps: {
 	});
 
 	// Save credentials (BYOA) + config. Admin-gated (RBAC seam).
-	router.post('/v1/providers/llm/:provider/connect', async (req, res) => {
+	router.post('/v1/providers/llm/:provider/connect', authorize('llm_providers:manage'), async (req, res) => {
 		const parsed = connectSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -124,7 +128,7 @@ export function createLlmProvidersController(deps: {
 	});
 
 	// Live connection test — returns { ok, models, latencyMs, region?, error? }.
-	router.post('/v1/providers/llm/:provider/test', async (req, res) => {
+	router.post('/v1/providers/llm/:provider/test', authorize('llm_providers:manage'), async (req, res) => {
 		const parsed = testSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -147,7 +151,7 @@ export function createLlmProvidersController(deps: {
 	// Make this provider the org's single active provider. An optional projectId
 	// makes the call block until that project's RocketRide pipeline is (re)built,
 	// so the UI can hold a loader and the user never chats mid-build.
-	router.post('/v1/providers/llm/:provider/activate', async (req, res) => {
+	router.post('/v1/providers/llm/:provider/activate', authorize('llm_providers:manage'), async (req, res) => {
 		const parsed = activateSchema.safeParse(req.body ?? {});
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -155,6 +159,12 @@ export function createLlmProvidersController(deps: {
 		}
 		try {
 			requireLlmAdmin(req.auth!);
+			// Activation warms that project's pipeline first: the caller must at least be able to see it.
+			if (parsed.data.projectId) {
+				const outcome = await deps.authz.checkProjectById(req, parsed.data.projectId, 'project:read');
+				if (outcome === 'hidden') return respondProjectNotFound(res, parsed.data.projectId);
+				if (outcome === 'forbidden') return void res.status(403).json(forbiddenBody('project:read'));
+			}
 			const result = await deps.activateLlmProvider.execute({
 				orgId: req.auth!.orgId,
 				provider: req.params.provider!,
@@ -167,7 +177,7 @@ export function createLlmProvidersController(deps: {
 	});
 
 	// Disconnect: purge credentials + config (cascades active + credentials rows).
-	router.delete('/v1/providers/llm/:provider', async (req, res) => {
+	router.delete('/v1/providers/llm/:provider', authorize('llm_providers:manage'), async (req, res) => {
 		try {
 			requireLlmAdmin(req.auth!);
 			await deps.disconnectLlmProvider.execute({ orgId: req.auth!.orgId, provider: req.params.provider! });

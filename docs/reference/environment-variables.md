@@ -47,6 +47,7 @@ root). Keep secrets in the root `.env` (git-ignored); commit only `.env.example`
 | `PLATFORM_API_KEY_PEPPER` | api | HMAC pepper for API-key hashing |
 | `ORG_KEY_ENCRYPTION_KEY` | bff, api, worker | Encrypts org API keys at rest; also signs Slack OAuth `state` + encrypts Slack tokens |
 | `BFF_ASSERTION_SECRET` | bff, api | Signs / verifies the identity assertion (`X-Meshify-Actor`). Must be identical on both. At least 32 chars. Unset = legacy role header only |
+| `RBAC_ENFORCEMENT` | api | `shadow` (default, rollout): permission denials are counted (`meshify_rbac_denials_total`) and logged, the request continues. `enforce`: a denial is a 404 or 403 |
 | `IDENTITY_ASSERTION_MODE` | bff, api | `permissive` (default, rollout) or `required`. In `required` both services refuse to boot without `BFF_ASSERTION_SECRET` |
 | `METRICS_TOKEN` | api, worker | Bearer token the scraper sends to `/metrics`; at least 16 chars, required in production (empty leaves `/metrics` open in dev only) |
 | `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_SEC` | api | Requests per window per end user (BFF traffic) or per API key (direct callers) |

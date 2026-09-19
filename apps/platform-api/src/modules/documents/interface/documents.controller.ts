@@ -1,10 +1,9 @@
 import type { Router } from 'express';
 import { DocumentFilenameConflictError, DocumentValidationError } from '../application/upload-document.usecase.js';
 import { createRouter } from '../../../http/router.js';
+import type { Authorizer } from '../../security/authorization/authorizer.js';
 import multer from 'multer';
 import type { Document } from '@meshify/data-access';
-import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
-import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
 import { requireUuidParams } from '../../../http/require-uuid-params.js';
 import type { UploadDocumentUseCase } from '../application/upload-document.usecase.js';
 import type { ListDocumentsUseCase } from '../application/list-documents.usecase.js';
@@ -25,22 +24,22 @@ function toResponse(doc: Document) {
 }
 
 export function createDocumentsController(deps: {
-	getProject: GetProjectUseCase;
+	authz: Authorizer;
 	uploadDocument: UploadDocumentUseCase;
 	listDocuments: ListDocumentsUseCase;
 	deleteDocument: DeleteDocumentUseCase;
 	getDocumentContent: GetDocumentContentUseCase;
 }): Router {
 	const router = createRouter();
-	const guard = projectIsolationGuard(deps.getProject);
+	const { authorize } = deps.authz;
 
 	// List a project's ingested documents (newest first) for the Documents screen.
-	router.get('/v1/projects/:projectId/documents', guard, async (req, res) => {
+	router.get('/v1/projects/:projectId/documents', authorize('documents:read'), async (req, res) => {
 		const documents = await deps.listDocuments.execute(req.project!.id);
 		res.status(200).json({ documents: documents.map(toResponse) });
 	});
 
-	router.post('/v1/projects/:projectId/documents', guard, upload.single('file'), async (req, res) => {
+	router.post('/v1/projects/:projectId/documents', authorize('documents:write'), upload.single('file'), async (req, res) => {
 		if (!req.file) {
 			res.status(400).json({ error: 'multipart field "file" is required' });
 			return;
@@ -77,7 +76,7 @@ export function createDocumentsController(deps: {
 	});
 
 	// Remove an ingested document — purges its vectors, raw upload, and DB row.
-	router.delete('/v1/projects/:projectId/documents/:documentId', guard, requireUuidParams('documentId'), async (req, res) => {
+	router.delete('/v1/projects/:projectId/documents/:documentId', authorize('documents:delete'), requireUuidParams('documentId'), async (req, res) => {
 		try {
 			await deps.deleteDocument.execute({
 				project: req.project!,
@@ -96,7 +95,7 @@ export function createDocumentsController(deps: {
 
 	// Stream a document's raw upload back (project-isolation enforced) — powers the
 	// Documents grid's PDF thumbnails and in-app previews.
-	router.get('/v1/projects/:projectId/documents/:documentId/content', guard, requireUuidParams('documentId'), async (req, res) => {
+	router.get('/v1/projects/:projectId/documents/:documentId/content', authorize('documents:read'), requireUuidParams('documentId'), async (req, res) => {
 		try {
 			const { buffer, contentType, filename } = await deps.getDocumentContent.execute({
 				projectId: req.project!.id,

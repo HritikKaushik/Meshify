@@ -57,7 +57,8 @@ five applications and eleven shared packages.
 | [Queues & Workers](backend/queues-and-workers.md) | BullMQ queues, worker processors, Redis, retries/DLQ |
 | [Connector Framework](backend/connectors.md) | The generic knowledge-source model (GitHub, Documents, Slack) and how to add a source |
 | [Real-Time Job Progress](backend/realtime-jobs.md) | SSE + Redis Pub/Sub live job progress and the Job Progress Center |
-| [Authentication & Authorization](backend/auth.md) | Clerk → org API key → HMAC auth → project isolation |
+| [Authentication & Authorization](backend/auth.md) | Clerk → org API key + signed identity → HMAC auth → project isolation |
+| [Roles & Permissions (RBAC)](backend/rbac.md) | The permission catalog, org and project roles, how a route declares its permission, shadow-to-enforce rollout |
 
 ### 4. Development
 | Doc | What it answers |
@@ -90,7 +91,8 @@ dependencies, consumers, and how to extend/test/debug it:
   [`apps/platform-api`](../apps/platform-api/README.md) ·
   [`apps/worker`](../apps/worker/README.md) ·
   [`apps/observability`](../apps/observability/README.md)
-- **Packages:** [`config`](../packages/config/README.md) ·
+- **Packages:** [`authz`](../packages/authz/README.md) ·
+  [`config`](../packages/config/README.md) ·
   [`shared`](../packages/shared/README.md) ·
   [`data-access`](../packages/data-access/README.md) ·
   [`vector-store`](../packages/vector-store/README.md) ·

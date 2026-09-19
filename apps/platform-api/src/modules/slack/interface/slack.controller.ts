@@ -1,10 +1,9 @@
 import type { Router } from 'express';
 import { requireUuidParams } from '../../../http/require-uuid-params.js';
 import { createRouter } from '../../../http/router.js';
+import type { Authorizer } from '../../security/authorization/authorizer.js';
 import { z } from 'zod';
 import type { SlackChannel } from '@meshify/data-access';
-import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
-import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
 import type { StartSlackOAuthUseCase } from '../application/start-slack-oauth.usecase.js';
 import type { CompleteSlackOAuthUseCase } from '../application/complete-slack-oauth.usecase.js';
 import type { ListSlackChannelsUseCase } from '../application/list-slack-channels.usecase.js';
@@ -42,7 +41,7 @@ function handleSlackError(err: unknown, res: import('express').Response, log?: {
 }
 
 export function createSlackController(deps: {
-	getProject: GetProjectUseCase;
+	authz: Authorizer;
 	startOAuth: StartSlackOAuthUseCase;
 	completeOAuth: CompleteSlackOAuthUseCase;
 	attachWorkspace: AttachSlackWorkspaceUseCase;
@@ -51,11 +50,11 @@ export function createSlackController(deps: {
 	syncSlack: SyncSlackUseCase;
 }): Router {
 	const router = createRouter();
-	const guard = projectIsolationGuard(deps.getProject);
+	const { authorize } = deps.authz;
 
 	// Provider-platform attach: bind an org-level Slack integration to this
 	// project (no second OAuth — the workspace was authorized once, org-wide).
-	router.post('/v1/projects/:projectId/connectors/slack', guard, async (req, res) => {
+	router.post('/v1/projects/:projectId/connectors/slack', authorize('connectors:manage'), async (req, res) => {
 		const parsed = attachSchema.safeParse(req.body);
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -75,7 +74,7 @@ export function createSlackController(deps: {
 	});
 
 	// Begin OAuth: returns the Slack authorize URL for the browser to navigate to.
-	router.post('/v1/projects/:projectId/connectors/slack/oauth/start', guard, async (req, res) => {
+	router.post('/v1/projects/:projectId/connectors/slack/oauth/start', authorize('connectors:manage'), async (req, res) => {
 		try {
 			const result = deps.startOAuth.execute({ projectId: req.project!.id });
 			res.status(200).json(result);
@@ -85,7 +84,7 @@ export function createSlackController(deps: {
 	});
 
 	// Finish OAuth: the same-origin web callback posts { code, state } here.
-	router.post('/v1/projects/:projectId/connectors/slack/oauth/complete', guard, async (req, res) => {
+	router.post('/v1/projects/:projectId/connectors/slack/oauth/complete', authorize('connectors:manage'), async (req, res) => {
 		const parsed = completeSchema.safeParse(req.body);
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -99,7 +98,7 @@ export function createSlackController(deps: {
 		}
 	});
 
-	router.get('/v1/projects/:projectId/connectors/slack/:connectorId/channels', guard, requireUuidParams('connectorId'), async (req, res) => {
+	router.get('/v1/projects/:projectId/connectors/slack/:connectorId/channels', authorize('connectors:read'), requireUuidParams('connectorId'), async (req, res) => {
 		try {
 			const channels = await deps.listChannels.execute({ projectId: req.project!.id, connectorId: req.params.connectorId as string });
 			res.status(200).json({ channels: channels.map(toChannel) });
@@ -108,7 +107,7 @@ export function createSlackController(deps: {
 		}
 	});
 
-	router.post('/v1/projects/:projectId/connectors/slack/:connectorId/channels', guard, requireUuidParams('connectorId'), async (req, res) => {
+	router.post('/v1/projects/:projectId/connectors/slack/:connectorId/channels', authorize('connectors:manage'), requireUuidParams('connectorId'), async (req, res) => {
 		const parsed = selectSchema.safeParse(req.body);
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -122,7 +121,7 @@ export function createSlackController(deps: {
 		}
 	});
 
-	router.post('/v1/projects/:projectId/connectors/slack/:connectorId/sync', guard, requireUuidParams('connectorId'), async (req, res) => {
+	router.post('/v1/projects/:projectId/connectors/slack/:connectorId/sync', authorize('connectors:sync'), requireUuidParams('connectorId'), async (req, res) => {
 		try {
 			const result = await deps.syncSlack.execute({ projectId: req.project!.id, connectorId: req.params.connectorId as string, userId: req.auth!.userId });
 			res.status(202).json(result);

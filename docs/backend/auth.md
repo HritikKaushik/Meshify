@@ -25,7 +25,7 @@ related:
 
 - **AuthN (who):** Clerk session (browser ↔ BFF) → HMAC-hashed org API key + signed identity assertion (BFF ↔ platform-api).
 - **Identity:** Clerk authenticates; Meshify owns people and roles. The BFF mirrors the signed-in Clerk user into `users` + `org_memberships` just in time, and platform-api reads the role from `org_memberships` on every request, so a role change or a removal takes effect immediately.
-- **AuthZ (what):** `projectIsolationGuard` scopes every project route to the key's `orgId`; cross-org access is `404`, not `403`. Org-admin actions require the Meshify org role `owner` or `admin`. Per-project roles and capability checks are the next milestones (see the [roadmap](../product/ai-pm-roadmap.md), Phase 1).
+- **AuthZ (what):** every route declares a permission; permissions come from the caller's org role and their role in the project. Tenant isolation is unchanged underneath it: cross-org access is `404`, not `403`. See [Roles & Permissions](rbac.md).
 - **Defense in depth:** per-key rate limiting, audit logging of mutations, and credential redaction in logs.
 
 ## Architecture

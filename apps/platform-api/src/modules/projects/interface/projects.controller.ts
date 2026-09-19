@@ -1,14 +1,14 @@
 import type { Router } from 'express';
 import { createRouter } from '../../../http/router.js';
+import type { Authorizer } from '../../security/authorization/authorizer.js';
+import { authenticatedOnly } from '../../../http/route-policy.js';
 import type { CreateProjectUseCase } from '../application/create-project.usecase.js';
 import { OrgNotFoundError } from '../application/create-project.usecase.js';
 import type { DeleteProjectUseCase } from '../application/delete-project.usecase.js';
 import { ProjectNotFoundError } from '../application/delete-project.usecase.js';
-import type { GetProjectUseCase } from '../application/get-project.usecase.js';
 import type { GetProjectStatsUseCase } from '../application/get-project-stats.usecase.js';
 import type { ListProjectsUseCase } from '../application/list-projects.usecase.js';
 import { createProjectSchema } from './dto.js';
-import { projectIsolationGuard } from './project-isolation.guard.js';
 import { OrgAdminForbiddenError, requireOrgAdmin } from '../../security/authorization/org-authorization.js';
 import type { Project } from '@meshify/data-access';
 
@@ -27,20 +27,21 @@ function toResponse(project: Project) {
 }
 
 export function createProjectsController(deps: {
+	authz: Authorizer;
 	createProject: CreateProjectUseCase;
 	deleteProject: DeleteProjectUseCase;
-	getProject: GetProjectUseCase;
 	getProjectStats: GetProjectStatsUseCase;
 	listProjects: ListProjectsUseCase;
 }): Router {
 	const router = createRouter();
+	const { authorize } = deps.authz;
 
-	router.get('/v1/projects', async (req, res) => {
+	router.get('/v1/projects', authenticatedOnly('lists only the projects the caller can see'), async (req, res) => {
 		const projects = await deps.listProjects.execute(req.auth!.orgId);
 		res.status(200).json(projects.map(toResponse));
 	});
 
-	router.post('/v1/projects', async (req, res) => {
+	router.post('/v1/projects', authorize('projects:create'), async (req, res) => {
 		const parsed = createProjectSchema.safeParse(req.body);
 		if (!parsed.success) {
 			res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -48,7 +49,7 @@ export function createProjectsController(deps: {
 		}
 
 		try {
-			const project = await deps.createProject.execute({ ...parsed.data, orgId: req.auth!.orgId });
+			const project = await deps.createProject.execute({ ...parsed.data, orgId: req.auth!.orgId, userId: req.auth!.userId });
 			res.status(201).json(toResponse(project));
 		} catch (err) {
 			if (err instanceof OrgNotFoundError) {
@@ -60,17 +61,17 @@ export function createProjectsController(deps: {
 		}
 	});
 
-	router.get('/v1/projects/:projectId', projectIsolationGuard(deps.getProject), (req, res) => {
+	router.get('/v1/projects/:projectId', authorize('project:read'), (req, res) => {
 		res.status(200).json(toResponse(req.project!));
 	});
 
 	// Real aggregate counts (repositories, documents, conversations, coverage) for Project Home.
-	router.get('/v1/projects/:projectId/stats', projectIsolationGuard(deps.getProject), async (req, res) => {
+	router.get('/v1/projects/:projectId/stats', authorize('project:read'), async (req, res) => {
 		const stats = await deps.getProjectStats.execute(req.project!.id);
 		res.status(200).json(stats);
 	});
 
-	router.delete('/v1/projects/:projectId', projectIsolationGuard(deps.getProject), async (req, res) => {
+	router.delete('/v1/projects/:projectId', authorize('project:delete'), async (req, res) => {
 		try {
 			requireOrgAdmin(req.auth!, 'delete projects');
 			await deps.deleteProject.execute(req.project!.id);

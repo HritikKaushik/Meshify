@@ -42,6 +42,29 @@ export default tseslint.config(
 		},
 	},
 	{
+		// platform-api routers must come from createRouter(): it forwards async
+		// rejections (a bare Router() is a process crash on the first one) and it
+		// refuses to register an endpoint that declares no access policy. Importing
+		// the TYPE is fine; constructing one is not.
+		files: ['apps/platform-api/src/**/*.ts'],
+		ignores: ['apps/platform-api/src/http/router.ts', '**/*.test.ts', '**/*.testutil.ts'],
+		rules: {
+			'@typescript-eslint/no-restricted-imports': [
+				'error',
+				{
+					paths: [
+						{
+							name: 'express',
+							importNames: ['Router'],
+							allowTypeImports: true,
+							message: "Build routers with createRouter() from 'src/http/router.ts' so every endpoint is rejection-safe and declares an access policy.",
+						},
+					],
+				},
+			],
+		},
+	},
+	{
 		// Plain JS/MJS (scripts, config) run in Node — declare its globals so
 		// console/process/URL aren't flagged as undefined (TS files get these from
 		// their tsconfig lib, so this is only for non-TS files).

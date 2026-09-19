@@ -12,6 +12,7 @@
 	},
 	"dependencies": {
 		"@meshify/ai": "workspace:*",
+		"@meshify/authz": "workspace:*",
 		"@meshify/config": "workspace:*",
 		"@meshify/data-access": "workspace:*",
 		"@meshify/embeddings": "workspace:*",

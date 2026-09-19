@@ -1,7 +1,6 @@
 import type { Router } from 'express';
 import { createRouter } from '../../../http/router.js';
-import type { GetProjectUseCase } from '../../projects/application/get-project.usecase.js';
-import { projectIsolationGuard } from '../../projects/interface/project-isolation.guard.js';
+import type { Authorizer } from '../../security/authorization/authorizer.js';
 import { OrgAdminForbiddenError, requireOrgAdmin } from '../../security/authorization/org-authorization.js';
 import { requireUuidParams } from '../../../http/require-uuid-params.js';
 import type { ListConnectorsUseCase } from '../application/list-connectors.usecase.js';
@@ -14,19 +13,19 @@ import { ConnectorNotFoundError, type DeleteConnectorUseCase } from '../applicat
  * `/documents`, `/connectors/slack/...`).
  */
 export function createConnectorsController(deps: {
-	getProject: GetProjectUseCase;
+	authz: Authorizer;
 	listConnectors: ListConnectorsUseCase;
 	deleteConnector: DeleteConnectorUseCase;
 }): Router {
 	const router = createRouter();
-	const guard = projectIsolationGuard(deps.getProject);
+	const { authorize } = deps.authz;
 
-	router.get('/v1/projects/:projectId/connectors', guard, async (req, res) => {
+	router.get('/v1/projects/:projectId/connectors', authorize('connectors:read'), async (req, res) => {
 		const connectors = await deps.listConnectors.execute(req.project!.id);
 		res.status(200).json({ connectors });
 	});
 
-	router.delete('/v1/projects/:projectId/connectors/:connectorId', guard, requireUuidParams('connectorId'), async (req, res) => {
+	router.delete('/v1/projects/:projectId/connectors/:connectorId', authorize('connectors:manage'), requireUuidParams('connectorId'), async (req, res) => {
 		try {
 			requireOrgAdmin(req.auth!, 'disconnect knowledge sources');
 			await deps.deleteConnector.execute({ project: req.project!, connectorId: req.params.connectorId as string });

@@ -76,10 +76,13 @@ import {
 	PostgresAuditLogRepository,
 	PostgresOrgMembershipRepository,
 	PostgresOrganizationRepository,
+	PostgresProjectMembershipRepository,
 	PostgresUserRepository,
 } from '@meshify/data-access';
 import { GetMeUseCase } from './modules/identity/application/get-me.usecase.js';
 import { createIdentityController } from './modules/identity/interface/identity.controller.js';
+import { createAuthorizer } from './modules/security/authorization/authorizer.js';
+import { ProjectAccessResolver } from './modules/security/authorization/project-access.js';
 import { AuthenticateApiKeyUseCase } from './modules/security/application/authenticate.usecase.js';
 import { authGuard } from './modules/security/interface/auth.guard.js';
 import { RedisRateLimiter } from './modules/security/infrastructure/redis-rate-limiter.js';
@@ -443,14 +446,31 @@ async function bootstrap(): Promise<void> {
 	app.use(rateLimitGuard(rateLimiter, keyCeilingLimiter));
 	app.use(auditLogMiddleware(auditLogRepository));
 
+	// Authorization: every route below declares the permission it needs (the
+	// router refuses to register one that does not). In shadow mode a denial is
+	// only counted; the handlers' pre-existing checks still decide.
+	const authz = createAuthorizer({
+		getProject,
+		access: new ProjectAccessResolver({
+			memberships: new PostgresProjectMembershipRepository(pgPool),
+			onUnknownRole: (roleKey, projectId) => logger.error({ roleKey, projectId }, 'project membership names a role the catalog does not define; it grants nothing'),
+		}),
+		mode: env.RBAC_ENFORCEMENT,
+		onDenied: (denial, mode) => {
+			metrics.recordRbacDenial({ mode, permission: denial.permission, route: denial.route, outcome: denial.outcome, principal: denial.principalKind });
+			logger.warn({ ...denial, mode }, mode === 'shadow' ? 'rbac shadow denial (request allowed to continue)' : 'rbac denial');
+		},
+	});
+
 	app.use(createIdentityController({ getMe }));
-	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
-	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument, getDocumentContent }));
-	app.use(createJobsController({ getProject, getJobStatus, listProjectJobs, jobEventStream: jobEventHub }));
-	app.use(createRepositoriesController({ getProject, connectGitHub, connectFromIntegration: connectRepositoryFromIntegration, uploadZip, syncRepository, listRepositories, deleteRepository }));
-	app.use(createConnectorsController({ getProject, listConnectors, deleteConnector }));
+	app.use(createProjectsController({ authz, createProject, deleteProject, getProjectStats, listProjects }));
+	app.use(createDocumentsController({ authz, uploadDocument, listDocuments, deleteDocument, getDocumentContent }));
+	app.use(createJobsController({ authz, getJobStatus, listProjectJobs, jobEventStream: jobEventHub }));
+	app.use(createRepositoriesController({ authz, connectGitHub, connectFromIntegration: connectRepositoryFromIntegration, uploadZip, syncRepository, listRepositories, deleteRepository }));
+	app.use(createConnectorsController({ authz, listConnectors, deleteConnector }));
 	app.use(
 		createIntegrationsController({
+			authz,
 			listProviders,
 			listIntegrations,
 			connectProvider,
@@ -466,6 +486,7 @@ async function bootstrap(): Promise<void> {
 	);
 	app.use(
 		createLlmProvidersController({
+			authz,
 			listLlmProviders,
 			getLlmProvider,
 			connectLlmProvider,
@@ -475,8 +496,8 @@ async function bootstrap(): Promise<void> {
 			listLlmModels,
 		})
 	);
-	app.use(createSlackController({ getProject, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, attachWorkspace: attachSlackWorkspace, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
-	app.use(createChatController({ getProject, askQuestion, listConversations, updateConversation, deleteConversation, getConversationMessages }));
+	app.use(createSlackController({ authz, startOAuth: startSlackOAuth, completeOAuth: completeSlackOAuth, attachWorkspace: attachSlackWorkspace, listChannels: listSlackChannels, selectChannels: selectSlackChannels, syncSlack }));
+	app.use(createChatController({ authz, askQuestion, listConversations, updateConversation, deleteConversation, getConversationMessages }));
 
 	// Terminal error middleware — MUST be mounted after every controller. Turns any
 	// error a handler throws or rejects with (routers are built with createRouter,
