@@ -3,9 +3,9 @@ import type { ChatCitation } from '@/api';
 /**
  * A single rendered turn in the thread. Flat fields (rather than the raw
  * ChatResponse) so both a live answer and a loaded-from-history assistant
- * message populate the same shape. `confidence` is only present on live answers
- * — the backend doesn't persist it per message, so replayed history omits it
- * (shown honestly as "—" rather than invented).
+ * message populate the same shape. `confidence` is persisted per assistant
+ * message; only turns saved before that carry none, and those show no meter
+ * rather than an invented one.
  */
 export interface Turn {
 	role: 'user' | 'assistant';

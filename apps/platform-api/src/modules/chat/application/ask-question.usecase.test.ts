@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Chat, ChatRepository, ChatSummary, Message, Project } from '@meshify/data-access';
+import type { Chat, ChatRepository, ChatSummary, CreateMessageInput, Message, Project } from '@meshify/data-access';
 import { FakeRagService, RocketRidePipelineTimeoutError } from '@meshify/rocketride-gateway';
 import { AskQuestionUseCase, ChatNotFoundError } from './ask-question.usecase.js';
 import type { ChatPipelineResolver } from './chat-pipeline.port.js';
@@ -52,7 +52,7 @@ class FakeChatRepository implements ChatRepository {
 		return [...this.chats.values()].filter((c) => c.projectId === projectId).length;
 	}
 
-	async createMessage(input: { id: string; chatId: string; role: Message['role']; content: string; citations?: Message['citations']; latencyMs?: number; modelUsed?: string; tokensUsed?: number }): Promise<Message> {
+	async createMessage(input: CreateMessageInput): Promise<Message> {
 		const message: Message = {
 			id: input.id,
 			chatId: input.chatId,
@@ -62,6 +62,8 @@ class FakeChatRepository implements ChatRepository {
 			latencyMs: input.latencyMs ?? null,
 			modelUsed: input.modelUsed ?? null,
 			tokensUsed: input.tokensUsed ?? null,
+			authorUserId: input.authorUserId ?? null,
+			confidence: input.confidence ?? null,
 			createdAt: new Date(),
 		};
 		this.messages.push(message);
@@ -118,6 +120,30 @@ describe('AskQuestionUseCase', () => {
 		// The retrieved context is folded into the question sent to RocketRide.
 		expect(rag.askCalls[0]!.turn.question).toContain('src/queue.ts');
 		expect(rag.askCalls[0]!.turn.question).toContain('Which queue library is used?');
+	});
+
+	it('attributes the conversation and the question to the asker, and persists the confidence it returned', async () => {
+		const chats = new FakeChatRepository();
+		const context = retrieverReturning([{ sourcePath: 'src/queue.ts', content: 'BullMQ setup...', score: 0.91, chunkId: 'c1' }]);
+		const usecase = new AskQuestionUseCase(chats, new FakeRagService(), fakeResolver, context);
+
+		const result = await usecase.execute({ project: PROJECT, question: 'Which queue library is used?', userId: 'user-uuid-1' });
+
+		expect(chats.chats.get(result.conversationId)?.userId).toBe('user-uuid-1');
+		const [question, answer] = chats.messages;
+		expect(question).toMatchObject({ role: 'user', authorUserId: 'user-uuid-1', confidence: null });
+		// The model wrote the answer, not the person: no author, but the same confidence the caller was shown.
+		expect(answer).toMatchObject({ role: 'assistant', authorUserId: null, confidence: result.confidence });
+	});
+
+	it('leaves attribution empty for a service key, which has no person behind it', async () => {
+		const chats = new FakeChatRepository();
+		const usecase = new AskQuestionUseCase(chats, new FakeRagService(), fakeResolver, NO_CONTEXT);
+
+		const result = await usecase.execute({ project: PROJECT, question: 'Anything?' });
+
+		expect(chats.chats.get(result.conversationId)?.userId).toBeNull();
+		expect(chats.messages[0]?.authorUserId).toBeNull();
 	});
 
 	it('passes prior turns as history on a follow-up question, to the model and to retrieval', async () => {

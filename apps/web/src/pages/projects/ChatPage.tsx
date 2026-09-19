@@ -12,11 +12,19 @@ import type { Turn } from '@/components/chat/chat-util';
 
 const SUGGESTED = ['Summarize the ingested knowledge', 'What does this project do?', 'Where is authentication handled?'];
 
-/** Map a persisted message into a render Turn (history has no confidence). */
+/** Map a persisted message into a render Turn. Turns saved before confidence was persisted carry none. */
 function toTurn(m: ChatMessage): Turn {
 	return m.role === 'user'
 		? { role: 'user', content: m.content }
-		: { role: 'assistant', content: m.content, citations: m.citations, latencyMs: m.latencyMs, modelUsed: m.modelUsed, tokensTotal: m.tokensUsed };
+		: {
+				role: 'assistant',
+				content: m.content,
+				confidence: m.confidence ?? undefined,
+				citations: m.citations,
+				latencyMs: m.latencyMs,
+				modelUsed: m.modelUsed,
+				tokensTotal: m.tokensUsed,
+			};
 }
 
 /**

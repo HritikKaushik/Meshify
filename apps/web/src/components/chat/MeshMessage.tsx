@@ -5,7 +5,7 @@ import { type Turn, isCodeSource, confidenceLabel } from './chat-util';
 import { cn } from '@/lib/utils';
 
 /**
- * A Mesh (assistant) message: confidence meter (live answers only), the answer
+ * A Mesh (assistant) message: confidence meter (when the turn has one), the answer
  * body with code-block rendering, inline citation chips, and latency/model/token
  * metadata. `reveal` plays a client-side typewriter reveal on a freshly-sent
  * answer only — never on replayed history, and never a fake streaming progress

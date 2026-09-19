@@ -20,6 +20,8 @@ export interface AskQuestionCommand {
 	project: Project;
 	conversationId?: string;
 	question: string;
+	/** The person asking (`users.id`); undefined for service keys. */
+	userId?: string;
 }
 
 export interface AskQuestionResult {
@@ -60,7 +62,7 @@ export class AskQuestionUseCase {
 		// The user's message is persisted before the model call: it happened
 		// regardless of whether generation succeeds, and a failed turn should
 		// still be visible in the conversation history.
-		await this.chats.createMessage({ id: randomUUID(), chatId: chat.id, role: 'user', content: command.question });
+		await this.chats.createMessage({ id: randomUUID(), chatId: chat.id, role: 'user', content: command.question, authorUserId: command.userId });
 
 		// Retrieval + prompt assembly happen here, not inside the RocketRide
 		// pipeline (see chat-pipeline.ts) — citations/confidence come from this
@@ -86,6 +88,8 @@ export class AskQuestionUseCase {
 			latencyMs: answer.latencyMs,
 			modelUsed: answer.modelUsed,
 			tokensUsed: answer.tokenUsage?.total,
+			// Persisted so a reloaded conversation shows the same meter the live turn did.
+			confidence,
 		});
 
 		return {
@@ -130,6 +134,7 @@ export class AskQuestionUseCase {
 			return this.chats.createChat({
 				id: randomUUID(),
 				projectId: command.project.id,
+				userId: command.userId,
 				title: command.question.slice(0, 120),
 			});
 		}

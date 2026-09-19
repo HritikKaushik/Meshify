@@ -112,6 +112,8 @@ export interface ChatMessage {
 	latencyMs: number | null;
 	modelUsed: string | null;
 	tokensUsed: number | null;
+	/** Calibrated retrieval confidence (0..1) of an assistant turn; null for user turns and for history that predates it. */
+	confidence: number | null;
 	createdAt: string;
 }
 

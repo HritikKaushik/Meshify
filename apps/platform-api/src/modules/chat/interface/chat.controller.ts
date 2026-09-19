@@ -41,6 +41,7 @@ function toMessage(m: Message) {
 		latencyMs: m.latencyMs,
 		modelUsed: m.modelUsed,
 		tokensUsed: m.tokensUsed,
+		confidence: m.confidence,
 		createdAt: m.createdAt.toISOString(),
 	};
 }
@@ -68,6 +69,7 @@ export function createChatController(deps: {
 				project: req.project!,
 				conversationId: parsed.data.conversationId,
 				question: parsed.data.question,
+				userId: req.auth!.userId,
 			});
 			res.status(200).json(result);
 		} catch (err) {
