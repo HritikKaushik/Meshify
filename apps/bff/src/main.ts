@@ -3,12 +3,14 @@ import express, { Router } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { pinoHttp } from 'pino-http';
-import { clerkMiddleware, getAuth } from '@clerk/express';
+import { clerkClient, clerkMiddleware, getAuth } from '@clerk/express';
 import { loadEnv } from '@meshify/config';
-import { createPgPool } from '@meshify/data-access';
+import { createPgPool, PostgresUserRepository, syncClerkMember } from '@meshify/data-access';
 import { closeHttpServer, createLogger, installGracefulShutdown, installProcessGuards } from '@meshify/shared';
 import { requireClerkSession } from './modules/auth/clerk-guard.js';
 import { resolveOrgForClerk } from './modules/auth/resolve-org-for-clerk.js';
+import { MemberResolver } from './modules/auth/member-resolver.js';
+import { confirmClerkMembership, fetchClerkProfile } from './modules/auth/clerk-directory.js';
 import { csrfOriginGuard } from './modules/security/csrf-origin-guard.js';
 import { maxBodySize } from './modules/security/max-body-size.js';
 import { createHealthProxy, createPlatformApiProxy, createWebhookProxy } from './modules/proxy/platform-proxy.js';
@@ -145,7 +147,26 @@ async function bootstrap(): Promise<void> {
 	const protectedRouter = Router();
 	protectedRouter.use(requireClerkSession());
 	protectedRouter.use(edgeRateLimit);
-	protectedRouter.use(resolveOrgForClerk({ pool: pgPool, pepper: env.PLATFORM_API_KEY_PEPPER, encryptionKey: bff.orgKeyEncryptionKey, logger }));
+	const userRepository = new PostgresUserRepository(pgPool);
+	const members = new MemberResolver({
+		sync: (input) => syncClerkMember({ ...input, pool: pgPool }),
+		updateProfile: (userId, profile) => userRepository.updateProfile(userId, profile),
+		fetchProfile: (clerkUserId) => fetchClerkProfile(clerkClient, clerkUserId),
+		confirmMembership: (clerkOrgId, clerkUserId) => confirmClerkMembership(clerkClient, clerkOrgId, clerkUserId),
+		logger,
+	});
+	if (!env.BFF_ASSERTION_SECRET) logger.warn('BFF_ASSERTION_SECRET is not set: requests are forwarded with the legacy role header only');
+	protectedRouter.use(
+		resolveOrgForClerk({
+			pool: pgPool,
+			pepper: env.PLATFORM_API_KEY_PEPPER,
+			encryptionKey: bff.orgKeyEncryptionKey,
+			logger,
+			members,
+			assertionSecret: env.BFF_ASSERTION_SECRET,
+			assertionMode: env.IDENTITY_ASSERTION_MODE,
+		})
+	);
 	protectedRouter.use(createPlatformApiProxy(bff.platformApiOrigin));
 	app.use('/api/v1', protectedRouter);
 

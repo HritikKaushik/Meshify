@@ -36,11 +36,26 @@ describe('auditLogMiddleware', () => {
 		expect(records[0]).toMatchObject({
 			orgId: 'org-1',
 			actorKeyId: 'key-1',
+			// No person behind this request: the key acted on its own.
+			actorUserId: null,
+			actorType: 'service',
 			projectId: 'p1',
 			resourceType: 'projects',
 			ipAddress: '203.0.113.5',
 			metadata: { status: 201 },
 		});
+	});
+
+	it('names the person as the actor when the BFF vouched for one', async () => {
+		const { repo, records } = recorder();
+		const req = mockRequest({ method: 'DELETE', path: '/v1/projects/p1', originalUrl: '/v1/projects/p1', auth: { ...AUTH, userId: 'user-uuid-1', orgRole: 'admin' } } as never);
+		const res = mockResponse();
+
+		auditLogMiddleware(repo)(req, res, vi.fn());
+		res.emitFinish();
+		await vi.waitFor(() => expect(records).toHaveLength(1));
+
+		expect(records[0]).toMatchObject({ actorKeyId: 'key-1', actorUserId: 'user-uuid-1', actorType: 'user' });
 	});
 
 	it('does not record GET requests', async () => {

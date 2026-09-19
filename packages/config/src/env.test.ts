@@ -62,6 +62,26 @@ describe('loadEnv production secret strength', () => {
 	});
 });
 
+describe('loadEnv identity assertion', () => {
+	beforeEach(() => resetEnvCache());
+
+	it('defaults to permissive, where the secret is optional', () => {
+		expect(loadEnv(baseEnv()).IDENTITY_ASSERTION_MODE).toBe('permissive');
+	});
+
+	it('refuses to boot in required mode without a secret (an empty value counts as unset)', () => {
+		expect(() => loadEnv(baseEnv({ IDENTITY_ASSERTION_MODE: 'required' }))).toThrow(/BFF_ASSERTION_SECRET is required/);
+		resetEnvCache();
+		expect(() => loadEnv(baseEnv({ IDENTITY_ASSERTION_MODE: 'required', BFF_ASSERTION_SECRET: '' }))).toThrow(/BFF_ASSERTION_SECRET is required/);
+	});
+
+	it('boots in required mode with a strong secret, and rejects a placeholder one in production', () => {
+		expect(() => loadEnv(baseEnv({ IDENTITY_ASSERTION_MODE: 'required', BFF_ASSERTION_SECRET: 'Ke1Wp8Nc3Bd6Fj0Hs5YaUoZx9Q2mVt7Lr4' }))).not.toThrow(); // gitleaks:allow (fixture, not a credential)
+		resetEnvCache();
+		expect(() => loadEnv(baseEnv({ BFF_ASSERTION_SECRET: 'change-me-to-a-random-32-char-string' }))).toThrow(/BFF_ASSERTION_SECRET/);
+	});
+});
+
 describe('S3_ENDPOINT normalization', () => {
 	beforeEach(() => resetEnvCache());
 

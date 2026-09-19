@@ -158,6 +158,20 @@ const envSchema = z.object({
 	SLACK_REDIRECT_URI: z.string().url().optional(),
 	// Reserved for a future Slack Events API receiver (request signature check); unused by history-timestamp sync.
 	SLACK_SIGNING_SECRET: z.string().optional(),
+
+	// Signs the BFF's identity assertion (X-Meshify-Actor) and verifies it in
+	// platform-api, so it must be byte-identical on both services. With it unset
+	// the BFF sends only the legacy role/user headers.
+	// An empty value counts as unset, like METRICS_TOKEN: compose and CI pass
+	// through blank variables.
+	BFF_ASSERTION_SECRET: z.preprocess(
+		(value) => (value === '' ? undefined : value),
+		z.string().min(32, 'BFF_ASSERTION_SECRET must be at least 32 chars (generate with `openssl rand -base64 32`)').optional()
+	),
+	// `permissive` (rollout): a missing or unverifiable assertion falls back to
+	// the legacy headers, with a warning. `required`: a request on a BFF key
+	// without a valid assertion is rejected. Flip once both services are live.
+	IDENTITY_ASSERTION_MODE: z.enum(['permissive', 'required']).default('permissive'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -167,7 +181,7 @@ export type Env = z.infer<typeof envSchema>;
  * enforces LENGTH — a long placeholder like `change-me-to-a-random-32-char-string`
  * passes it — so this catches obviously-weak values before they protect real data.
  */
-const PRODUCTION_STRONG_SECRETS = ['PLATFORM_API_KEY_PEPPER', 'ORG_KEY_ENCRYPTION_KEY', 'INTEGRATION_ENCRYPTION_KEY'] as const;
+const PRODUCTION_STRONG_SECRETS = ['PLATFORM_API_KEY_PEPPER', 'ORG_KEY_ENCRYPTION_KEY', 'INTEGRATION_ENCRYPTION_KEY', 'BFF_ASSERTION_SECRET'] as const;
 
 /** Substrings that mark a value as a template/dev placeholder, never a real secret. */
 const PLACEHOLDER_MARKERS = ['change-me', 'changeme', 'replace_me', 'replace-me', 'your-', 'example', 'placeholder', 'local-', 'dev-', 'test-'];
@@ -215,6 +229,16 @@ function assertProductionMetricsToken(env: Env): void {
 	}
 }
 
+/**
+ * `required` mode with no secret would reject every signed-in request, on
+ * whichever service is missing it. Fail at boot instead.
+ */
+function assertAssertionSecretWhenRequired(env: Env): void {
+	if (env.IDENTITY_ASSERTION_MODE === 'required' && !env.BFF_ASSERTION_SECRET) {
+		throw new Error('BFF_ASSERTION_SECRET is required when IDENTITY_ASSERTION_MODE=required (generate with `openssl rand -base64 32`; it must match on the BFF and platform-api).');
+	}
+}
+
 let cached: Env | undefined;
 
 /**
@@ -232,6 +256,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
 
 	assertStrongProductionSecrets(result.data);
 	assertProductionMetricsToken(result.data);
+	assertAssertionSecretWhenRequired(result.data);
 
 	cached = result.data;
 	return cached;

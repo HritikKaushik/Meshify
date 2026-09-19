@@ -71,7 +71,15 @@ import { GetConversationMessagesUseCase } from './modules/chat/application/get-c
 import { createChatController } from './modules/chat/interface/chat.controller.js';
 import { QdrantSearchClient } from '@meshify/vector-store';
 import { ConfiguredEmbeddingProviderFactory } from './modules/retrieval/infrastructure/embedding-provider.factory.js';
-import { PostgresApiKeyRepository, PostgresAuditLogRepository } from '@meshify/data-access';
+import {
+	PostgresApiKeyRepository,
+	PostgresAuditLogRepository,
+	PostgresOrgMembershipRepository,
+	PostgresOrganizationRepository,
+	PostgresUserRepository,
+} from '@meshify/data-access';
+import { GetMeUseCase } from './modules/identity/application/get-me.usecase.js';
+import { createIdentityController } from './modules/identity/interface/identity.controller.js';
 import { AuthenticateApiKeyUseCase } from './modules/security/application/authenticate.usecase.js';
 import { authGuard } from './modules/security/interface/auth.guard.js';
 import { RedisRateLimiter } from './modules/security/infrastructure/redis-rate-limiter.js';
@@ -373,7 +381,16 @@ async function bootstrap(): Promise<void> {
 	// before routing so the guards can be mounted around the data controllers.
 	const apiKeyRepository = new PostgresApiKeyRepository(pgPool);
 	const auditLogRepository = new PostgresAuditLogRepository(pgPool);
-	const authenticate = new AuthenticateApiKeyUseCase(apiKeyRepository, env.PLATFORM_API_KEY_PEPPER);
+	// Identity: the BFF names the signed-in person in a signed assertion; their
+	// role is read from org_memberships here, per request, never from a header.
+	const orgMembershipRepository = new PostgresOrgMembershipRepository(pgPool);
+	const authenticate = new AuthenticateApiKeyUseCase(apiKeyRepository, env.PLATFORM_API_KEY_PEPPER, {
+		secret: env.BFF_ASSERTION_SECRET,
+		mode: env.IDENTITY_ASSERTION_MODE,
+		memberships: orgMembershipRepository,
+		onRejected: (reason, keyId) => logger.warn({ reason, keyId, mode: env.IDENTITY_ASSERTION_MODE }, 'identity assertion rejected'),
+	});
+	const getMe = new GetMeUseCase(new PostgresOrganizationRepository(pgPool), new PostgresUserRepository(pgPool));
 	const rateLimiterFallback = (err: unknown) => logger.warn({ err }, 'rate limiter fell back to in-memory (redis unavailable)');
 	const rateLimiter = new FallbackRateLimiter(
 		new RedisRateLimiter(redis, env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_SEC),
@@ -426,6 +443,7 @@ async function bootstrap(): Promise<void> {
 	app.use(rateLimitGuard(rateLimiter, keyCeilingLimiter));
 	app.use(auditLogMiddleware(auditLogRepository));
 
+	app.use(createIdentityController({ getMe }));
 	app.use(createProjectsController({ createProject, deleteProject, getProject, getProjectStats, listProjects }));
 	app.use(createDocumentsController({ getProject, uploadDocument, listDocuments, deleteDocument, getDocumentContent }));
 	app.use(createJobsController({ getProject, getJobStatus, listProjectJobs, jobEventStream: jobEventHub }));

@@ -1,13 +1,14 @@
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import type { ClientRequest } from 'node:http';
 import type { Request, RequestHandler } from 'express';
+import { ACTOR_ASSERTION_HEADER } from '@meshify/shared';
 
 /**
  * Headers platform-api trusts from the BFF. Every one is SET (overwriting
  * whatever the browser sent) or removed, never passed through: the browser
  * must not be able to forge an org role, a user id, or its own address.
  */
-const TRUSTED_HEADERS = ['authorization', 'x-meshify-org-role', 'x-meshify-user-id'] as const;
+const TRUSTED_HEADERS = ['authorization', 'x-meshify-org-role', 'x-meshify-user-id', ACTOR_ASSERTION_HEADER] as const;
 
 /**
  * Forward the client address platform-api should attribute the request to.
@@ -83,6 +84,10 @@ export function createPlatformApiProxy(platformApiOrigin: string): RequestHandle
 				proxyReq.setHeader('X-Meshify-Org-Role', meshify?.orgRole ?? 'member');
 				if (meshify?.userId) proxyReq.setHeader('X-Meshify-User-Id', meshify.userId);
 				else proxyReq.removeHeader('X-Meshify-User-Id');
+				// The signed identity assertion supersedes the role header above. It is
+				// removed, never passed through, when this process did not mint one.
+				if (meshify?.actorAssertion) proxyReq.setHeader(ACTOR_ASSERTION_HEADER, meshify.actorAssertion);
+				else proxyReq.removeHeader(ACTOR_ASSERTION_HEADER);
 				forwardClientAddress(proxyReq, req as Request);
 			},
 		},

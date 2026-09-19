@@ -4,7 +4,7 @@ purpose: Document the Postgres schema, its relationships, and the per-project Qd
 audience: Backend engineers.
 owner: Platform Team
 status: stable
-last_updated: 2026-07-14
+last_updated: 2026-09-19
 prerequisites:
   - backend.md
 related:
@@ -32,7 +32,12 @@ related:
 ```mermaid
 erDiagram
   organizations ||--o{ projects : has
-  organizations ||--o{ users : has
+  organizations ||--o{ org_memberships : has
+  users ||--o{ org_memberships : "belongs via"
+  org_memberships ||--o{ project_memberships : grants
+  projects ||--o{ project_memberships : "scoped to"
+  users ||--o{ chats : started
+  users ||--o{ audit_logs : "acted in"
   organizations ||--o{ api_keys : issues
   organizations ||--o{ clerk_org_links : maps
   organizations ||--o{ audit_logs : records
@@ -82,7 +87,7 @@ Collection names are stored on the project (`qdrant_collection_docs`,
 ### Key tables
 | Table | Purpose | Repository |
 | --- | --- | --- |
-| `projects` | Tenant workspace + its Qdrant/RocketRide pipeline ids | `postgres-project.repository.ts` |
+| `projects` | Tenant workspace + its Qdrant/RocketRide pipeline ids. `default_member_role_key` non-null = open to every org member at that role (all pre-0019 projects); null = private to its `project_memberships` | `postgres-project.repository.ts` |
 | `documents` | Uploaded docs + ingestion status | `postgres-document.repository.ts` |
 | `repositories` / `files` | Connected repos and their scanned files | `postgres-repository.repository.ts`, `postgres-file.repository.ts` |
 | `chats` / `messages` | Conversations and turns | `postgres-chat.repository.ts` |
@@ -90,8 +95,11 @@ Collection names are stored on the project (`qdrant_collection_docs`,
 | `knowledge_connectors` | Generic connector aggregate (github/documents/slack) every source is modeled as | `postgres-knowledge-connector.repository.ts` |
 | `slack_workspaces` / `slack_channels` | Connected Slack workspace (encrypted token) + its channels | `postgres-slack-workspace.repository.ts`, `postgres-slack-channel.repository.ts` |
 | `slack_conversations` / `slack_sync_state` | Grouped conversation documents (+ citation metadata) and per-channel sync cursor | `postgres-slack-conversation.repository.ts`, `postgres-slack-sync-state.repository.ts` |
-| `api_keys` / `clerk_org_links` | Auth: hashed org keys + Clerk-org mapping | `postgres-api-key.repository.ts`, `postgres-clerk-org-link.repository.ts` |
-| `audit_logs` | Every mutating request | `postgres-audit-log.repository.ts` |
+| `api_keys` / `clerk_org_links` | Auth: hashed org keys (`kind`: `bff` acts for signed-in people, `service` is a machine credential) + Clerk-org mapping | `postgres-api-key.repository.ts`, `postgres-clerk-org-link.repository.ts` |
+| `users` | A person, global across orgs, keyed by `clerk_user_id`. Email is display data, not identity. Deactivated (PII scrubbed), never deleted | `identity/postgres-user.repository.ts` |
+| `org_memberships` | A person's org role (`owner`/`admin`/`member`) and status. At least one active owner is enforced under an organization row lock | `identity/postgres-org-membership.repository.ts` |
+| `project_memberships` | A person's role in one project. `role_key` names a role in the code-defined catalog. Composite FKs make a cross-org grant impossible | `identity/postgres-project-membership.repository.ts` |
+| `audit_logs` | Every mutating request (`category = http`) plus explicit domain events (`domain`), with the human actor (`actor_id`, `actor_type`) | `postgres-audit-log.repository.ts` |
 | `pipeline_runs` / `pipeline_run_traces` | RocketRide observability | `postgres-pipeline-run.repository.ts` |
 
 ### Indexing (already tuned)

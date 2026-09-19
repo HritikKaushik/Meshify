@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { AuthContext } from '@meshify/data-access';
-import { AuthenticateApiKeyUseCase, AuthenticationError } from '../application/authenticate.usecase.js';
+import { ACTOR_ASSERTION_HEADER } from '@meshify/shared';
+import { AuthenticateApiKeyUseCase, AuthenticationError, NotAMemberError } from '../application/authenticate.usecase.js';
 
 declare global {
 	// eslint-disable-next-line @typescript-eslint/no-namespace
@@ -20,15 +21,24 @@ declare global {
 export function authGuard(authenticate: AuthenticateApiKeyUseCase) {
 	return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 		try {
-			// X-Meshify-Org-Role is set authoritatively by the BFF from the Clerk
-			// session (browsers can't forge it — they never hold the org key and
-			// the BFF overwrites the header). Absent = direct server-key caller.
-			req.auth = await authenticate.execute(req.header('authorization'), req.header('x-meshify-org-role'), req.header('x-meshify-user-id'));
+			// Every identity header is set authoritatively by the BFF (browsers cannot
+			// forge them - they never hold the org key and the BFF overwrites the
+			// headers). The signed assertion supersedes the legacy role header.
+			req.auth = await authenticate.execute({
+				authorization: req.header('authorization'),
+				assertion: req.header(ACTOR_ASSERTION_HEADER),
+				orgRole: req.header('x-meshify-org-role'),
+				actorId: req.header('x-meshify-user-id'),
+			});
 			next();
 		} catch (err) {
 			if (err instanceof AuthenticationError) {
 				res.setHeader('WWW-Authenticate', 'Bearer');
 				res.status(401).json({ error: 'Unauthorized' });
+				return;
+			}
+			if (err instanceof NotAMemberError) {
+				res.status(403).json({ error: 'You are not an active member of this organization', code: 'not_a_member' });
 				return;
 			}
 			req.log?.error({ err }, 'authentication failed unexpectedly');

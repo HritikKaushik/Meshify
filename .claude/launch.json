@@ -4,8 +4,32 @@
 		{
 			"name": "web",
 			"runtimeExecutable": "pnpm",
-			"runtimeArgs": ["--filter", "@meshify/web", "dev"],
+			"runtimeArgs": [
+				"--filter",
+				"@meshify/web",
+				"dev"
+			],
 			"port": 5174
+		},
+		{
+			"name": "platform-api",
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": [
+				"--filter",
+				"@meshify/platform-api",
+				"dev"
+			],
+			"port": 3000
+		},
+		{
+			"name": "bff",
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": [
+				"--filter",
+				"@meshify/bff",
+				"dev"
+			],
+			"port": 3001
 		}
 	]
 }

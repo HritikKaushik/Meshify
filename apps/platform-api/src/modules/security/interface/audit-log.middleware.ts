@@ -30,6 +30,9 @@ export function auditLogMiddleware(audit: AuditLogRepository) {
 					orgId: auth.orgId,
 					projectId,
 					actorKeyId: auth.keyId,
+					// The person when the BFF vouched for one; otherwise the key acted on its own.
+					actorUserId: auth.userId ?? null,
+					actorType: auth.userId ? 'user' : 'service',
 					action: `${req.method} ${req.route?.path ?? req.path}`,
 					resourceType: resourceTypeFrom(req.path),
 					resourceId: projectId ?? req.path,

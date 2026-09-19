@@ -39,6 +39,8 @@ function startBff(platformApiOrigin: string): Promise<{ server: Server; origin: 
 	const protectedRouter = Router();
 	protectedRouter.use((req: Request, _res, next) => {
 		req.meshify = { meshifyOrgId: 'org-1', apiKey: 'msk_org_key', orgRole: 'member', userId: 'user_42' };
+		// `?signed` stands in for a BFF that has an assertion secret configured.
+		if (req.query.signed !== undefined) req.meshify.actorAssertion = 'v1.minted-by-the-bff.signature';
 		next();
 	});
 	protectedRouter.use(createPlatformApiProxy(platformApiOrigin));
@@ -75,6 +77,7 @@ describe('platform proxies', () => {
 				authorization: 'Bearer forged',
 				'x-meshify-org-role': 'admin',
 				'x-meshify-user-id': 'user_other',
+				'x-meshify-actor': 'v1.forged.forged',
 			},
 			body,
 		});
@@ -87,6 +90,16 @@ describe('platform proxies', () => {
 		expect(got.headers.authorization).toBeUndefined();
 		expect(got.headers['x-meshify-org-role']).toBeUndefined();
 		expect(got.headers['x-meshify-user-id']).toBeUndefined();
+		expect(got.headers['x-meshify-actor']).toBeUndefined();
+	});
+
+	it('forwards the identity assertion it minted, never one the browser sent', async () => {
+		await fetch(`${bff.origin}/api/v1/projects?signed`, { headers: { 'x-meshify-actor': 'v1.forged.forged' } });
+		expect(upstream.last().headers['x-meshify-actor']).toBe('v1.minted-by-the-bff.signature');
+
+		// With no assertion of its own, the BFF strips the browser's rather than passing it on.
+		await fetch(`${bff.origin}/api/v1/projects`, { headers: { 'x-meshify-actor': 'v1.forged.forged' } });
+		expect(upstream.last().headers['x-meshify-actor']).toBeUndefined();
 	});
 
 	it('injects the org key, role and user id on the authenticated proxy, overwriting anything the browser sent', async () => {
