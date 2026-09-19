@@ -82,14 +82,31 @@ export { tokensToUsd } from './pipeline-runs/pipeline-run.entity.js';
 export type { PipelineRunRepository } from './pipeline-runs/pipeline-run.repository.js';
 export { PostgresPipelineRunRepository } from './pipeline-runs/postgres-pipeline-run.repository.js';
 
-export type { ApiKey, AuthContext } from './api-keys/api-key.entity.js';
+export type { ApiKey, ApiKeyKind, AuthContext } from './api-keys/api-key.entity.js';
 export { generateApiKey, hashApiKey, looksLikeApiKey, hashesEqual } from './api-keys/api-key.entity.js';
 export type { ApiKeyRepository, ActiveApiKey, CreateApiKeyInput } from './api-keys/api-key.repository.js';
 export { PostgresApiKeyRepository } from './api-keys/postgres-api-key.repository.js';
 
-export type { AuditLogEntry } from './audit/audit-log.entity.js';
+export type { AuditLogEntry, AuditActorType, AuditCategory } from './audit/audit-log.entity.js';
 export type { AuditLogRepository } from './audit/audit-log.repository.js';
 export { PostgresAuditLogRepository } from './audit/postgres-audit-log.repository.js';
+
+export type { Organization } from './organizations/organization.entity.js';
+export type { OrganizationRepository } from './organizations/organization.repository.js';
+export { PostgresOrganizationRepository } from './organizations/postgres-organization.repository.js';
+
+export type { User, UserProfile } from './identity/user.entity.js';
+export type { UserRepository } from './identity/user.repository.js';
+export { PostgresUserRepository } from './identity/postgres-user.repository.js';
+export type { OrgMembership, OrgMember, OrgRoleKey, OrgMembershipStatus } from './identity/org-membership.entity.js';
+export { ORG_ROLE_KEYS, LastOwnerError } from './identity/org-membership.entity.js';
+export type { OrgMembershipRepository, CreateOrgMembershipInput } from './identity/org-membership.repository.js';
+export { PostgresOrgMembershipRepository } from './identity/postgres-org-membership.repository.js';
+export type { ProjectMembership, ProjectMember } from './identity/project-membership.entity.js';
+export type { ProjectMembershipRepository, UpsertProjectMembershipInput } from './identity/project-membership.repository.js';
+export { PostgresProjectMembershipRepository } from './identity/postgres-project-membership.repository.js';
+export { syncClerkMember } from './identity/sync-clerk-member.js';
+export type { SyncClerkMemberInput, SyncedClerkMember } from './identity/sync-clerk-member.js';
 
 export type { ClerkOrgLink } from './provisioning/clerk-org-link.entity.js';
 export type { ClerkOrgLinkRepository, CreateClerkOrgLinkInput } from './provisioning/clerk-org-link.repository.js';
@@ -98,4 +115,6 @@ export { provisionOrgForClerk } from './provisioning/provision-org-for-clerk.js'
 export type { ProvisionOrgForClerkInput } from './provisioning/provision-org-for-clerk.js';
 export { encryptSecret, decryptSecret } from './provisioning/secret-encryption.js';
 export { createPgPool, pgPoolOptions } from './db/pool.js';
+export { withTransaction } from './db/transaction.js';
+export type { Queryable } from './db/queryable.js';
 export type { PgPoolSettings } from './db/pool.js';

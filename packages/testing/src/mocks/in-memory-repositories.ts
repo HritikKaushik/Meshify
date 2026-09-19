@@ -129,6 +129,8 @@ export class InMemoryChatRepository implements ChatRepository {
 			latencyMs: input.latencyMs ?? null,
 			modelUsed: input.modelUsed ?? null,
 			tokensUsed: input.tokensUsed ?? null,
+			authorUserId: input.authorUserId ?? null,
+			confidence: input.confidence ?? null,
 			createdAt: this.nextDate(),
 		};
 		this.messages.push(message);

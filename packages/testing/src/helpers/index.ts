@@ -13,3 +13,5 @@ export function deferred<T = void>(): { promise: Promise<T>; resolve: (value: T)
 	});
 	return { promise, resolve, reject };
 }
+
+export { buildAuthContext } from './auth-context.js';

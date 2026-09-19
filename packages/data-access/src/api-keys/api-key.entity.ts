@@ -1,10 +1,19 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import type { OrgRoleKey } from '../identity/org-membership.entity.js';
+
+/**
+ * `bff` keys are the per-org keys the BFF holds on behalf of signed-in people:
+ * authority for those requests comes from the person's memberships. `service`
+ * keys are machine credentials whose authority is their scopes.
+ */
+export type ApiKeyKind = 'service' | 'bff';
 
 /** A stored API key. `keyHash` is never exposed outside the repository layer. */
 export interface ApiKey {
 	id: string;
 	orgId: string;
 	name: string;
+	kind: ApiKeyKind;
 	keyPrefix: string;
 	scopes: string[];
 	lastUsedAt: Date | null;
@@ -24,6 +33,14 @@ export interface AuthContext {
 	 * the org key every browser session shares. Absent for direct API-key callers.
 	 */
 	actorId?: string;
+	/**
+	 * The person behind the request as Meshify knows them (`users.id`), resolved
+	 * from the BFF's signed identity assertion. Absent for service keys and for
+	 * requests that still arrive with only the legacy headers.
+	 */
+	userId?: string;
+	/** That person's role in `orgId`. Present exactly when `userId` is. */
+	orgRole?: OrgRoleKey;
 	/**
 	 * Whether this request may perform org-admin actions (manage AI providers,
 	 * delete projects, manage connectors/integrations). Derived from the

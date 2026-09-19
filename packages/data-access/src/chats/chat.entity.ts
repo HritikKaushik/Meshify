@@ -1,6 +1,7 @@
 export interface Chat {
 	id: string;
 	projectId: string;
+	/** The person who started the conversation (`users.id`); null for history that predates identity and for service callers. */
 	userId: string | null;
 	title: string | null;
 	pinned: boolean;
@@ -44,5 +45,9 @@ export interface Message {
 	latencyMs: number | null;
 	modelUsed: string | null;
 	tokensUsed: number | null;
+	/** Who wrote a `user` message (`users.id`); null for assistant/system turns, service callers, and old history. */
+	authorUserId: string | null;
+	/** Calibrated retrieval confidence (0..1) of an assistant turn; null for every other row. */
+	confidence: number | null;
 	createdAt: Date;
 }

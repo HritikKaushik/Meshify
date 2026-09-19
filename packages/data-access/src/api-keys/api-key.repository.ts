@@ -1,4 +1,4 @@
-import type { ApiKey } from './api-key.entity.js';
+import type { ApiKey, ApiKeyKind } from './api-key.entity.js';
 
 export interface CreateApiKeyInput {
 	orgId: string;
@@ -7,6 +7,8 @@ export interface CreateApiKeyInput {
 	keyHash: string;
 	scopes: string[];
 	expiresAt: Date | null;
+	/** Defaults to `service`. */
+	kind?: ApiKeyKind;
 }
 
 /**
@@ -16,6 +18,8 @@ export interface CreateApiKeyInput {
 export interface ActiveApiKey {
 	id: string;
 	orgId: string;
+	/** `bff` = held by the BFF on behalf of signed-in people; `service` = a machine credential. */
+	kind: ApiKeyKind;
 	scopes: string[];
 	expiresAt: Date | null;
 	revokedAt: Date | null;

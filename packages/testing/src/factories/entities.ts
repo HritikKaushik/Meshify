@@ -69,6 +69,8 @@ export function buildMessage(overrides: Partial<Message> = {}): Message {
 		latencyMs: null,
 		modelUsed: null,
 		tokensUsed: null,
+		authorUserId: null,
+		confidence: null,
 		createdAt: TEST_EPOCH,
 		...overrides,
 	};

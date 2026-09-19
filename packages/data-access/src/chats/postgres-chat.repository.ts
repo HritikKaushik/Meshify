@@ -20,6 +20,8 @@ interface MessageRow {
 	latency_ms: number | null;
 	model_used: string | null;
 	tokens_used: number | null;
+	author_user_id: string | null;
+	confidence: number | null;
 	created_at: Date;
 }
 
@@ -37,6 +39,8 @@ function messageToDomain(row: MessageRow): Message {
 		latencyMs: row.latency_ms,
 		modelUsed: row.model_used,
 		tokensUsed: row.tokens_used,
+		authorUserId: row.author_user_id,
+		confidence: row.confidence,
 		createdAt: row.created_at,
 	};
 }
@@ -107,8 +111,8 @@ export class PostgresChatRepository implements ChatRepository {
 
 	async createMessage(input: CreateMessageInput): Promise<Message> {
 		const { rows } = await this.pool.query<MessageRow>(
-			`insert into messages (id, chat_id, role, content, citations, latency_ms, model_used, tokens_used)
-			 values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
+			`insert into messages (id, chat_id, role, content, citations, latency_ms, model_used, tokens_used, author_user_id, confidence)
+			 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning *`,
 			[
 				input.id,
 				input.chatId,
@@ -118,6 +122,8 @@ export class PostgresChatRepository implements ChatRepository {
 				input.latencyMs ?? null,
 				input.modelUsed ?? null,
 				input.tokensUsed ?? null,
+				input.authorUserId ?? null,
+				input.confidence ?? null,
 			]
 		);
 		const row = rows[0];

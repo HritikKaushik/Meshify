@@ -51,6 +51,7 @@ export async function provisionOrgForClerk(input: ProvisionOrgForClerkInput): Pr
 			keyHash,
 			scopes: [],
 			expiresAt: null,
+			kind: 'bff',
 		});
 
 		const link = await new PostgresClerkOrgLinkRepository(client, encryptionKey).createIfAbsent({

@@ -21,6 +21,9 @@ export interface CreateMessageInput {
 	latencyMs?: number;
 	modelUsed?: string;
 	tokensUsed?: number;
+	authorUserId?: string;
+	/** 0..1, as produced by `calibrateConfidence`. The column CHECK rejects anything else. */
+	confidence?: number;
 }
 
 export interface ChatRepository {
