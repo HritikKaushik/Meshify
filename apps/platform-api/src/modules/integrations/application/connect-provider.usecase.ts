@@ -10,6 +10,8 @@ export interface ConnectProviderCommand {
 	projectId?: string;
 	returnPath?: string;
 	createdByKeyId?: string;
+	/** The person starting the flow (`users.id`); undefined for service keys. */
+	createdByUserId?: string;
 }
 
 export class ProjectNotInOrgError extends Error {
@@ -53,6 +55,7 @@ export class ConnectProviderUseCase {
 			returnPath: command.returnPath ?? null,
 			intent: 'connect',
 			createdByKeyId: command.createdByKeyId ?? null,
+			createdByUserId: command.createdByUserId ?? null,
 		});
 
 		return { url: provider.buildConnectUrl({ stateToken: token, intent: 'connect' }, registration) };

@@ -52,6 +52,7 @@ export function createDocumentsController(deps: {
 				filename: req.file.originalname,
 				mimeType: req.file.mimetype,
 				buffer: req.file.buffer,
+				userId: req.auth!.userId,
 			});
 
 			res.status(202).json({

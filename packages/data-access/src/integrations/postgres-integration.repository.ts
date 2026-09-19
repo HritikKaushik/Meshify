@@ -16,6 +16,7 @@ interface IntegrationRow {
 	health_checked_at: Date | null;
 	metadata: Record<string, unknown>;
 	last_error: string | null;
+	connected_by_user_id: string | null;
 	created_at: Date;
 	updated_at: Date;
 }
@@ -35,6 +36,7 @@ function toDomain(row: IntegrationRow): Integration {
 		healthCheckedAt: row.health_checked_at,
 		metadata: row.metadata,
 		lastError: row.last_error,
+		connectedByUserId: row.connected_by_user_id,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 	};
@@ -45,8 +47,8 @@ export class PostgresIntegrationRepository implements IntegrationRepository {
 
 	async create(input: CreateIntegrationInput): Promise<Integration> {
 		const { rows } = await this.pool.query<IntegrationRow>(
-			`insert into integrations (id, org_id, provider, mode, external_account_id, external_account_name, registration_id, status, metadata)
-			 values (coalesce($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+			`insert into integrations (id, org_id, provider, mode, external_account_id, external_account_name, registration_id, status, metadata, connected_by_user_id)
+			 values (coalesce($1, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8, $9, $10) returning *`,
 			[
 				input.id ?? null,
 				input.orgId,
@@ -57,6 +59,7 @@ export class PostgresIntegrationRepository implements IntegrationRepository {
 				input.registrationId ?? null,
 				input.status ?? 'pending',
 				JSON.stringify(input.metadata ?? {}),
+				input.connectedByUserId ?? null,
 			]
 		);
 		const row = rows[0];

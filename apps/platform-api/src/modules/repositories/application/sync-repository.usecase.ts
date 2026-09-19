@@ -25,7 +25,7 @@ export class SyncRepositoryUseCase {
 		private readonly sourceSyncQueue: Queue<SourceSyncJobPayload>
 	) {}
 
-	async execute(projectId: string, repositoryId: string): Promise<{ jobId: string }> {
+	async execute(projectId: string, repositoryId: string, userId?: string): Promise<{ jobId: string }> {
 		const repository = await this.repositories.findById(repositoryId);
 		// Cross-project probing must look identical to a missing repository.
 		if (!repository || repository.projectId !== projectId) throw new RepositoryNotFoundError(repositoryId);
@@ -40,6 +40,7 @@ export class SyncRepositoryUseCase {
 				jobType: 'source_sync',
 				payload: { connectorId: connector.id, mode: 'incremental' },
 				dedupeKey: `source_sync:${connector.id}:incremental`,
+				triggeredByUserId: userId,
 			});
 			if (created) {
 				await this.sourceSyncQueue.add(
@@ -57,6 +58,7 @@ export class SyncRepositoryUseCase {
 			projectId,
 			jobType: 'sync_repo',
 			payload: { repositoryId },
+			triggeredByUserId: userId,
 		});
 		await this.legacySyncQueue.add('sync', { pipelineJobId, repositoryId, projectId }, { jobId: pipelineJobId });
 		return { jobId: pipelineJobId };

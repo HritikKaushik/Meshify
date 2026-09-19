@@ -12,6 +12,7 @@ export interface OAuthStateStore {
 		integrationId?: string | null;
 		returnPath?: string | null;
 		createdByKeyId?: string | null;
+		createdByUserId?: string | null;
 		expiresAt: Date;
 	}): Promise<OAuthState>;
 	consumeByHash(stateHash: string, now: Date): Promise<OAuthState | undefined>;
@@ -25,6 +26,8 @@ export interface IssueStateInput {
 	integrationId?: string | null;
 	returnPath?: string | null;
 	createdByKeyId?: string | null;
+	/** The person starting the flow (`users.id`); the connection it produces is attributed to them. */
+	createdByUserId?: string | null;
 }
 
 const STATE_TTL_MS = 15 * 60 * 1000;

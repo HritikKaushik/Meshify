@@ -10,6 +10,7 @@ export interface CreateRepositoryInput {
 	owner?: string;
 	name?: string;
 	githubRepoId?: string;
+	connectedByUserId?: string | null;
 }
 
 export interface RepositoryRepository {

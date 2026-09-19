@@ -9,6 +9,7 @@ export interface CreateConnectorInput {
 	config?: Record<string, unknown>;
 	integrationId?: string;
 	syncPolicy?: SyncPolicy;
+	createdByUserId?: string | null;
 }
 
 export interface KnowledgeConnectorRepository {

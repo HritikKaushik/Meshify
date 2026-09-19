@@ -7,6 +7,8 @@ export interface AttachSlackWorkspaceCommand {
 	projectId: string;
 	orgId: string;
 	integrationId: string;
+	/** The person acting (`users.id`); undefined for service keys. */
+	userId?: string;
 }
 
 export interface AttachSlackWorkspaceResult {
@@ -76,6 +78,7 @@ export class AttachSlackWorkspaceUseCase {
 			status: 'active',
 			config: { teamId: integration.externalAccountId, integrationId: integration.id },
 			integrationId: integration.id,
+			createdByUserId: command.userId,
 		});
 
 		const workspace = await this.workspaces.create({

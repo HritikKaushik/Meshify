@@ -71,6 +71,9 @@ export class CompleteConnectUseCase {
 				mode: registration.mode,
 				status: 'active',
 				metadata: result.metadata,
+				// The callback is attributed to whoever STARTED the flow: the state row
+				// is the only link between the two requests that the server controls.
+				connectedByUserId: state.createdByUserId,
 			});
 		}
 

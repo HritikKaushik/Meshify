@@ -19,7 +19,7 @@ export class SelectSlackChannelsUseCase {
 		private readonly sourceSyncQueue: Queue<SourceSyncJobPayload>
 	) {}
 
-	async execute(command: { projectId: string; connectorId: string; channelIds: string[] }): Promise<{ jobId: string; selectedCount: number }> {
+	async execute(command: { projectId: string; connectorId: string; channelIds: string[]; userId?: string }): Promise<{ jobId: string; selectedCount: number }> {
 		const { workspace } = await loadSlackWorkspace(this.connectors, this.workspaces, command.projectId, command.connectorId);
 
 		await this.channels.setSelected(workspace.id, command.channelIds);
@@ -33,6 +33,7 @@ export class SelectSlackChannelsUseCase {
 				jobType: 'source_sync',
 				payload: { connectorId: command.connectorId, mode: 'full' },
 				dedupeKey: `source_sync:${command.connectorId}:full`,
+				triggeredByUserId: command.userId,
 			});
 			if (created) {
 				await this.sourceSyncQueue.add(
@@ -50,6 +51,7 @@ export class SelectSlackChannelsUseCase {
 			projectId: command.projectId,
 			jobType: 'slack_ingest',
 			payload: { connectorId: command.connectorId, workspaceId: workspace.id },
+			triggeredByUserId: command.userId,
 		});
 
 		await this.ingestQueue.add(

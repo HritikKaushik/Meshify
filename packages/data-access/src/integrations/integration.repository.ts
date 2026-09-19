@@ -10,6 +10,7 @@ export interface CreateIntegrationInput {
 	registrationId?: string | null;
 	status?: IntegrationStatus;
 	metadata?: Record<string, unknown>;
+	connectedByUserId?: string | null;
 }
 
 export interface IntegrationRepository {

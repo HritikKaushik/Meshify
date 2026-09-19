@@ -68,6 +68,7 @@ export function createRepositoriesController(deps: {
 					projectId: req.project!.id,
 					filename: req.file.originalname,
 					buffer: req.file.buffer,
+					userId: req.auth!.userId,
 				});
 				res.status(202).json({ repository: toResponse(result.repository), jobId: result.jobId });
 				return;
@@ -84,6 +85,7 @@ export function createRepositoriesController(deps: {
 					orgId: req.auth!.orgId,
 					integrationId: parsed.data.integrationId,
 					githubRepoId: parsed.data.githubRepoId,
+					userId: req.auth!.userId,
 				});
 				res.status(202).json({ repository: toResponse(result.repository), jobId: result.jobId });
 				return;
@@ -98,7 +100,7 @@ export function createRepositoriesController(deps: {
 				return;
 			}
 
-			const result = await deps.connectGitHub.execute({ projectId: req.project!.id, remoteUrl: parsed.data.remoteUrl });
+			const result = await deps.connectGitHub.execute({ projectId: req.project!.id, remoteUrl: parsed.data.remoteUrl, userId: req.auth!.userId });
 			res.status(202).json({ repository: toResponse(result.repository), jobId: result.jobId });
 		} catch (err) {
 			if (err instanceof GitHubIntegrationNotFoundError) {
@@ -135,7 +137,7 @@ export function createRepositoriesController(deps: {
 
 	router.post('/v1/projects/:projectId/repositories/:repositoryId/sync', guard, requireUuidParams('repositoryId'), async (req, res) => {
 		try {
-			const result = await deps.syncRepository.execute(req.project!.id, req.params.repositoryId as string);
+			const result = await deps.syncRepository.execute(req.project!.id, req.params.repositoryId as string, req.auth!.userId);
 			res.status(202).json(result);
 		} catch (err) {
 			if (err instanceof RepositoryNotFoundError) {

@@ -11,6 +11,8 @@ export interface Document {
 	objectStorageKey: string;
 	contentHash: string;
 	status: DocumentStatus;
+	/** Who uploaded it (`users.id`); null for service keys and for uploads that predate identity. */
+	uploadedByUserId: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 }

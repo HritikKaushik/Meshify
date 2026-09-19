@@ -11,6 +11,7 @@ interface DocumentRow {
 	object_storage_key: string;
 	content_hash: string;
 	status: string;
+	uploaded_by_user_id: string | null;
 	created_at: Date;
 	updated_at: Date;
 }
@@ -25,6 +26,7 @@ function toDomain(row: DocumentRow): Document {
 		objectStorageKey: row.object_storage_key,
 		contentHash: row.content_hash,
 		status: row.status as DocumentStatus,
+		uploadedByUserId: row.uploaded_by_user_id,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 	};
@@ -35,10 +37,10 @@ export class PostgresDocumentRepository implements DocumentRepository {
 
 	async create(input: CreateDocumentInput): Promise<Document> {
 		const { rows } = await this.pool.query<DocumentRow>(
-			`insert into documents (id, project_id, connector_id, source_type, filename, object_storage_key, content_hash)
-			 values ($1, $2, $3, $4, $5, $6, $7)
+			`insert into documents (id, project_id, connector_id, source_type, filename, object_storage_key, content_hash, uploaded_by_user_id)
+			 values ($1, $2, $3, $4, $5, $6, $7, $8)
 			 returning *`,
-			[input.id, input.projectId, input.connectorId, input.sourceType, input.filename, input.objectStorageKey, input.contentHash]
+			[input.id, input.projectId, input.connectorId, input.sourceType, input.filename, input.objectStorageKey, input.contentHash, input.uploadedByUserId ?? null]
 		);
 		const row = rows[0];
 		if (!row) throw new Error('Insert into documents returned no row');

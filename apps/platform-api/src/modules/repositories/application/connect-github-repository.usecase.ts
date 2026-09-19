@@ -7,6 +7,8 @@ import type { RepoIngestJobPayload } from '@meshify/queues';
 export interface ConnectGitHubRepositoryCommand {
 	projectId: string;
 	remoteUrl: string;
+	/** The person acting (`users.id`); undefined for service keys. */
+	userId?: string;
 }
 
 export interface ConnectRepositoryResult {
@@ -33,6 +35,7 @@ export class ConnectGitHubRepositoryUseCase {
 			displayName: command.remoteUrl,
 			status: 'connecting',
 			config: { source: 'github', remoteUrl: command.remoteUrl },
+			createdByUserId: command.userId,
 		});
 
 		const repository = await this.repositories.create({
@@ -41,6 +44,7 @@ export class ConnectGitHubRepositoryUseCase {
 			connectorId: connector.id,
 			source: 'github',
 			remoteUrl: command.remoteUrl,
+			connectedByUserId: command.userId,
 		});
 
 		const pipelineJobId = randomUUID();
@@ -49,6 +53,7 @@ export class ConnectGitHubRepositoryUseCase {
 			projectId: command.projectId,
 			jobType: 'clone_repo',
 			payload: { repositoryId: repository.id },
+			triggeredByUserId: command.userId,
 		});
 
 		await this.ingestQueue.add('ingest', { pipelineJobId, repositoryId: repository.id, projectId: command.projectId }, { jobId: pipelineJobId });

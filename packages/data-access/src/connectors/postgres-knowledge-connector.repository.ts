@@ -12,6 +12,7 @@ interface ConnectorRow {
 	integration_id: string | null;
 	sync_policy: SyncPolicy;
 	last_error: string | null;
+	created_by_user_id: string | null;
 	created_at: Date;
 	updated_at: Date;
 }
@@ -27,6 +28,7 @@ function toDomain(row: ConnectorRow): KnowledgeConnector {
 		integrationId: row.integration_id,
 		syncPolicy: row.sync_policy,
 		lastError: row.last_error,
+		createdByUserId: row.created_by_user_id,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 	};
@@ -37,8 +39,8 @@ export class PostgresKnowledgeConnectorRepository implements KnowledgeConnectorR
 
 	async create(input: CreateConnectorInput): Promise<KnowledgeConnector> {
 		const { rows } = await this.pool.query<ConnectorRow>(
-			`insert into knowledge_connectors (id, project_id, type, display_name, status, config, integration_id, sync_policy)
-			 values ($1, $2, $3, $4, coalesce($5, 'connecting'), coalesce($6, '{}'::jsonb), $7, coalesce($8::jsonb, '{"trigger": "event"}'::jsonb)) returning *`,
+			`insert into knowledge_connectors (id, project_id, type, display_name, status, config, integration_id, sync_policy, created_by_user_id)
+			 values ($1, $2, $3, $4, coalesce($5, 'connecting'), coalesce($6, '{}'::jsonb), $7, coalesce($8::jsonb, '{"trigger": "event"}'::jsonb), $9) returning *`,
 			[
 				input.id,
 				input.projectId,
@@ -48,6 +50,7 @@ export class PostgresKnowledgeConnectorRepository implements KnowledgeConnectorR
 				input.config ?? null,
 				input.integrationId ?? null,
 				input.syncPolicy ? JSON.stringify(input.syncPolicy) : null,
+				input.createdByUserId ?? null,
 			]
 		);
 		const row = rows[0];

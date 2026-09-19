@@ -10,6 +10,7 @@ export interface CreateOAuthStateInput {
 	returnPath?: string | null;
 	createdByKeyId?: string | null;
 	expiresAt: Date;
+	createdByUserId?: string | null;
 }
 
 export interface OAuthStateRepository {

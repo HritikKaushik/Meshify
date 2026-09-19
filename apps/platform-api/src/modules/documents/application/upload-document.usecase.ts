@@ -16,6 +16,8 @@ export interface UploadDocumentCommand {
 	filename: string;
 	mimeType: string;
 	buffer: Buffer;
+	/** The person acting (`users.id`); undefined for service keys. */
+	userId?: string;
 }
 
 /** The request itself is unacceptable (empty, too large, unsupported type) — a 400. */
@@ -64,7 +66,7 @@ export class UploadDocumentUseCase {
 	) {}
 
 	/** The project's singleton `documents` connector owns every uploaded file; created lazily on first upload. */
-	private async ensureDocumentsConnector(projectId: string): Promise<string> {
+	private async ensureDocumentsConnector(projectId: string, userId: string | undefined): Promise<string> {
 		const existing = await this.connectors.findByProjectAndType(projectId, 'documents');
 		if (existing) return existing.id;
 		const connector = await this.connectors.create({
@@ -73,6 +75,7 @@ export class UploadDocumentUseCase {
 			type: 'documents',
 			displayName: 'Uploaded documents',
 			status: 'active',
+			createdByUserId: userId,
 		});
 		return connector.id;
 	}
@@ -101,7 +104,7 @@ export class UploadDocumentUseCase {
 		const sameName = await this.documents.findByProjectAndFilename(command.projectId, command.filename);
 		if (sameName && sameName.contentHash !== contentHash) throw new DocumentFilenameConflictError(command.filename, sameName.id);
 
-		const connectorId = await this.ensureDocumentsConnector(command.projectId);
+		const connectorId = await this.ensureDocumentsConnector(command.projectId, command.userId);
 
 		const id = randomUUID();
 		const objectStorageKey = `projects/${command.projectId}/documents/${id}/${command.filename}`;
@@ -117,6 +120,7 @@ export class UploadDocumentUseCase {
 				filename: command.filename,
 				objectStorageKey,
 				contentHash,
+				uploadedByUserId: command.userId,
 			});
 		} catch (err) {
 			// Lost a race with a concurrent upload of the same name: the object we
@@ -135,6 +139,7 @@ export class UploadDocumentUseCase {
 			projectId: command.projectId,
 			jobType: 'ingest_document',
 			payload: { documentId: document.id },
+			triggeredByUserId: command.userId,
 		});
 
 		await this.ingestQueue.add(

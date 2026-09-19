@@ -6,6 +6,7 @@ export interface CreatePipelineJobInput {
 	jobType: PipelineJobType;
 	payload: Record<string, unknown>;
 	dedupeKey?: string;
+	triggeredByUserId?: string | null;
 }
 
 export interface PipelineJobRepository {

@@ -10,6 +10,8 @@ export interface ConnectRepositoryFromIntegrationCommand {
 	integrationId: string;
 	/** GitHub's numeric repo id, as listed by the resource picker. */
 	githubRepoId: string;
+	/** The person acting (`users.id`); undefined for service keys. */
+	userId?: string;
 }
 
 /** Unknown id, wrong provider, and cross-org probe are indistinguishable (404). */
@@ -80,6 +82,7 @@ export class ConnectRepositoryFromIntegrationUseCase {
 			status: 'connecting',
 			config: { source: 'github', remoteUrl, integrationId: integration.id, resourceIds: [command.githubRepoId] },
 			integrationId: integration.id,
+			createdByUserId: command.userId,
 		});
 
 		const repository = await this.repositories.create({
@@ -91,6 +94,7 @@ export class ConnectRepositoryFromIntegrationUseCase {
 			owner,
 			name: shortName,
 			githubRepoId: command.githubRepoId,
+			connectedByUserId: command.userId,
 		});
 
 		const pipelineJobId = randomUUID();
@@ -100,6 +104,7 @@ export class ConnectRepositoryFromIntegrationUseCase {
 			jobType: 'source_sync',
 			payload: { connectorId: connector.id, mode: 'full' },
 			dedupeKey: `source_sync:${connector.id}:full`,
+			triggeredByUserId: command.userId,
 		});
 		await this.sourceSyncQueue.add(
 			'ingest',

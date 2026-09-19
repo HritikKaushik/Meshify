@@ -18,7 +18,7 @@ export class SyncSlackUseCase {
 		private readonly sourceSyncQueue: Queue<SourceSyncJobPayload>
 	) {}
 
-	async execute(command: { projectId: string; connectorId: string }): Promise<{ jobId: string }> {
+	async execute(command: { projectId: string; connectorId: string; userId?: string }): Promise<{ jobId: string }> {
 		const { workspace } = await loadSlackWorkspace(this.connectors, this.workspaces, command.projectId, command.connectorId);
 
 		// Integration-linked workspaces ride the provider platform's generic lane.
@@ -29,6 +29,7 @@ export class SyncSlackUseCase {
 				jobType: 'source_sync',
 				payload: { connectorId: command.connectorId, mode: 'incremental' },
 				dedupeKey: `source_sync:${command.connectorId}:incremental`,
+				triggeredByUserId: command.userId,
 			});
 			if (created) {
 				await this.sourceSyncQueue.add(
@@ -46,6 +47,7 @@ export class SyncSlackUseCase {
 			projectId: command.projectId,
 			jobType: 'slack_sync',
 			payload: { connectorId: command.connectorId, workspaceId: workspace.id },
+			triggeredByUserId: command.userId,
 		});
 
 		await this.syncQueue.add(

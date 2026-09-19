@@ -14,6 +14,7 @@ interface PipelineJobRow {
 	dedupe_key: string | null;
 	progress: number | null;
 	stage: string | null;
+	triggered_by_user_id: string | null;
 	created_at: Date;
 	updated_at: Date;
 	completed_at: Date | null;
@@ -32,6 +33,7 @@ function toDomain(row: PipelineJobRow): PipelineJob {
 		dedupeKey: row.dedupe_key,
 		progress: row.progress,
 		stage: row.stage,
+		triggeredByUserId: row.triggered_by_user_id,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		completedAt: row.completed_at,
@@ -43,8 +45,8 @@ export class PostgresPipelineJobRepository implements PipelineJobRepository {
 
 	async create(input: CreatePipelineJobInput): Promise<PipelineJob> {
 		const { rows } = await this.pool.query<PipelineJobRow>(
-			`insert into pipeline_jobs (id, project_id, job_type, payload, dedupe_key) values ($1, $2, $3, $4, $5) returning *`,
-			[input.id, input.projectId, input.jobType, input.payload, input.dedupeKey ?? null]
+			`insert into pipeline_jobs (id, project_id, job_type, payload, dedupe_key, triggered_by_user_id) values ($1, $2, $3, $4, $5, $6) returning *`,
+			[input.id, input.projectId, input.jobType, input.payload, input.dedupeKey ?? null, input.triggeredByUserId ?? null]
 		);
 		const row = rows[0];
 		if (!row) throw new Error('Insert into pipeline_jobs returned no row');
@@ -54,11 +56,11 @@ export class PostgresPipelineJobRepository implements PipelineJobRepository {
 	async createDeduped(input: CreatePipelineJobInput & { dedupeKey: string }): Promise<{ job: PipelineJob; created: boolean }> {
 		// Conflict target matches the partial unique index on (dedupe_key) where status = 'queued'.
 		const { rows } = await this.pool.query<PipelineJobRow>(
-			`insert into pipeline_jobs (id, project_id, job_type, payload, dedupe_key)
-			 values ($1, $2, $3, $4, $5)
+			`insert into pipeline_jobs (id, project_id, job_type, payload, dedupe_key, triggered_by_user_id)
+			 values ($1, $2, $3, $4, $5, $6)
 			 on conflict (dedupe_key) where status = 'queued' do nothing
 			 returning *`,
-			[input.id, input.projectId, input.jobType, input.payload, input.dedupeKey]
+			[input.id, input.projectId, input.jobType, input.payload, input.dedupeKey, input.triggeredByUserId ?? null]
 		);
 		const row = rows[0];
 		if (row) return { job: toDomain(row), created: true };

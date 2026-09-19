@@ -10,6 +10,8 @@ export interface CompleteSlackOAuthCommand {
 	projectId: string;
 	code: string;
 	state: string;
+	/** The person acting (`users.id`); undefined for service keys. */
+	userId?: string;
 }
 
 export interface CompleteSlackOAuthResult {
@@ -64,6 +66,7 @@ export class CompleteSlackOAuthUseCase {
 				displayName: oauth.teamName ?? 'Slack workspace',
 				status: 'active',
 				config: { teamId: oauth.teamId },
+				createdByUserId: command.userId,
 			});
 			const workspace = await this.workspaces.create({
 				id: randomUUID(),

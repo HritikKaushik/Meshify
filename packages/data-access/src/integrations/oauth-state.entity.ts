@@ -17,6 +17,8 @@ export interface OAuthState {
 	/** SPA path to land on after completion (e.g. the marketplace page). */
 	returnPath: string | null;
 	createdByKeyId: string | null;
+	/** Who started the flow (`users.id`), so the connection it produces can be attributed to them. */
+	createdByUserId: string | null;
 	expiresAt: Date;
 	consumedAt: Date | null;
 	createdAt: Date;

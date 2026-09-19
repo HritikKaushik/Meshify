@@ -12,7 +12,7 @@ export class ReconnectIntegrationUseCase {
 		private readonly registrations: ProviderRegistrationService
 	) {}
 
-	async execute(command: { orgId: string; integrationId: string; returnPath?: string; createdByKeyId?: string }): Promise<{ url: string }> {
+	async execute(command: { orgId: string; integrationId: string; returnPath?: string; createdByKeyId?: string; createdByUserId?: string }): Promise<{ url: string }> {
 		const integration = await loadIntegrationForOrg(this.integrations, command.integrationId, command.orgId);
 		const provider = this.registry.get(integration.provider);
 		if (!supportsOAuth(provider)) throw new UnsupportedProviderOperationError(integration.provider, 'reconnect');
@@ -26,6 +26,7 @@ export class ReconnectIntegrationUseCase {
 			integrationId: integration.id,
 			returnPath: command.returnPath ?? null,
 			createdByKeyId: command.createdByKeyId ?? null,
+			createdByUserId: command.createdByUserId ?? null,
 		});
 
 		return {

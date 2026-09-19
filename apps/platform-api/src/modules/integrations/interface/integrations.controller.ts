@@ -122,6 +122,7 @@ export function createIntegrationsController(deps: {
 				projectId: parsed.data.projectId,
 				returnPath: parsed.data.returnPath,
 				createdByKeyId: req.auth!.keyId,
+				createdByUserId: req.auth!.userId,
 			});
 			res.status(200).json(result);
 		} catch (err) {
@@ -167,6 +168,7 @@ export function createIntegrationsController(deps: {
 				integrationId: req.params.integrationId as string,
 				returnPath: parsed.data.returnPath,
 				createdByKeyId: req.auth!.keyId,
+				createdByUserId: req.auth!.userId,
 			});
 			res.status(200).json(result);
 		} catch (err) {

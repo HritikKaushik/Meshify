@@ -8,6 +8,7 @@ export interface CreateDocumentInput {
 	filename: string;
 	objectStorageKey: string;
 	contentHash: string;
+	uploadedByUserId?: string | null;
 }
 
 export interface DocumentRepository {

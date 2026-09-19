@@ -21,6 +21,8 @@ export interface PipelineJob {
 	progress: number | null;
 	/** Human-readable current stage (e.g. "Scanning repository"), or null. */
 	stage: string | null;
+	/** Who set the job off (`users.id`); null for webhooks, schedules, service keys and history. */
+	triggeredByUserId: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 	completedAt: Date | null;

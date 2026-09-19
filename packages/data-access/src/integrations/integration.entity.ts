@@ -41,6 +41,8 @@ export interface Integration {
 	/** Provider-specific, non-sensitive facts (account login/type, scopes, avatar). Secrets live in `integration_credentials`. */
 	metadata: Record<string, unknown>;
 	lastError: string | null;
+	/** Who connected the account (`users.id`); null for service keys and history. */
+	connectedByUserId: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 }

@@ -66,6 +66,7 @@ export function createSlackController(deps: {
 				projectId: req.project!.id,
 				orgId: req.auth!.orgId,
 				integrationId: parsed.data.integrationId,
+				userId: req.auth!.userId,
 			});
 			res.status(result.alreadyAttached ? 200 : 201).json(result);
 		} catch (err) {
@@ -91,7 +92,7 @@ export function createSlackController(deps: {
 			return;
 		}
 		try {
-			const result = await deps.completeOAuth.execute({ projectId: req.project!.id, code: parsed.data.code, state: parsed.data.state });
+			const result = await deps.completeOAuth.execute({ projectId: req.project!.id, code: parsed.data.code, state: parsed.data.state, userId: req.auth!.userId });
 			res.status(201).json(result);
 		} catch (err) {
 			handleSlackError(err, res, req.log);
@@ -114,7 +115,7 @@ export function createSlackController(deps: {
 			return;
 		}
 		try {
-			const result = await deps.selectChannels.execute({ projectId: req.project!.id, connectorId: req.params.connectorId as string, channelIds: parsed.data.channelIds });
+			const result = await deps.selectChannels.execute({ projectId: req.project!.id, connectorId: req.params.connectorId as string, channelIds: parsed.data.channelIds, userId: req.auth!.userId });
 			res.status(202).json(result);
 		} catch (err) {
 			handleSlackError(err, res, req.log);
@@ -123,7 +124,7 @@ export function createSlackController(deps: {
 
 	router.post('/v1/projects/:projectId/connectors/slack/:connectorId/sync', guard, requireUuidParams('connectorId'), async (req, res) => {
 		try {
-			const result = await deps.syncSlack.execute({ projectId: req.project!.id, connectorId: req.params.connectorId as string });
+			const result = await deps.syncSlack.execute({ projectId: req.project!.id, connectorId: req.params.connectorId as string, userId: req.auth!.userId });
 			res.status(202).json(result);
 		} catch (err) {
 			handleSlackError(err, res, req.log);

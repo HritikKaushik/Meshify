@@ -63,6 +63,7 @@ function syncCtx(mode: 'full' | 'incremental'): SyncContext {
 			integrationId: 'int-1',
 			syncPolicy: { trigger: 'event' },
 			lastError: null,
+			createdByUserId: null,
 			createdAt: new Date(0),
 			updatedAt: new Date(0),
 		},

@@ -16,6 +16,7 @@ interface RepositoryRow {
 	owner: string | null;
 	name: string | null;
 	last_synced_at: Date | null;
+	connected_by_user_id: string | null;
 	created_at: Date;
 	updated_at: Date;
 }
@@ -35,6 +36,7 @@ function toDomain(row: RepositoryRow): Repository {
 		owner: row.owner,
 		name: row.name,
 		lastSyncedAt: row.last_synced_at,
+		connectedByUserId: row.connected_by_user_id,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 	};
@@ -45,8 +47,8 @@ export class PostgresRepositoryRepository implements RepositoryRepository {
 
 	async create(input: CreateRepositoryInput): Promise<Repository> {
 		const { rows } = await this.pool.query<RepositoryRow>(
-			`insert into repositories (id, project_id, connector_id, source, remote_url, archive_object_key, owner, name, github_repo_id)
-			 values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+			`insert into repositories (id, project_id, connector_id, source, remote_url, archive_object_key, owner, name, github_repo_id, connected_by_user_id)
+			 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning *`,
 			[
 				input.id,
 				input.projectId,
@@ -57,6 +59,7 @@ export class PostgresRepositoryRepository implements RepositoryRepository {
 				input.owner ?? null,
 				input.name ?? null,
 				input.githubRepoId ?? null,
+				input.connectedByUserId ?? null,
 			]
 		);
 		const row = rows[0];

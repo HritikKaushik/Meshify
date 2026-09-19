@@ -151,7 +151,7 @@ export class InMemoryDocumentRepository implements DocumentRepository {
 	}
 
 	async create(input: CreateDocumentInput): Promise<Document> {
-		const doc: Document = { ...input, status: 'pending', createdAt: TEST_EPOCH, updatedAt: TEST_EPOCH };
+		const doc: Document = { ...input, uploadedByUserId: input.uploadedByUserId ?? null, status: 'pending', createdAt: TEST_EPOCH, updatedAt: TEST_EPOCH };
 		this.docs.set(doc.id, doc);
 		return doc;
 	}
@@ -213,6 +213,7 @@ export class InMemoryRepositoryRepository implements RepositoryRepository {
 			owner: input.owner ?? null,
 			name: input.name ?? null,
 			lastSyncedAt: null,
+			connectedByUserId: input.connectedByUserId ?? null,
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
 		};
@@ -384,6 +385,7 @@ export class InMemoryKnowledgeConnectorRepository implements KnowledgeConnectorR
 			integrationId: input.integrationId ?? null,
 			syncPolicy: input.syncPolicy ?? { trigger: 'event' },
 			lastError: null,
+			createdByUserId: input.createdByUserId ?? null,
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
 		};
@@ -635,6 +637,7 @@ export class InMemoryPipelineJobRepository implements PipelineJobRepository {
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
 			completedAt: null,
+			triggeredByUserId: input.triggeredByUserId ?? null,
 		};
 		this.jobs.set(job.id, job);
 		return job;
@@ -754,6 +757,7 @@ export class InMemoryIntegrationRepository implements IntegrationRepository {
 			healthCheckedAt: null,
 			metadata: input.metadata ?? {},
 			lastError: null,
+			connectedByUserId: input.connectedByUserId ?? null,
 			createdAt: TEST_EPOCH,
 			updatedAt: TEST_EPOCH,
 		};

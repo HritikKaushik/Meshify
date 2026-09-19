@@ -12,6 +12,7 @@ interface OAuthStateRow {
 	integration_id: string | null;
 	return_path: string | null;
 	created_by_key_id: string | null;
+	created_by_user_id: string | null;
 	expires_at: Date;
 	consumed_at: Date | null;
 	created_at: Date;
@@ -28,6 +29,7 @@ function toDomain(row: OAuthStateRow): OAuthState {
 		integrationId: row.integration_id,
 		returnPath: row.return_path,
 		createdByKeyId: row.created_by_key_id,
+		createdByUserId: row.created_by_user_id,
 		expiresAt: row.expires_at,
 		consumedAt: row.consumed_at,
 		createdAt: row.created_at,
@@ -39,8 +41,8 @@ export class PostgresOAuthStateRepository implements OAuthStateRepository {
 
 	async create(input: CreateOAuthStateInput): Promise<OAuthState> {
 		const { rows } = await this.pool.query<OAuthStateRow>(
-			`insert into oauth_states (state_hash, org_id, provider, project_id, intent, integration_id, return_path, created_by_key_id, expires_at)
-			 values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+			`insert into oauth_states (state_hash, org_id, provider, project_id, intent, integration_id, return_path, created_by_key_id, expires_at, created_by_user_id)
+			 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning *`,
 			[
 				input.stateHash,
 				input.orgId,
@@ -51,6 +53,7 @@ export class PostgresOAuthStateRepository implements OAuthStateRepository {
 				input.returnPath ?? null,
 				input.createdByKeyId ?? null,
 				input.expiresAt,
+				input.createdByUserId ?? null,
 			]
 		);
 		const row = rows[0];

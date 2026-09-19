@@ -17,6 +17,8 @@ export interface Repository {
 	owner: string | null;
 	name: string | null;
 	lastSyncedAt: Date | null;
+	/** Who connected it (`users.id`); null for service keys and history. */
+	connectedByUserId: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 }

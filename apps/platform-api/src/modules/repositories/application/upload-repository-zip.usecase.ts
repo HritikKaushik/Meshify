@@ -9,6 +9,8 @@ export interface UploadRepositoryZipCommand {
 	projectId: string;
 	filename: string;
 	buffer: Buffer;
+	/** The person acting (`users.id`); undefined for service keys. */
+	userId?: string;
 }
 
 const MAX_ZIP_BYTES = 100 * 1024 * 1024;
@@ -40,6 +42,7 @@ export class UploadRepositoryZipUseCase {
 			displayName: command.filename || 'Uploaded archive',
 			status: 'connecting',
 			config: { source: 'zip', filename: command.filename },
+			createdByUserId: command.userId,
 		});
 
 		const repository = await this.repositories.create({
@@ -48,6 +51,7 @@ export class UploadRepositoryZipUseCase {
 			connectorId: connector.id,
 			source: 'zip',
 			archiveObjectKey,
+			connectedByUserId: command.userId,
 		});
 
 		const pipelineJobId = randomUUID();
@@ -56,6 +60,7 @@ export class UploadRepositoryZipUseCase {
 			projectId: command.projectId,
 			jobType: 'clone_repo',
 			payload: { repositoryId, filename: command.filename },
+			triggeredByUserId: command.userId,
 		});
 
 		await this.ingestQueue.add('ingest', { pipelineJobId, repositoryId, projectId: command.projectId }, { jobId: pipelineJobId });

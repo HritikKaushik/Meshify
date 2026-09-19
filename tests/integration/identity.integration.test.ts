@@ -5,9 +5,15 @@ import {
 	LastOwnerError,
 	PostgresAuditLogRepository,
 	PostgresChatRepository,
+	PostgresDocumentRepository,
+	PostgresIntegrationRepository,
+	PostgresKnowledgeConnectorRepository,
+	PostgresOAuthStateRepository,
 	PostgresOrgMembershipRepository,
+	PostgresPipelineJobRepository,
 	PostgresProjectMembershipRepository,
 	PostgresProjectRepository,
+	PostgresRepositoryRepository,
 	PostgresUserRepository,
 	createPgPool,
 	syncClerkMember,
@@ -325,6 +331,46 @@ describe('attribution', () => {
 		await withTransaction(pool!, (client) => new PostgresAuditLogRepository(client).record({ ...entry, actorUserId: member.userId, actorType: 'user', category: 'domain' }));
 		const { rows } = await pool!.query<{ actor_id: string; actor_type: string; category: string }>('select actor_id, actor_type, category from audit_logs where org_id = $1 and category = $2', [orgId, 'domain']);
 		expect(rows).toEqual([{ actor_id: member.userId, actor_type: 'user', category: 'domain' }]);
+	});
+
+	it('every create path records who acted, and stays null when nobody did', async (ctx) => {
+		if (!available) return ctx.skip();
+		const member = await syncClerkMember({ pool: pool!, orgId, clerkUserId: clerkId(), clerkOrgRole: 'org:member' });
+		const by = member.userId;
+
+		const connectors = new PostgresKnowledgeConnectorRepository(pool!);
+		const connector = await connectors.create({ id: randomUUID(), projectId, type: 'github', displayName: 'attributed', createdByUserId: by });
+		const anonymous = await connectors.create({ id: randomUUID(), projectId, type: 'github', displayName: 'webhook-made' });
+		expect(connector.createdByUserId).toBe(by);
+		expect(anonymous.createdByUserId).toBeNull();
+
+		const document = await new PostgresDocumentRepository(pool!).create({
+			id: randomUUID(),
+			projectId,
+			connectorId: connector.id,
+			sourceType: 'md',
+			filename: `attributed-${randomUUID()}.md`,
+			objectStorageKey: 'k',
+			contentHash: randomUUID(),
+			uploadedByUserId: by,
+		});
+		expect(document.uploadedByUserId).toBe(by);
+
+		const repository = await new PostgresRepositoryRepository(pool!).create({ id: randomUUID(), projectId, connectorId: connector.id, source: 'zip', connectedByUserId: by } as never);
+		expect(repository.connectedByUserId).toBe(by);
+
+		const jobs = new PostgresPipelineJobRepository(pool!);
+		const job = await jobs.create({ id: randomUUID(), projectId, jobType: 'ingest_document', payload: {}, triggeredByUserId: by });
+		const deduped = await jobs.createDeduped({ id: randomUUID(), projectId, jobType: 'source_sync', payload: {}, dedupeKey: `itest:${randomUUID()}`, triggeredByUserId: by });
+		expect(job.triggeredByUserId).toBe(by);
+		expect(deduped.job.triggeredByUserId).toBe(by);
+
+		// The OAuth state is the only server-controlled link between "start" and
+		// "callback", so the person who started the flow is carried on it.
+		const state = await new PostgresOAuthStateRepository(pool!).create({ stateHash: randomUUID(), orgId, provider: 'github', createdByUserId: by, expiresAt: new Date(Date.now() + 60_000) });
+		expect(state.createdByUserId).toBe(by);
+		const integration = await new PostgresIntegrationRepository(pool!).create({ orgId, provider: 'github', externalAccountId: `itest-${randomUUID()}`, connectedByUserId: state.createdByUserId });
+		expect(integration.connectedByUserId).toBe(by);
 	});
 
 	it('an audit row written the old way defaults to the http category with no actor type', async (ctx) => {

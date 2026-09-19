@@ -36,6 +36,8 @@ export interface KnowledgeConnector {
 	integrationId: string | null;
 	syncPolicy: SyncPolicy;
 	lastError: string | null;
+	/** Who connected this source (`users.id`); null for service keys, webhooks, and history. */
+	createdByUserId: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 }
