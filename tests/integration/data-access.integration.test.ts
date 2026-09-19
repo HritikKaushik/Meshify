@@ -125,12 +125,14 @@ describe('webhook events', () => {
 		await events.markStatus(recent.id, 'failed', 'boom');
 		await pool!.query("update webhook_events set received_at = now() - interval '45 days' where id = any($1)", [[processed.id, failed.id]]);
 
+		// The sweep is table-wide, so the count also includes whatever old
+		// deliveries a developer database already holds. The rows are the proof.
 		const removed = await events.deleteTerminalBefore(new Date(Date.now() - 30 * 86_400_000), new Date(Date.now() - 90 * 86_400_000));
-		expect(removed).toBe(1);
+		expect(removed).toBeGreaterThanOrEqual(1);
 		expect(await events.findById(processed.id)).toBeUndefined();
 		expect(await events.findById(failed.id)).toBeDefined();
 
-		expect(await events.deleteTerminalBefore(new Date(Date.now() - 30 * 86_400_000), new Date(Date.now() - 40 * 86_400_000))).toBe(1);
+		expect(await events.deleteTerminalBefore(new Date(Date.now() - 30 * 86_400_000), new Date(Date.now() - 40 * 86_400_000))).toBeGreaterThanOrEqual(1);
 		expect(await events.findById(failed.id)).toBeUndefined();
 		expect(await events.findById(recent.id)).toBeDefined();
 	});
