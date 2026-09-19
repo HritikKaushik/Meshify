@@ -143,6 +143,9 @@ importers:
       '@meshify/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@meshify/authz':
+        specifier: workspace:*
+        version: link:../../packages/authz
       '@meshify/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -401,6 +404,15 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.6
+        version: 3.2.7(@types/node@22.20.1)(jiti@1.21.7)(jsdom@30.0.1)(tsx@4.23.0)(yaml@2.9.0)
+
+  packages/authz:
+    devDependencies:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
