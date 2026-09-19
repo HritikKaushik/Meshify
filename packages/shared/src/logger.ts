@@ -17,6 +17,9 @@ export interface LoggerOptions {
 const SECRET_KEYS = [
 	'authorization',
 	'cookie',
+	// The BFF's signed identity assertion: short-lived and useless without the
+	// org key beside it, but it is a credential and it names a person.
+	'x-meshify-actor',
 	'apikey',
 	'apiKey',
 	'api_key',
@@ -41,12 +44,18 @@ const SECRET_KEYS = [
 	'app_webhook_secret',
 ];
 
+/** Pino path syntax: a name that is not a plain identifier (a hyphenated header) must be bracket-quoted. */
+function pathSegment(key: string): string {
+	return /^[A-Za-z_$][\w$]*$/.test(key) ? key : `["${key}"]`;
+}
+
 export const REDACT_PATHS = [
 	'req.headers.authorization',
 	'req.headers.cookie',
+	'req.headers["x-meshify-actor"]',
 	'res.headers["set-cookie"]',
 	// A bare name covers the top level; `*` in pino matches exactly one level.
-	...SECRET_KEYS.flatMap((key) => [key, `*.${key}`, `*.*.${key}`, `*.*.*.${key}`]),
+	...SECRET_KEYS.map(pathSegment).flatMap((key) => [key, `*.${key}`, `*.*.${key}`, `*.*.*.${key}`]),
 ];
 
 export function createLogger(options: LoggerOptions) {

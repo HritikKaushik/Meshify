@@ -36,6 +36,17 @@ describe('logger redaction', () => {
 		expect(line).toContain('[redacted]');
 	});
 
+	it('masks the signed identity assertion on a logged request, and wherever else the header is echoed', () => {
+		const { logger, lines } = captureLogger();
+		logger.info({ req: { method: 'POST', headers: { 'x-meshify-actor': 'v1.payload.sig-1', 'content-type': 'application/json' } } }, 'request completed');
+		logger.error({ err: { config: { headers: { 'x-meshify-actor': 'v1.payload.sig-2' } } } }, 'upstream failed');
+
+		const line = lines.join('');
+		expect(line).not.toContain('sig-1');
+		expect(line).not.toContain('sig-2');
+		expect(line).toContain('application/json');
+	});
+
 	it('masks an HTTP client error that embeds its request headers', () => {
 		const { logger, lines } = captureLogger();
 		logger.error({ err: { message: 'boom', config: { headers: { authorization: 'Bearer msk_abc', cookie: '__session=xyz' } } } }, 'request failed');
