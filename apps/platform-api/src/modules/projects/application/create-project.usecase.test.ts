@@ -70,6 +70,20 @@ describe('CreateProjectUseCase', () => {
 		expect(project.qdrantCollectionCode).toMatch(/_code$/);
 	});
 
+	it('makes the person who creates a project its PMO, and creates no membership for a service key', async () => {
+		const created: Array<{ creator?: unknown }> = [];
+		const repo = makeProjectRepo();
+		const recording = { ...repo, create: async (input: never) => (created.push(input), repo.create(input)) } satisfies ProjectRepository;
+		const usecase = new CreateProjectUseCase(recording, makeQdrantFake().fake);
+
+		await usecase.execute({ ...COMMAND, userId: 'user-uuid-1' });
+		await usecase.execute(COMMAND);
+
+		// A new project is private, so without this the creator could not open what they just made.
+		expect(created[0]?.creator).toEqual({ userId: 'user-uuid-1', roleKey: 'pmo' });
+		expect(created[1]?.creator).toBeNull();
+	});
+
 	it('rolls back the docs collection when the code collection fails to provision', async () => {
 		const { fake, calls } = makeQdrantFake((name) => name.endsWith('_code'));
 		const usecase = new CreateProjectUseCase(makeProjectRepo(), fake);

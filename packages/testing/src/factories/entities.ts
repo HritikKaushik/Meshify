@@ -36,6 +36,8 @@ export function buildProject(overrides: Partial<Project> = {}): Project {
 		rocketrideDocsIngestPipelineId: 'rr-docs-1',
 		rocketrideCodeIngestPipelineId: 'rr-code-1',
 		rocketrideChatPipelineId: 'rr-chat-1',
+		defaultMemberRoleKey: null,
+		createdByUserId: null,
 		createdAt: TEST_EPOCH,
 		updatedAt: TEST_EPOCH,
 		deletedAt: null,

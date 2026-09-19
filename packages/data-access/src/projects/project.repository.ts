@@ -12,6 +12,12 @@ export interface CreateProjectInput {
 	rocketrideDocsIngestPipelineId: string;
 	rocketrideCodeIngestPipelineId: string;
 	rocketrideChatPipelineId: string;
+	/**
+	 * The person creating the project and the role they take in it. The
+	 * membership is written in the same statement as the project, so a private
+	 * project can never exist without the member who can open it up.
+	 */
+	creator?: { userId: string; roleKey: string } | null;
 }
 
 export interface ProjectRepository {

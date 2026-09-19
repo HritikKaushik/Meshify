@@ -344,9 +344,15 @@ export class InMemoryProjectRepository implements ProjectRepository {
 		return this.orgs.has(orgId);
 	}
 
+	/** Creator memberships written alongside a project, mirroring the single-statement insert. */
+	readonly creatorMemberships: Array<{ projectId: string; orgId: string; userId: string; roleKey: string }> = [];
+
 	async create(input: CreateProjectInput): Promise<Project> {
-		const project: Project = { ...input, status: 'active', createdAt: TEST_EPOCH, updatedAt: TEST_EPOCH, deletedAt: null };
+		const { creator, ...columns } = input;
+		// New projects are private: no default member role.
+		const project: Project = { ...columns, status: 'active', defaultMemberRoleKey: null, createdByUserId: creator?.userId ?? null, createdAt: TEST_EPOCH, updatedAt: TEST_EPOCH, deletedAt: null };
 		this.projects.set(project.id, project);
+		if (creator) this.creatorMemberships.push({ projectId: project.id, orgId: project.orgId, userId: creator.userId, roleKey: creator.roleKey });
 		return project;
 	}
 

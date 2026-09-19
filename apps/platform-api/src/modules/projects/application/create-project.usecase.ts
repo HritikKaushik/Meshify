@@ -15,7 +15,12 @@ export interface CreateProjectCommand {
 	description?: string;
 	llmProfile: string;
 	embeddingProfile: string;
+	/** The person creating it (`users.id`); undefined for service keys. */
+	userId?: string;
 }
+
+/** A new project is private, so whoever creates it runs it. */
+const CREATOR_ROLE = 'pmo';
 
 /**
  * Provisions physical isolation (two Qdrant collections) and the Postgres
@@ -66,6 +71,7 @@ export class CreateProjectUseCase {
 				rocketrideDocsIngestPipelineId: randomUUID(),
 				rocketrideCodeIngestPipelineId: randomUUID(),
 				rocketrideChatPipelineId: randomUUID(),
+				creator: command.userId ? { userId: command.userId, roleKey: CREATOR_ROLE } : null,
 			});
 		} catch (err) {
 			// Best-effort rollback: don't leave orphaned Qdrant collections behind on a failed insert.

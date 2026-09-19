@@ -276,6 +276,52 @@ describe('project memberships', () => {
 	});
 });
 
+describe('project creation with a creator', () => {
+	const input = (id: string, org: string) =>
+		({
+			id,
+			orgId: org,
+			name: `creator ${id.slice(0, 8)}`,
+			description: null,
+			qdrantCollectionDocs: `proj_${id.replaceAll('-', '')}_documents`,
+			qdrantCollectionCode: `proj_${id.replaceAll('-', '')}_code`,
+			rocketrideDocsIngestPipelineId: randomUUID(),
+			rocketrideCodeIngestPipelineId: randomUUID(),
+			rocketrideChatPipelineId: randomUUID(),
+			llmProfile: 'openai-5',
+			embeddingProfile: 'openai-text-embedding-3-large',
+		}) as const;
+
+	it('writes the project and its creator membership in one statement', async (ctx) => {
+		if (!available) return ctx.skip();
+		const creator = await syncClerkMember({ pool: pool!, orgId, clerkUserId: clerkId(), clerkOrgRole: 'org:member' });
+		const id = randomUUID();
+
+		const project = await new PostgresProjectRepository(pool!).create({ ...input(id, orgId), creator: { userId: creator.userId, roleKey: 'pmo' } });
+
+		expect(project).toMatchObject({ createdByUserId: creator.userId, defaultMemberRoleKey: null });
+		expect(await new PostgresProjectMembershipRepository(pool!).findByProjectAndUser(id, creator.userId)).toMatchObject({ roleKey: 'pmo', orgId, addedByUserId: creator.userId });
+	});
+
+	it('creates no project at all when the creator is not a member of the org', async (ctx) => {
+		if (!available) return ctx.skip();
+		const outsider = await syncClerkMember({ pool: pool!, orgId: otherOrgId, clerkUserId: clerkId(), clerkOrgRole: 'org:member' });
+		const id = randomUUID();
+
+		await expect(new PostgresProjectRepository(pool!).create({ ...input(id, orgId), creator: { userId: outsider.userId, roleKey: 'pmo' } })).rejects.toThrow(/foreign key/);
+		// A private project nobody can open must never be left behind.
+		expect(await new PostgresProjectRepository(pool!).findById(id)).toBeUndefined();
+	});
+
+	it('a service key creates a project with no creator and no membership', async (ctx) => {
+		if (!available) return ctx.skip();
+		const id = randomUUID();
+		const project = await new PostgresProjectRepository(pool!).create({ ...input(id, orgId), creator: null });
+		expect(project.createdByUserId).toBeNull();
+		expect(await new PostgresProjectMembershipRepository(pool!).listByProject(id)).toEqual([]);
+	});
+});
+
 describe('projects after 0019', () => {
 	it('new projects are private: no default member role', async (ctx) => {
 		if (!available) return ctx.skip();

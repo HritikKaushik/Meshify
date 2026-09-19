@@ -26,6 +26,8 @@ export interface ApiKey {
 export interface AuthContext {
 	orgId: string;
 	keyId: string;
+	/** What the authenticated key is for. Absent only in hand-built test contexts, which read as `service`. */
+	keyKind?: ApiKeyKind;
 	scopes: string[];
 	/**
 	 * The end user behind a BFF-forwarded request (the Clerk user id), when

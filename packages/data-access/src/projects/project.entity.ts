@@ -13,6 +13,14 @@ export interface Project {
 	rocketrideDocsIngestPipelineId: string;
 	rocketrideCodeIngestPipelineId: string;
 	rocketrideChatPipelineId: string;
+	/**
+	 * Non-null: every active org member without an explicit membership holds this
+	 * role here (every project that predates per-project roles is open this way).
+	 * Null: the project is private to its members.
+	 */
+	defaultMemberRoleKey: string | null;
+	/** Who created it (`users.id`); null for service keys and for projects that predate identity. */
+	createdByUserId: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 	deletedAt: Date | null;
