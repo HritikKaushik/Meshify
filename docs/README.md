@@ -44,6 +44,7 @@ five applications and eleven shared packages.
 | [Backend Architecture](architecture/backend.md) | Clean-architecture layering, module anatomy, request lifecycle |
 | [Frontend Architecture](architecture/frontend.md) | The web SPA, routing, code-splitting, data access |
 | [Data Model](architecture/data-model.md) | Postgres tables, relationships, and the Qdrant collections |
+| [AI Project Management Roadmap](product/ai-pm-roadmap.md) | The approved path from RAG tool to AI PM platform: identity + RBAC, per-project memory, PM capabilities |
 
 ### 2. AI & Retrieval
 | Doc | What it answers |
