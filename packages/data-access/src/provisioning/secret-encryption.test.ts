@@ -14,7 +14,11 @@ function legacyCiphertext(key: string, plaintext: string, withV1Prefix: boolean)
 	return withV1Prefix ? ['v1', ...parts].join('.') : parts.join('.');
 }
 
-describe('secret-encryption', () => {
+// Every case here runs the real scrypt KDF (N=2^14) synchronously, several times.
+// That is tens of milliseconds on an idle machine but has been measured past
+// the 5 s default when the whole monorepo's suites run in parallel, so the
+// budget reflects the work rather than the machine's mood.
+describe('secret-encryption', { timeout: 30_000 }, () => {
 	it('round-trips through the current v2 (scrypt) envelope', () => {
 		const ciphertext = encryptSecret(KEY, 'xoxb-super-secret');
 		expect(ciphertext.startsWith('v2.')).toBe(true);
