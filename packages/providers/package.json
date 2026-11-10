@@ -24,11 +24,11 @@
 		"@meshify/data-access": "workspace:*",
 		"@meshify/github": "workspace:*",
 		"@meshify/slack": "workspace:*",
-		"adm-zip": "^0.5.16",
+		"adm-zip": "^0.6.1",
 		"tar": "^7.5.22"
 	},
 	"devDependencies": {
-		"@types/adm-zip": "^0.5.7",
+		"@types/adm-zip": "^0.6.0",
 		"@types/node": "^22.9.0",
 		"typescript": "^5.6.3",
 		"vitest": "^3.2.6"
